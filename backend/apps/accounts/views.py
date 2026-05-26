@@ -71,3 +71,24 @@ def logout_view(request):
 @permission_classes([IsAuthenticated])
 def me_view(request):
     return Response(UserSerializer(request.user).data)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsAdminOrRRHH])
+def create_user_view(request):
+    serializer = CreateUserSerializer(
+        data=request.data,
+        context={"request": request},
+    )
+
+    if serializer.is_valid():
+        user = serializer.save()
+
+        return Response(
+            {
+                "detail": "Usuario creado correctamente.",
+                "user": UserSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

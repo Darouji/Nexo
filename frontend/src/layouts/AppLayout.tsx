@@ -10,7 +10,6 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Stack,
   Toolbar,
   Typography,
 } from "@mui/material";
@@ -31,6 +30,8 @@ const drawerWidth = 280;
 
 type AppLayoutProps = {
   user: AuthUser | null;
+  activeSection: string;
+  onSectionChange: (section: string) => void;
   onLogout: () => void;
   children: ReactNode;
 };
@@ -91,7 +92,13 @@ const menuItems = [
   },
 ];
 
-export function AppLayout({ user, onLogout, children }: AppLayoutProps) {
+export function AppLayout({
+  user,
+  activeSection,
+  onSectionChange,
+  onLogout,
+  children,
+}: AppLayoutProps) {
   const role = user?.profile?.role;
 
   const visibleMenuItems = menuItems.filter((item) =>
@@ -115,7 +122,7 @@ export function AppLayout({ user, onLogout, children }: AppLayoutProps) {
         }}
       >
         <Box sx={{ p: 3 }}>
-          <Typography variant="h5" fontWeight={800}>
+          <Typography variant="h5" sx={{ fontWeight: 800 }}>
             Serkan V2
           </Typography>
 
@@ -129,8 +136,9 @@ export function AppLayout({ user, onLogout, children }: AppLayoutProps) {
         <List sx={{ px: 1.5, py: 2 }}>
           {visibleMenuItems.map((item) => (
             <ListItemButton
-              key={item.label}
-              selected={item.label === "Dashboard"}
+                key={item.label}
+                selected={item.label === activeSection}
+                onClick={() => onSectionChange(item.label)}
               sx={{
                 borderRadius: 2,
                 mb: 0.5,
@@ -168,36 +176,43 @@ export function AppLayout({ user, onLogout, children }: AppLayoutProps) {
         >
           <Toolbar sx={{ justifyContent: "space-between" }}>
             <Box>
-              <Typography variant="h6">Dashboard</Typography>
+              <Typography variant="h6">{activeSection}</Typography>
               <Typography variant="body2" color="text.secondary">
-                Resumen general de la plataforma
+                Sección actual de la plataforma
               </Typography>
             </Box>
 
-            <Stack direction="row" spacing={2} alignItems="center">
-              {user && (
+            <Box
+            sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+            }}
+            >
+            {user && (
                 <Box sx={{ textAlign: "right" }}>
-                  <Typography variant="body2" fontWeight={700}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
                     {user.username}
-                  </Typography>
-                  <Chip
+                </Typography>
+
+                <Chip
                     size="small"
                     label={user.profile?.role_display || "Sin rol"}
                     color="primary"
                     variant="outlined"
-                  />
+                />
                 </Box>
-              )}
+            )}
 
-              <Button
+            <Button
                 variant="outlined"
                 color="error"
                 startIcon={<LogoutIcon />}
                 onClick={onLogout}
-              >
+            >
                 Salir
-              </Button>
-            </Stack>
+            </Button>
+            </Box>
           </Toolbar>
         </AppBar>
 

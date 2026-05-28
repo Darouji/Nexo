@@ -114,11 +114,21 @@ class CreateUserSerializer(serializers.Serializer):
             password=password,
         )
 
+        collaborator = Collaborator.objects.create(
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+            email=validated_data.get("email", ""),
+            phone=phone,
+            position=position,
+            area=area,
+        )
+
         profile = user.profile
         profile.role = role
         profile.phone = phone
         profile.position = position
         profile.area = area
+        profile.collaborator = collaborator
         profile.is_active_profile = True
         profile.save()
 

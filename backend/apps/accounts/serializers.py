@@ -34,6 +34,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = [
             "id",
+            "collaborator",
             "role",
             "role_display",
             "is_active_profile",

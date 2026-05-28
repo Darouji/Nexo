@@ -3,6 +3,7 @@ import { Card, CardContent, Grid, Stack, Typography } from "@mui/material";
 import { AppLayout } from "../layouts/AppLayout";
 import { getStoredUser, logout } from "../services/authService";
 import { UsersPage } from "./UsersPage";
+import { CollaboratorsPage } from "./CollaboratorsPage";
 
 type DashboardPageProps = {
   onLogout: () => void;
@@ -91,6 +92,8 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
     >
       {activeSection === "Usuarios" ? (
         <UsersPage currentUser={user} />
+      ) : activeSection === "Colaboradores" ? (
+        <CollaboratorsPage />
       ) : (
         <DashboardHome />
       )}

@@ -25,6 +25,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import type { ReactNode } from "react";
 import type { AuthUser } from "../types/auth";
 import { colors } from "../theme/colors";
+import BadgeIcon from "@mui/icons-material/Badge";
 
 const drawerWidth = 280;
 
@@ -52,6 +53,11 @@ const menuItems = [
   {
   label: "Usuarios",
   icon: <PeopleIcon />,
+  roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
+  },
+  {
+  label: "Colaboradores",
+  icon: <BadgeIcon />,
   roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
   },
   {

@@ -1,14 +1,16 @@
 from django.conf import settings
 from django.db import models
 
+from apps.collaborators.models import Collaborator
+
 
 class UserRole(models.TextChoices):
     ADMINISTRADOR = "ADMINISTRADOR", "Administrador"
-    FINANZAS_COMERCIAL = "FINANZAS_COMERCIAL", "Finanzas / Comercial"
     RRHH = "RRHH", "RRHH"
-    SUPERVISOR = "SUPERVISOR", "Supervisor"
-    TRABAJADOR = "TRABAJADOR", "Trabajador"
-    SOLO_LECTURA = "SOLO_LECTURA", "Solo lectura"
+    INFORMATICO = "INFORMATICO", "Informático"
+    FINANZAS_COMERCIAL = "FINANZAS_COMERCIAL", "Finanzas / Comercial"
+    OPERATIVO = "OPERATIVO", "Operativo"
+    CONSULTA = "CONSULTA", "Consulta"
 
 
 class UserProfile(models.Model):
@@ -17,10 +19,18 @@ class UserProfile(models.Model):
         on_delete=models.CASCADE,
         related_name="profile",
     )
+    collaborator = models.OneToOneField(
+        Collaborator,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="user_profile",
+        verbose_name="Colaborador vinculado",
+    )
     role = models.CharField(
         max_length=30,
         choices=UserRole.choices,
-        default=UserRole.TRABAJADOR,
+        default=UserRole.OPERATIVO,
     )
     is_active_profile = models.BooleanField(default=True)
     phone = models.CharField(max_length=30, blank=True)

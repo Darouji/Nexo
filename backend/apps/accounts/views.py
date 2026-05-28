@@ -4,7 +4,7 @@ from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from .permissions import IsAdminOrRRHH
+from .permissions import IsOperativoGlobal
 
 
 from .serializers import CreateUserSerializer, UserSerializer
@@ -73,7 +73,7 @@ def me_view(request):
     return Response(UserSerializer(request.user).data)
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated, IsAdminOrRRHH])
+@permission_classes([IsAuthenticated, IsOperativoGlobal])
 def create_user_view(request):
     serializer = CreateUserSerializer(
         data=request.data,

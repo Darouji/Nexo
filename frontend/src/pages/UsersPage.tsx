@@ -28,28 +28,28 @@ const roleOptions = [
     onlyAdmin: true,
   },
   {
-    value: "FINANZAS_COMERCIAL",
-    label: "Finanzas / Comercial",
-    onlyAdmin: false,
-  },
-  {
     value: "RRHH",
     label: "RRHH",
     onlyAdmin: false,
   },
   {
-    value: "SUPERVISOR",
-    label: "Supervisor",
+    value: "INFORMATICO",
+    label: "Informático",
     onlyAdmin: false,
   },
   {
-    value: "TRABAJADOR",
-    label: "Trabajador",
+    value: "FINANZAS_COMERCIAL",
+    label: "Finanzas / Comercial",
     onlyAdmin: false,
   },
   {
-    value: "SOLO_LECTURA",
-    label: "Solo lectura",
+  value: "OPERATIVO",
+  label: "Operativo",
+  onlyAdmin: false,
+  },
+  {
+    value: "CONSULTA",
+    label: "Consulta",
     onlyAdmin: false,
   },
 ];
@@ -60,7 +60,7 @@ const initialForm: CreateUserPayload = {
   first_name: "",
   last_name: "",
   password: "",
-  role: "TRABAJADOR",
+  role: "OPERATIVO",
   phone: "",
   position: "",
   area: "",

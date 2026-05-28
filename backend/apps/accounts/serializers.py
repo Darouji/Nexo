@@ -2,11 +2,33 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from apps.collaborators.models import Collaborator
+
 from .models import UserProfile, UserRole
 
+class CollaboratorBasicSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
 
+    class Meta:
+        model = Collaborator
+        fields = [
+            "id",
+            "rut",
+            "first_name",
+            "last_name",
+            "full_name",
+            "position",
+            "area",
+            "email",
+            "phone",
+            "status",
+        ]
+
+    def get_full_name(self, obj):
+        return f"{obj.first_name} {obj.last_name}".strip()
 class UserProfileSerializer(serializers.ModelSerializer):
     role_display = serializers.CharField(source="get_role_display", read_only=True)
+    collaborator = CollaboratorBasicSerializer(read_only=True)
 
     class Meta:
         model = UserProfile

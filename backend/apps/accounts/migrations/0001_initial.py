@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
             name='UserProfile',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('role', models.CharField(choices=[('ADMINISTRADOR', 'Administrador'), ('FINANZAS_COMERCIAL', 'Finanzas / Comercial'), ('RRHH', 'RRHH'), ('SUPERVISOR', 'Supervisor'), ('TRABAJADOR', 'Trabajador'), ('SOLO_LECTURA', 'Solo lectura')], default='TRABAJADOR', max_length=30)),
+                ('role', models.CharField(choices=[('ADMINISTRADOR', 'Administrador'), ('FINANZAS_COMERCIAL', 'Finanzas / Comercial'), ('RRHH', 'RRHH'), ('SUPERVISOR', 'Supervisor'), ('OPERATIVO', 'Operativo'), ('SOLO_LECTURA', 'Solo lectura')], default='OPERATIVO', max_length=30)),
                 ('is_active_profile', models.BooleanField(default=True)),
                 ('phone', models.CharField(blank=True, max_length=30)),
                 ('position', models.CharField(blank=True, max_length=120)),

@@ -34,6 +34,7 @@ import {
   getMineras,
   createEmpresaCliente,
   createContactoCliente,
+  createAreaCliente,
   type AreaCliente,
   type ContactoCliente,
   type EmpresaCliente,
@@ -41,6 +42,7 @@ import {
   type Minera,
   type CreateEmpresaClientePayload,
   type CreateContactoClientePayload,
+  type CreateAreaClientePayload,
 } from "../services/commercialService";
 
 export function ClientsPage() {

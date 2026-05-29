@@ -71,7 +71,9 @@ export interface ContactoCliente {
 }
 
 export async function getGruposEmpresariales() {
-  const response = await api.get<GrupoEmpresarial[]>("/commercial/business-groups/");
+  const response = await api.get<GrupoEmpresarial[]>(
+    "/commercial/business-groups/",
+  );
   return response.data;
 }
 
@@ -81,7 +83,9 @@ export async function getMineras() {
 }
 
 export async function getEmpresasCliente() {
-  const response = await api.get<EmpresaCliente[]>("/commercial/client-companies/");
+  const response = await api.get<EmpresaCliente[]>(
+    "/commercial/client-companies/",
+  );
   return response.data;
 }
 
@@ -91,7 +95,9 @@ export async function getAreasCliente() {
 }
 
 export async function getContactosCliente() {
-  const response = await api.get<ContactoCliente[]>("/commercial/client-contacts/");
+  const response = await api.get<ContactoCliente[]>(
+    "/commercial/client-contacts/",
+  );
   return response.data;
 }
 
@@ -121,19 +127,40 @@ export type CreateContactoClientePayload = {
   observations?: string;
 };
 
-export async function createEmpresaCliente(payload: CreateEmpresaClientePayload) {
+export async function createEmpresaCliente(
+  payload: CreateEmpresaClientePayload,
+) {
   const response = await api.post<EmpresaCliente>(
     "/commercial/client-companies/",
-    payload
+    payload,
   );
 
   return response.data;
 }
 
-export async function createContactoCliente(payload: CreateContactoClientePayload) {
+export async function createContactoCliente(
+  payload: CreateContactoClientePayload,
+) {
   const response = await api.post<ContactoCliente>(
     "/commercial/client-contacts/",
-    payload
+    payload,
+  );
+
+  return response.data;
+}
+
+export type CreateAreaClientePayload = {
+  company: number;
+  name: string;
+  location?: string;
+  description?: string;
+  status?: string;
+};
+
+export async function createAreaCliente(payload: CreateAreaClientePayload) {
+  const response = await api.post<AreaCliente>(
+    "/commercial/client-areas/",
+    payload,
   );
 
   return response.data;

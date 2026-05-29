@@ -130,7 +130,6 @@ class ContactoClienteSerializer(serializers.ModelSerializer):
             "phone",
             "shift",
             "contact_type",
-            "alliance_level",
             "status",
             "observations",
             "created_at",

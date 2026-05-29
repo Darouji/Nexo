@@ -61,13 +61,11 @@ class ContactoClienteAdmin(admin.ModelAdmin):
         "email",
         "phone",
         "contact_type",
-        "alliance_level",
         "status",
     )
     list_filter = (
         "status",
         "contact_type",
-        "alliance_level",
         "company",
         "area",
     )

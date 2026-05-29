@@ -15,14 +15,6 @@ class ContactType(models.TextChoices):
     TECNICO = "TECNICO", "Técnico"
     OTRO = "OTRO", "Otro"
 
-
-class AllianceLevel(models.TextChoices):
-    ALTO = "ALTO", "Alto"
-    MEDIO = "MEDIO", "Medio"
-    BAJO = "BAJO", "Bajo"
-    SIN_DEFINIR = "SIN_DEFINIR", "Sin definir"
-
-
 class GrupoEmpresarial(models.Model):
     name = models.CharField(max_length=180, unique=True, verbose_name="Nombre")
     description = models.TextField(blank=True, verbose_name="Descripción")
@@ -185,12 +177,6 @@ class ContactoCliente(models.Model):
         choices=ContactType.choices,
         default=ContactType.OTRO,
         verbose_name="Tipo de contacto",
-    )
-    alliance_level = models.CharField(
-        max_length=30,
-        choices=AllianceLevel.choices,
-        default=AllianceLevel.SIN_DEFINIR,
-        verbose_name="Nivel de alianza",
     )
     status = models.CharField(
         max_length=20,

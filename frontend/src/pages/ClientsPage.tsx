@@ -34,7 +34,6 @@ import {
   getMineras,
   createEmpresaCliente,
   createContactoCliente,
-  createAreaCliente,
   type AreaCliente,
   type ContactoCliente,
   type EmpresaCliente,
@@ -42,7 +41,6 @@ import {
   type Minera,
   type CreateEmpresaClientePayload,
   type CreateContactoClientePayload,
-  type CreateAreaClientePayload,
 } from "../services/commercialService";
 
 export function ClientsPage() {
@@ -83,7 +81,6 @@ export function ClientsPage() {
     phone: "",
     shift: "",
     contact_type: "OTRO",
-    alliance_level: "SIN_DEFINIR",
     status: "ACTIVO",
     observations: "",
   });
@@ -150,7 +147,6 @@ export function ClientsPage() {
       contact.position,
       contact.shift,
       contact.contact_type,
-      contact.alliance_level,
       contact.status,
     ]
       .filter(Boolean)
@@ -216,7 +212,6 @@ export function ClientsPage() {
         phone: "",
         shift: "",
         contact_type: "OTRO",
-        alliance_level: "SIN_DEFINIR",
         status: "ACTIVO",
         observations: "",
       });
@@ -367,7 +362,6 @@ export function ClientsPage() {
                     <TableCell>Cargo</TableCell>
                     <TableCell>Turno</TableCell>
                     <TableCell>Tipo</TableCell>
-                    <TableCell>Alianza</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
                 </TableHead>
@@ -375,7 +369,7 @@ export function ClientsPage() {
                 <TableBody>
                   {filteredContacts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8}>
+                      <TableCell colSpan={7}>
                         <Typography color="text.secondary">
                           No hay contactos cliente registrados.
                         </Typography>
@@ -390,7 +384,6 @@ export function ClientsPage() {
                         <TableCell>{contact.position || "-"}</TableCell>
                         <TableCell>{contact.shift || "-"}</TableCell>
                         <TableCell>{contact.contact_type}</TableCell>
-                        <TableCell>{contact.alliance_level}</TableCell>
                         <TableCell>
                           <StatusChip status={contact.status} />
                         </TableCell>
@@ -645,24 +638,6 @@ export function ClientsPage() {
               <MenuItem value="FINANZAS">Finanzas</MenuItem>
               <MenuItem value="TECNICO">Técnico</MenuItem>
               <MenuItem value="OTRO">Otro</MenuItem>
-            </TextField>
-
-            <TextField
-              select
-              label="Nivel de alianza"
-              value={contactForm.alliance_level}
-              onChange={(event) =>
-                setContactForm({
-                  ...contactForm,
-                  alliance_level: event.target.value,
-                })
-              }
-              fullWidth
-            >
-              <MenuItem value="ALTO">Alto</MenuItem>
-              <MenuItem value="MEDIO">Medio</MenuItem>
-              <MenuItem value="BAJO">Bajo</MenuItem>
-              <MenuItem value="SIN_DEFINIR">Sin definir</MenuItem>
             </TextField>
 
             <TextField

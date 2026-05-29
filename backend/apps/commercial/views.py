@@ -101,7 +101,6 @@ class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
         "company__name",
         "area__name",
         "contact_type",
-        "alliance_level",
         "status",
         "created_at",
         "updated_at",

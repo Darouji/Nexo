@@ -63,7 +63,6 @@ export interface ContactoCliente {
   phone: string;
   shift: string;
   contact_type: string;
-  alliance_level: string;
   status: string;
   observations: string;
   created_at: string;
@@ -122,7 +121,6 @@ export type CreateContactoClientePayload = {
   phone?: string;
   shift?: string;
   contact_type?: string;
-  alliance_level?: string;
   status?: string;
   observations?: string;
 };

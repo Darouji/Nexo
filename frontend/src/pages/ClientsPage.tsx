@@ -284,142 +284,163 @@ export function ClientsPage() {
     )}
 
     {activeTab === 1 && (
-      <><Card elevation={0}>
-                    <CardContent>
-                        <Typography variant="h6" gutterBottom>
-                            Contactos cliente
-                        </Typography>
+      <Card elevation={0}>
+        <CardContent>
+          <Typography variant="h6" gutterBottom>
+            Contactos cliente
+          </Typography>
 
-                        <TableContainer component={Paper} elevation={0}>
-                            <Table size="small">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>Nombre</TableCell>
-                                        <TableCell>Empresa</TableCell>
-                                        <TableCell>Área</TableCell>
-                                        <TableCell>Cargo</TableCell>
-                                        <TableCell>Turno</TableCell>
-                                        <TableCell>Tipo</TableCell>
-                                        <TableCell>Alianza</TableCell>
-                                        <TableCell>Estado</TableCell>
-                                    </TableRow>
-                                </TableHead>
+          <TableContainer component={Paper} elevation={0}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Nombre</TableCell>
+                  <TableCell>Empresa</TableCell>
+                  <TableCell>Área</TableCell>
+                  <TableCell>Cargo</TableCell>
+                  <TableCell>Turno</TableCell>
+                  <TableCell>Tipo</TableCell>
+                  <TableCell>Alianza</TableCell>
+                  <TableCell>Estado</TableCell>
+                </TableRow>
+              </TableHead>
 
-                                <TableBody>
-                                    {filteredContacts.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={8}>
-                                                <Typography color="text.secondary">
-                                                    No hay contactos cliente registrados.
-                                                </Typography>
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        filteredContacts.map((contact) => (
-                                            <TableRow key={contact.id} hover>
-                                                <TableCell>{contact.full_name}</TableCell>
-                                                <TableCell>{contact.company_name}</TableCell>
-                                                <TableCell>{contact.area_name || "-"}</TableCell>
-                                                <TableCell>{contact.position || "-"}</TableCell>
-                                                <TableCell>{contact.shift || "-"}</TableCell>
-                                                <TableCell>{contact.contact_type}</TableCell>
-                                                <TableCell>{contact.alliance_level}</TableCell>
-                                                <TableCell>
-                                                    <StatusChip status={contact.status} />
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </CardContent>
-                </Card><Dialog
-                    open={companyDialogOpen}
-                    onClose={() => setCompanyDialogOpen(false)}
-                    fullWidth
-                    maxWidth="sm"
-                >
-                        <DialogTitle>Nueva empresa cliente</DialogTitle>
-
-                        <DialogContent>
-                            <Stack spacing={2} sx={{ mt: 1 }}>
-                                <TextField
-                                    label="Nombre / Razón social"
-                                    value={companyForm.name}
-                                    onChange={(event) => setCompanyForm({ ...companyForm, name: event.target.value })}
-                                    required
-                                    fullWidth />
-
-                                <TextField
-                                    label="RUT"
-                                    value={companyForm.rut}
-                                    onChange={(event) => setCompanyForm({ ...companyForm, rut: event.target.value })}
-                                    fullWidth />
-
-                                <TextField
-                                    select
-                                    label="Minera relacionada"
-                                    value={companyForm.mining_company ?? ""}
-                                    onChange={(event) => setCompanyForm({
-                                        ...companyForm,
-                                        mining_company: event.target.value
-                                            ? Number(event.target.value)
-                                            : null,
-                                    })}
-                                    fullWidth
-                                >
-                                    <MenuItem value="">Sin minera</MenuItem>
-                                    {miningCompanies.map((miningCompany) => (
-                                        <MenuItem key={miningCompany.id} value={miningCompany.id}>
-                                            {miningCompany.name}
-                                        </MenuItem>
-                                    ))}
-                                </TextField>
-
-                                <TextField
-                                    label="Correo"
-                                    value={companyForm.email}
-                                    onChange={(event) => setCompanyForm({ ...companyForm, email: event.target.value })}
-                                    fullWidth />
-
-                                <TextField
-                                    label="Teléfono"
-                                    value={companyForm.phone}
-                                    onChange={(event) => setCompanyForm({ ...companyForm, phone: event.target.value })}
-                                    fullWidth />
-
-                                <TextField
-                                    label="Dirección"
-                                    value={companyForm.address}
-                                    onChange={(event) => setCompanyForm({ ...companyForm, address: event.target.value })}
-                                    fullWidth />
-
-                                <TextField
-                                    label="Observaciones"
-                                    value={companyForm.observations}
-                                    onChange={(event) => setCompanyForm({ ...companyForm, observations: event.target.value })}
-                                    multiline
-                                    minRows={3}
-                                    fullWidth />
-                            </Stack>
-                        </DialogContent>
-
-                        <DialogActions>
-                            <Button onClick={() => setCompanyDialogOpen(false)}>
-                                Cancelar
-                            </Button>
-
-                            <Button
-                                variant="contained"
-                                onClick={handleCreateCompany}
-                                disabled={savingCompany || !companyForm.name.trim()}
-                            >
-                                {savingCompany ? "Guardando..." : "Guardar"}
-                            </Button>
-                        </DialogActions>
-                    </Dialog></>
+              <TableBody>
+                {filteredContacts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8}>
+                      <Typography color="text.secondary">
+                        No hay contactos cliente registrados.
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredContacts.map((contact) => (
+                    <TableRow key={contact.id} hover>
+                      <TableCell>{contact.full_name}</TableCell>
+                      <TableCell>{contact.company_name}</TableCell>
+                      <TableCell>{contact.area_name || "-"}</TableCell>
+                      <TableCell>{contact.position || "-"}</TableCell>
+                      <TableCell>{contact.shift || "-"}</TableCell>
+                      <TableCell>{contact.contact_type}</TableCell>
+                      <TableCell>{contact.alliance_level}</TableCell>
+                      <TableCell>
+                        <StatusChip status={contact.status} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
     )}
+    <Dialog
+        open={companyDialogOpen}
+        onClose={() => setCompanyDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        >
+        <DialogTitle>Nueva empresa cliente</DialogTitle>
+
+        <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+                label="Nombre / Razón social"
+                value={companyForm.name}
+                onChange={(event) =>
+                setCompanyForm({ ...companyForm, name: event.target.value })
+                }
+                required
+                fullWidth
+            />
+
+            <TextField
+                label="RUT"
+                value={companyForm.rut}
+                onChange={(event) =>
+                setCompanyForm({ ...companyForm, rut: event.target.value })
+                }
+                fullWidth
+            />
+
+            <TextField
+                select
+                label="Minera relacionada"
+                value={companyForm.mining_company ?? ""}
+                onChange={(event) =>
+                setCompanyForm({
+                    ...companyForm,
+                    mining_company: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+                }
+                fullWidth
+            >
+                <MenuItem value="">Sin minera</MenuItem>
+                {miningCompanies.map((miningCompany) => (
+                <MenuItem key={miningCompany.id} value={miningCompany.id}>
+                    {miningCompany.name}
+                </MenuItem>
+                ))}
+            </TextField>
+
+            <TextField
+                label="Correo"
+                value={companyForm.email}
+                onChange={(event) =>
+                setCompanyForm({ ...companyForm, email: event.target.value })
+                }
+                fullWidth
+            />
+
+            <TextField
+                label="Teléfono"
+                value={companyForm.phone}
+                onChange={(event) =>
+                setCompanyForm({ ...companyForm, phone: event.target.value })
+                }
+                fullWidth
+            />
+
+            <TextField
+                label="Dirección"
+                value={companyForm.address}
+                onChange={(event) =>
+                setCompanyForm({ ...companyForm, address: event.target.value })
+                }
+                fullWidth
+            />
+
+            <TextField
+                label="Observaciones"
+                value={companyForm.observations}
+                onChange={(event) =>
+                setCompanyForm({ ...companyForm, observations: event.target.value })
+                }
+                multiline
+                minRows={3}
+                fullWidth
+            />
+            </Stack>
+        </DialogContent>
+
+        <DialogActions>
+            <Button onClick={() => setCompanyDialogOpen(false)}>
+            Cancelar
+            </Button>
+
+            <Button
+            variant="contained"
+            onClick={handleCreateCompany}
+            disabled={savingCompany || !companyForm.name.trim()}
+            >
+            {savingCompany ? "Guardando..." : "Guardar"}
+            </Button>
+        </DialogActions>
+    </Dialog>
     </Stack>
   );
 }

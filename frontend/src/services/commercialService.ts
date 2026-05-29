@@ -94,3 +94,47 @@ export async function getContactosCliente() {
   const response = await api.get<ContactoCliente[]>("/commercial/client-contacts/");
   return response.data;
 }
+
+export type CreateEmpresaClientePayload = {
+  name: string;
+  rut?: string | null;
+  mining_company?: number | null;
+  email?: string;
+  phone?: string;
+  address?: string;
+  status?: string;
+  observations?: string;
+};
+
+export type CreateContactoClientePayload = {
+  first_name: string;
+  last_name?: string;
+  position?: string;
+  company: number;
+  area?: number | null;
+  email?: string;
+  phone?: string;
+  shift?: string;
+  contact_type?: string;
+  alliance_level?: string;
+  status?: string;
+  observations?: string;
+};
+
+export async function createEmpresaCliente(payload: CreateEmpresaClientePayload) {
+  const response = await api.post<EmpresaCliente>(
+    "/commercial/client-companies/",
+    payload
+  );
+
+  return response.data;
+}
+
+export async function createContactoCliente(payload: CreateContactoClientePayload) {
+  const response = await api.post<ContactoCliente>(
+    "/commercial/client-contacts/",
+    payload
+  );
+
+  return response.data;
+}

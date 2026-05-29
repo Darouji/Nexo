@@ -4,6 +4,7 @@ import { AppLayout } from "../layouts/AppLayout";
 import { getStoredUser, logout } from "../services/authService";
 import { UsersPage } from "./UsersPage";
 import { CollaboratorsPage } from "./CollaboratorsPage";
+import { ClientsPage } from "./ClientsPage";
 
 type DashboardPageProps = {
   onLogout: () => void;
@@ -94,6 +95,8 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
         <UsersPage currentUser={user} />
       ) : activeSection === "Colaboradores" ? (
         <CollaboratorsPage />
+      ) : activeSection === "Clientes" ? (
+        <ClientsPage />
       ) : (
         <DashboardHome />
       )}

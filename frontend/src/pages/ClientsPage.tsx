@@ -33,12 +33,14 @@ import {
   getGruposEmpresariales,
   getMineras,
   createEmpresaCliente,
+  createContactoCliente,
   type AreaCliente,
   type ContactoCliente,
   type EmpresaCliente,
   type GrupoEmpresarial,
   type Minera,
   type CreateEmpresaClientePayload,
+  type CreateContactoClientePayload,
 } from "../services/commercialService";
 
 export function ClientsPage() {
@@ -64,7 +66,25 @@ export function ClientsPage() {
     address: "",
     status: "ACTIVO",
     observations: "",
-    });
+  });
+
+  const [contactDialogOpen, setContactDialogOpen] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
+
+  const [contactForm, setContactForm] = useState<CreateContactoClientePayload>({
+    first_name: "",
+    last_name: "",
+    position: "",
+    company: 0,
+    area: null,
+    email: "",
+    phone: "",
+    shift: "",
+    contact_type: "OTRO",
+    alliance_level: "SIN_DEFINIR",
+    status: "ACTIVO",
+    observations: "",
+  });
 
   useEffect(() => {
     async function loadCommercialData() {
@@ -72,19 +92,14 @@ export function ClientsPage() {
         setLoading(true);
         setError("");
 
-        const [
-          groupsData,
-          miningData,
-          companiesData,
-          areasData,
-          contactsData,
-        ] = await Promise.all([
-          getGruposEmpresariales(),
-          getMineras(),
-          getEmpresasCliente(),
-          getAreasCliente(),
-          getContactosCliente(),
-        ]);
+        const [groupsData, miningData, companiesData, areasData, contactsData] =
+          await Promise.all([
+            getGruposEmpresariales(),
+            getMineras(),
+            getEmpresasCliente(),
+            getAreasCliente(),
+            getContactosCliente(),
+          ]);
 
         setBusinessGroups(groupsData);
         setMiningCompanies(miningData);
@@ -101,77 +116,118 @@ export function ClientsPage() {
     loadCommercialData();
   }, []);
 
-    if (loading) {
+  if (loading) {
     return (
-        <Stack spacing={2} sx={{ alignItems: "center" }}>
+      <Stack spacing={2} sx={{ alignItems: "center" }}>
         <CircularProgress />
         <Typography color="text.secondary">Cargando clientes...</Typography>
-        </Stack>
+      </Stack>
     );
+  }
+
+  const normalizedSearch = searchTerm.toLowerCase().trim();
+
+  const filteredCompanies = clientCompanies.filter((company) =>
+    [
+      company.name,
+      company.rut,
+      company.mining_company_name,
+      company.business_group_name,
+      company.phone,
+      company.status,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+  );
+
+  const filteredContacts = clientContacts.filter((contact) =>
+    [
+      contact.full_name,
+      contact.company_name,
+      contact.area_name,
+      contact.position,
+      contact.shift,
+      contact.contact_type,
+      contact.alliance_level,
+      contact.status,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+  );
+
+  async function handleCreateCompany() {
+    try {
+      setSavingCompany(true);
+      setError("");
+
+      const createdCompany = await createEmpresaCliente({
+        ...companyForm,
+        mining_company: companyForm.mining_company || null,
+      });
+
+      setClientCompanies((currentCompanies) => [
+        ...currentCompanies,
+        createdCompany,
+      ]);
+
+      setCompanyForm({
+        name: "",
+        rut: "",
+        mining_company: null,
+        email: "",
+        phone: "",
+        address: "",
+        status: "ACTIVO",
+        observations: "",
+      });
+
+      setCompanyDialogOpen(false);
+    } catch {
+      setError("No se pudo crear la empresa cliente.");
+    } finally {
+      setSavingCompany(false);
     }
+  }
 
-    const normalizedSearch = searchTerm.toLowerCase().trim();
+  async function handleCreateContact() {
+    try {
+      setSavingContact(true);
+      setError("");
 
-    const filteredCompanies = clientCompanies.filter((company) =>
-    [
-        company.name,
-        company.rut,
-        company.mining_company_name,
-        company.business_group_name,
-        company.phone,
-        company.status,
-    ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
-    );
+      const createdContact = await createContactoCliente({
+        ...contactForm,
+        area: contactForm.area || null,
+      });
 
-    const filteredContacts = clientContacts.filter((contact) =>
-    [
-        contact.full_name,
-        contact.company_name,
-        contact.area_name,
-        contact.position,
-        contact.shift,
-        contact.contact_type,
-        contact.alliance_level,
-        contact.status,
-    ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(normalizedSearch))
-    );
+      setClientContacts((currentContacts) => [
+        ...currentContacts,
+        createdContact,
+      ]);
 
-    async function handleCreateCompany() {
-        try {
-            setSavingCompany(true);
-            setError("");
+      setContactForm({
+        first_name: "",
+        last_name: "",
+        position: "",
+        company: 0,
+        area: null,
+        email: "",
+        phone: "",
+        shift: "",
+        contact_type: "OTRO",
+        alliance_level: "SIN_DEFINIR",
+        status: "ACTIVO",
+        observations: "",
+      });
 
-            const createdCompany = await createEmpresaCliente({
-            ...companyForm,
-            mining_company: companyForm.mining_company || null,
-            });
+      setContactDialogOpen(false);
+    } catch {
+      setError("No se pudo crear el contacto cliente.");
+    } finally {
+      setSavingContact(false);
+    }
+  }
 
-            setClientCompanies((currentCompanies) => [...currentCompanies, createdCompany]);
-
-            setCompanyForm({
-            name: "",
-            rut: "",
-            mining_company: null,
-            email: "",
-            phone: "",
-            address: "",
-            status: "ACTIVO",
-            observations: "",
-            });
-
-            setCompanyDialogOpen(false);
-        } catch {
-            setError("No se pudo crear la empresa cliente.");
-        } finally {
-            setSavingCompany(false);
-        }
-        }
-
-    return (
+  return (
     <Stack spacing={3}>
       <Card elevation={0}>
         <CardContent>
@@ -189,7 +245,10 @@ export function ClientsPage() {
       {error && <Alert severity="error">{error}</Alert>}
 
       <Grid container spacing={3}>
-        <SummaryCard title="Grupos empresariales" value={businessGroups.length} />
+        <SummaryCard
+          title="Grupos empresariales"
+          value={businessGroups.length}
+        />
         <SummaryCard title="Mineras" value={miningCompanies.length} />
         <SummaryCard title="Empresas cliente" value={clientCompanies.length} />
         <SummaryCard title="Áreas cliente" value={clientAreas.length} />
@@ -198,249 +257,444 @@ export function ClientsPage() {
 
       <Card elevation={0}>
         <CardContent>
-            <TextField
+          <TextField
             fullWidth
             label="Buscar en clientes"
             placeholder="Buscar empresa, contacto, minera, grupo, área, turno..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            />
+          />
         </CardContent>
       </Card>
 
       <Card elevation={0}>
         <CardContent>
-            <Stack
-            direction="row"
-            sx={{ justifyContent: "space-between", alignItems: "center", mb: 2 }}
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              onClick={() => setCompanyDialogOpen(true)}
             >
-            <Typography variant="h6">Gestión de clientes</Typography>
+              Nueva empresa cliente
+            </Button>
 
             <Button
-                variant="contained"
-                onClick={() => setCompanyDialogOpen(true)}
+              variant="outlined"
+              onClick={() => setContactDialogOpen(true)}
             >
-                Nueva empresa cliente
+              Nuevo contacto cliente
             </Button>
-            </Stack>
-            <Tabs
+          </Stack>
+          <Tabs
             value={activeTab}
             onChange={(_, newValue) => setActiveTab(newValue)}
-            >
+          >
             <Tab label="Empresas cliente" />
             <Tab label="Contactos cliente" />
-            </Tabs>
+          </Tabs>
         </CardContent>
       </Card>
 
-    {activeTab === 0 && (
-      <Card elevation={0}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Empresas cliente
-          </Typography>
+      {activeTab === 0 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Empresas cliente
+            </Typography>
 
-          <TableContainer component={Paper} elevation={0}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Empresa</TableCell>
-                  <TableCell>RUT</TableCell>
-                  <TableCell>Minera</TableCell>
-                  <TableCell>Grupo</TableCell>
-                  <TableCell>Teléfono</TableCell>
-                  <TableCell>Estado</TableCell>
-                </TableRow>
-              </TableHead>
-
-              <TableBody>
-                {filteredCompanies.length === 0 ? (
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={6}>
-                      <Typography color="text.secondary">
-                        No hay empresas cliente registradas.
-                      </Typography>
-                    </TableCell>
+                    <TableCell>Empresa</TableCell>
+                    <TableCell>RUT</TableCell>
+                    <TableCell>Minera</TableCell>
+                    <TableCell>Grupo</TableCell>
+                    <TableCell>Teléfono</TableCell>
+                    <TableCell>Estado</TableCell>
                   </TableRow>
-                ) : (
-                  filteredCompanies.map((company) => (
-                    <TableRow key={company.id} hover>
-                      <TableCell>{company.name}</TableCell>
-                      <TableCell>{company.rut || "-"}</TableCell>
-                      <TableCell>{company.mining_company_name || "-"}</TableCell>
-                      <TableCell>{company.business_group_name || "-"}</TableCell>
-                      <TableCell>{company.phone || "-"}</TableCell>
-                      <TableCell>
-                        <StatusChip status={company.status} />
+                </TableHead>
+
+                <TableBody>
+                  {filteredCompanies.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        <Typography color="text.secondary">
+                          No hay empresas cliente registradas.
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
-    )}
+                  ) : (
+                    filteredCompanies.map((company) => (
+                      <TableRow key={company.id} hover>
+                        <TableCell>{company.name}</TableCell>
+                        <TableCell>{company.rut || "-"}</TableCell>
+                        <TableCell>
+                          {company.mining_company_name || "-"}
+                        </TableCell>
+                        <TableCell>
+                          {company.business_group_name || "-"}
+                        </TableCell>
+                        <TableCell>{company.phone || "-"}</TableCell>
+                        <TableCell>
+                          <StatusChip status={company.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
 
-    {activeTab === 1 && (
-      <Card elevation={0}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Contactos cliente
-          </Typography>
+      {activeTab === 1 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Contactos cliente
+            </Typography>
 
-          <TableContainer component={Paper} elevation={0}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nombre</TableCell>
-                  <TableCell>Empresa</TableCell>
-                  <TableCell>Área</TableCell>
-                  <TableCell>Cargo</TableCell>
-                  <TableCell>Turno</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell>Alianza</TableCell>
-                  <TableCell>Estado</TableCell>
-                </TableRow>
-              </TableHead>
-
-              <TableBody>
-                {filteredContacts.length === 0 ? (
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={8}>
-                      <Typography color="text.secondary">
-                        No hay contactos cliente registrados.
-                      </Typography>
-                    </TableCell>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Empresa</TableCell>
+                    <TableCell>Área</TableCell>
+                    <TableCell>Cargo</TableCell>
+                    <TableCell>Turno</TableCell>
+                    <TableCell>Tipo</TableCell>
+                    <TableCell>Alianza</TableCell>
+                    <TableCell>Estado</TableCell>
                   </TableRow>
-                ) : (
-                  filteredContacts.map((contact) => (
-                    <TableRow key={contact.id} hover>
-                      <TableCell>{contact.full_name}</TableCell>
-                      <TableCell>{contact.company_name}</TableCell>
-                      <TableCell>{contact.area_name || "-"}</TableCell>
-                      <TableCell>{contact.position || "-"}</TableCell>
-                      <TableCell>{contact.shift || "-"}</TableCell>
-                      <TableCell>{contact.contact_type}</TableCell>
-                      <TableCell>{contact.alliance_level}</TableCell>
-                      <TableCell>
-                        <StatusChip status={contact.status} />
+                </TableHead>
+
+                <TableBody>
+                  {filteredContacts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8}>
+                        <Typography color="text.secondary">
+                          No hay contactos cliente registrados.
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
-    )}
-    <Dialog
+                  ) : (
+                    filteredContacts.map((contact) => (
+                      <TableRow key={contact.id} hover>
+                        <TableCell>{contact.full_name}</TableCell>
+                        <TableCell>{contact.company_name}</TableCell>
+                        <TableCell>{contact.area_name || "-"}</TableCell>
+                        <TableCell>{contact.position || "-"}</TableCell>
+                        <TableCell>{contact.shift || "-"}</TableCell>
+                        <TableCell>{contact.contact_type}</TableCell>
+                        <TableCell>{contact.alliance_level}</TableCell>
+                        <TableCell>
+                          <StatusChip status={contact.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+      <Dialog
         open={companyDialogOpen}
         onClose={() => setCompanyDialogOpen(false)}
         fullWidth
         maxWidth="sm"
-        >
+      >
         <DialogTitle>Nueva empresa cliente</DialogTitle>
 
         <DialogContent>
-            <Stack spacing={2} sx={{ mt: 1 }}>
+          <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
-                label="Nombre / Razón social"
-                value={companyForm.name}
-                onChange={(event) =>
+              label="Nombre / Razón social"
+              value={companyForm.name}
+              onChange={(event) =>
                 setCompanyForm({ ...companyForm, name: event.target.value })
-                }
-                required
-                fullWidth
+              }
+              required
+              fullWidth
             />
 
             <TextField
-                label="RUT"
-                value={companyForm.rut}
-                onChange={(event) =>
+              label="RUT"
+              value={companyForm.rut}
+              onChange={(event) =>
                 setCompanyForm({ ...companyForm, rut: event.target.value })
-                }
-                fullWidth
+              }
+              fullWidth
             />
 
             <TextField
-                select
-                label="Minera relacionada"
-                value={companyForm.mining_company ?? ""}
-                onChange={(event) =>
+              select
+              label="Minera relacionada"
+              value={companyForm.mining_company ?? ""}
+              onChange={(event) =>
                 setCompanyForm({
-                    ...companyForm,
-                    mining_company: event.target.value
+                  ...companyForm,
+                  mining_company: event.target.value
                     ? Number(event.target.value)
                     : null,
                 })
-                }
-                fullWidth
+              }
+              fullWidth
             >
-                <MenuItem value="">Sin minera</MenuItem>
-                {miningCompanies.map((miningCompany) => (
+              <MenuItem value="">Sin minera</MenuItem>
+              {miningCompanies.map((miningCompany) => (
                 <MenuItem key={miningCompany.id} value={miningCompany.id}>
-                    {miningCompany.name}
+                  {miningCompany.name}
                 </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="Correo"
+              value={companyForm.email}
+              onChange={(event) =>
+                setCompanyForm({ ...companyForm, email: event.target.value })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Teléfono"
+              value={companyForm.phone}
+              onChange={(event) =>
+                setCompanyForm({ ...companyForm, phone: event.target.value })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Dirección"
+              value={companyForm.address}
+              onChange={(event) =>
+                setCompanyForm({ ...companyForm, address: event.target.value })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Observaciones"
+              value={companyForm.observations}
+              onChange={(event) =>
+                setCompanyForm({
+                  ...companyForm,
+                  observations: event.target.value,
+                })
+              }
+              multiline
+              minRows={3}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setCompanyDialogOpen(false)}>Cancelar</Button>
+
+          <Button
+            variant="contained"
+            onClick={handleCreateCompany}
+            disabled={savingCompany || !companyForm.name.trim()}
+          >
+            {savingCompany ? "Guardando..." : "Guardar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={contactDialogOpen}
+        onClose={() => setContactDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nuevo contacto cliente</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Nombres"
+              value={contactForm.first_name}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  first_name: event.target.value,
+                })
+              }
+              required
+              fullWidth
+            />
+
+            <TextField
+              label="Apellidos"
+              value={contactForm.last_name}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  last_name: event.target.value,
+                })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Cargo"
+              value={contactForm.position}
+              onChange={(event) =>
+                setContactForm({ ...contactForm, position: event.target.value })
+              }
+              fullWidth
+            />
+
+            <TextField
+              select
+              label="Empresa"
+              value={contactForm.company || ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  company: Number(event.target.value),
+                  area: null,
+                })
+              }
+              required
+              fullWidth
+            >
+              <MenuItem value="">Seleccionar empresa</MenuItem>
+              {clientCompanies.map((company) => (
+                <MenuItem key={company.id} value={company.id}>
+                  {company.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              label="Área"
+              value={contactForm.area ?? ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  area: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              fullWidth
+              disabled={!contactForm.company}
+            >
+              <MenuItem value="">Sin área</MenuItem>
+              {clientAreas
+                .filter((area) => area.company === contactForm.company)
+                .map((area) => (
+                  <MenuItem key={area.id} value={area.id}>
+                    {area.name}
+                  </MenuItem>
                 ))}
             </TextField>
 
             <TextField
-                label="Correo"
-                value={companyForm.email}
-                onChange={(event) =>
-                setCompanyForm({ ...companyForm, email: event.target.value })
-                }
-                fullWidth
+              label="Correo"
+              value={contactForm.email}
+              onChange={(event) =>
+                setContactForm({ ...contactForm, email: event.target.value })
+              }
+              fullWidth
             />
 
             <TextField
-                label="Teléfono"
-                value={companyForm.phone}
-                onChange={(event) =>
-                setCompanyForm({ ...companyForm, phone: event.target.value })
-                }
-                fullWidth
+              label="Teléfono"
+              value={contactForm.phone}
+              onChange={(event) =>
+                setContactForm({ ...contactForm, phone: event.target.value })
+              }
+              fullWidth
             />
 
             <TextField
-                label="Dirección"
-                value={companyForm.address}
-                onChange={(event) =>
-                setCompanyForm({ ...companyForm, address: event.target.value })
-                }
-                fullWidth
+              label="Turno"
+              value={contactForm.shift}
+              onChange={(event) =>
+                setContactForm({ ...contactForm, shift: event.target.value })
+              }
+              fullWidth
             />
 
             <TextField
-                label="Observaciones"
-                value={companyForm.observations}
-                onChange={(event) =>
-                setCompanyForm({ ...companyForm, observations: event.target.value })
-                }
-                multiline
-                minRows={3}
-                fullWidth
+              select
+              label="Tipo de contacto"
+              value={contactForm.contact_type}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  contact_type: event.target.value,
+                })
+              }
+              fullWidth
+            >
+              <MenuItem value="COMPRAS">Compras</MenuItem>
+              <MenuItem value="VENTAS">Ventas</MenuItem>
+              <MenuItem value="OPERACION">Operación</MenuItem>
+              <MenuItem value="ADMINISTRACION">Administración</MenuItem>
+              <MenuItem value="FINANZAS">Finanzas</MenuItem>
+              <MenuItem value="TECNICO">Técnico</MenuItem>
+              <MenuItem value="OTRO">Otro</MenuItem>
+            </TextField>
+
+            <TextField
+              select
+              label="Nivel de alianza"
+              value={contactForm.alliance_level}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  alliance_level: event.target.value,
+                })
+              }
+              fullWidth
+            >
+              <MenuItem value="ALTO">Alto</MenuItem>
+              <MenuItem value="MEDIO">Medio</MenuItem>
+              <MenuItem value="BAJO">Bajo</MenuItem>
+              <MenuItem value="SIN_DEFINIR">Sin definir</MenuItem>
+            </TextField>
+
+            <TextField
+              label="Observaciones"
+              value={contactForm.observations}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  observations: event.target.value,
+                })
+              }
+              multiline
+              minRows={3}
+              fullWidth
             />
-            </Stack>
+          </Stack>
         </DialogContent>
 
         <DialogActions>
-            <Button onClick={() => setCompanyDialogOpen(false)}>
-            Cancelar
-            </Button>
+          <Button onClick={() => setContactDialogOpen(false)}>Cancelar</Button>
 
-            <Button
+          <Button
             variant="contained"
-            onClick={handleCreateCompany}
-            disabled={savingCompany || !companyForm.name.trim()}
-            >
-            {savingCompany ? "Guardando..." : "Guardar"}
-            </Button>
+            onClick={handleCreateContact}
+            disabled={
+              savingContact ||
+              !contactForm.first_name.trim() ||
+              !contactForm.company
+            }
+          >
+            {savingContact ? "Guardando..." : "Guardar"}
+          </Button>
         </DialogActions>
-    </Dialog>
+      </Dialog>
     </Stack>
   );
 }

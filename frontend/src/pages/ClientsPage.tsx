@@ -34,6 +34,7 @@ import {
   getMineras,
   createEmpresaCliente,
   createContactoCliente,
+  createAreaCliente,
   type AreaCliente,
   type ContactoCliente,
   type EmpresaCliente,
@@ -41,6 +42,7 @@ import {
   type Minera,
   type CreateEmpresaClientePayload,
   type CreateContactoClientePayload,
+  type CreateAreaClientePayload,
 } from "../services/commercialService";
 
 export function ClientsPage() {
@@ -71,6 +73,17 @@ export function ClientsPage() {
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
 
+  const [areaDialogOpen, setAreaDialogOpen] = useState(false);
+  const [savingArea, setSavingArea] = useState(false);
+
+  const [areaForm, setAreaForm] = useState<CreateAreaClientePayload>({
+    company: 0,
+    name: "",
+    location: "",
+    description: "",
+    status: "ACTIVO",
+  });
+
   const [contactForm, setContactForm] = useState<CreateContactoClientePayload>({
     first_name: "",
     last_name: "",
@@ -80,7 +93,6 @@ export function ClientsPage() {
     email: "",
     phone: "",
     shift: "",
-    contact_type: "OTRO",
     status: "ACTIVO",
     observations: "",
   });
@@ -146,7 +158,6 @@ export function ClientsPage() {
       contact.area_name,
       contact.position,
       contact.shift,
-      contact.contact_type,
       contact.status,
     ]
       .filter(Boolean)
@@ -211,7 +222,6 @@ export function ClientsPage() {
         email: "",
         phone: "",
         shift: "",
-        contact_type: "OTRO",
         status: "ACTIVO",
         observations: "",
       });
@@ -221,6 +231,31 @@ export function ClientsPage() {
       setError("No se pudo crear el contacto cliente.");
     } finally {
       setSavingContact(false);
+    }
+  }
+
+  async function handleCreateArea() {
+    try {
+      setSavingArea(true);
+      setError("");
+
+      const createdArea = await createAreaCliente(areaForm);
+
+      setClientAreas((currentAreas) => [...currentAreas, createdArea]);
+
+      setAreaForm({
+        company: 0,
+        name: "",
+        location: "",
+        description: "",
+        status: "ACTIVO",
+      });
+
+      setAreaDialogOpen(false);
+    } catch {
+      setError("No se pudo crear el área cliente.");
+    } finally {
+      setSavingArea(false);
     }
   }
 
@@ -279,6 +314,9 @@ export function ClientsPage() {
               onClick={() => setContactDialogOpen(true)}
             >
               Nuevo contacto cliente
+            </Button>
+            <Button variant="outlined" onClick={() => setAreaDialogOpen(true)}>
+              Nueva área cliente
             </Button>
           </Stack>
           <Tabs
@@ -361,7 +399,6 @@ export function ClientsPage() {
                     <TableCell>Área</TableCell>
                     <TableCell>Cargo</TableCell>
                     <TableCell>Turno</TableCell>
-                    <TableCell>Tipo</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
                 </TableHead>
@@ -369,7 +406,7 @@ export function ClientsPage() {
                 <TableBody>
                   {filteredContacts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={6}>
                         <Typography color="text.secondary">
                           No hay contactos cliente registrados.
                         </Typography>
@@ -383,7 +420,6 @@ export function ClientsPage() {
                         <TableCell>{contact.area_name || "-"}</TableCell>
                         <TableCell>{contact.position || "-"}</TableCell>
                         <TableCell>{contact.shift || "-"}</TableCell>
-                        <TableCell>{contact.contact_type}</TableCell>
                         <TableCell>
                           <StatusChip status={contact.status} />
                         </TableCell>
@@ -504,6 +540,85 @@ export function ClientsPage() {
       </Dialog>
 
       <Dialog
+        open={areaDialogOpen}
+        onClose={() => setAreaDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nueva área cliente</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              select
+              label="Empresa"
+              value={areaForm.company || ""}
+              onChange={(event) =>
+                setAreaForm({
+                  ...areaForm,
+                  company: Number(event.target.value),
+                })
+              }
+              required
+              fullWidth
+            >
+              <MenuItem value="">Seleccionar empresa</MenuItem>
+              {clientCompanies.map((company) => (
+                <MenuItem key={company.id} value={company.id}>
+                  {company.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="Nombre del área"
+              value={areaForm.name}
+              onChange={(event) =>
+                setAreaForm({ ...areaForm, name: event.target.value })
+              }
+              required
+              fullWidth
+            />
+
+            <TextField
+              label="Ubicación"
+              value={areaForm.location}
+              onChange={(event) =>
+                setAreaForm({ ...areaForm, location: event.target.value })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Descripción"
+              value={areaForm.description}
+              onChange={(event) =>
+                setAreaForm({
+                  ...areaForm,
+                  description: event.target.value,
+                })
+              }
+              multiline
+              minRows={3}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setAreaDialogOpen(false)}>Cancelar</Button>
+
+          <Button
+            variant="contained"
+            onClick={handleCreateArea}
+            disabled={savingArea || !areaForm.company || !areaForm.name.trim()}
+          >
+            {savingArea ? "Guardando..." : "Guardar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={contactDialogOpen}
         onClose={() => setContactDialogOpen(false)}
         fullWidth
@@ -618,27 +733,6 @@ export function ClientsPage() {
               }
               fullWidth
             />
-
-            <TextField
-              select
-              label="Tipo de contacto"
-              value={contactForm.contact_type}
-              onChange={(event) =>
-                setContactForm({
-                  ...contactForm,
-                  contact_type: event.target.value,
-                })
-              }
-              fullWidth
-            >
-              <MenuItem value="COMPRAS">Compras</MenuItem>
-              <MenuItem value="VENTAS">Ventas</MenuItem>
-              <MenuItem value="OPERACION">Operación</MenuItem>
-              <MenuItem value="ADMINISTRACION">Administración</MenuItem>
-              <MenuItem value="FINANZAS">Finanzas</MenuItem>
-              <MenuItem value="TECNICO">Técnico</MenuItem>
-              <MenuItem value="OTRO">Otro</MenuItem>
-            </TextField>
 
             <TextField
               label="Observaciones"

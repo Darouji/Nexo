@@ -6,15 +6,6 @@ class RecordStatus(models.TextChoices):
     INACTIVO = "INACTIVO", "Inactivo"
 
 
-class ContactType(models.TextChoices):
-    COMPRAS = "COMPRAS", "Compras"
-    VENTAS = "VENTAS", "Ventas"
-    OPERACION = "OPERACION", "Operación"
-    ADMINISTRACION = "ADMINISTRACION", "Administración"
-    FINANZAS = "FINANZAS", "Finanzas"
-    TECNICO = "TECNICO", "Técnico"
-    OTRO = "OTRO", "Otro"
-
 class GrupoEmpresarial(models.Model):
     name = models.CharField(max_length=180, unique=True, verbose_name="Nombre")
     description = models.TextField(blank=True, verbose_name="Descripción")
@@ -172,12 +163,7 @@ class ContactoCliente(models.Model):
     email = models.EmailField(blank=True, verbose_name="Correo")
     phone = models.CharField(max_length=30, blank=True, verbose_name="Teléfono")
     shift = models.CharField(max_length=80, blank=True, verbose_name="Turno")
-    contact_type = models.CharField(
-        max_length=30,
-        choices=ContactType.choices,
-        default=ContactType.OTRO,
-        verbose_name="Tipo de contacto",
-    )
+    
     status = models.CharField(
         max_length=20,
         choices=RecordStatus.choices,

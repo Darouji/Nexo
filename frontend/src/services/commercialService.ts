@@ -62,7 +62,6 @@ export interface ContactoCliente {
   email: string;
   phone: string;
   shift: string;
-  contact_type: string;
   status: string;
   observations: string;
   created_at: string;
@@ -120,7 +119,6 @@ export type CreateContactoClientePayload = {
   email?: string;
   phone?: string;
   shift?: string;
-  contact_type?: string;
   status?: string;
   observations?: string;
 };

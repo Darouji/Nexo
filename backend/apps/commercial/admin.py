@@ -60,12 +60,10 @@ class ContactoClienteAdmin(admin.ModelAdmin):
         "position",
         "email",
         "phone",
-        "contact_type",
         "status",
     )
     list_filter = (
         "status",
-        "contact_type",
         "company",
         "area",
     )

@@ -100,7 +100,6 @@ class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
         "last_name",
         "company__name",
         "area__name",
-        "contact_type",
         "status",
         "created_at",
         "updated_at",

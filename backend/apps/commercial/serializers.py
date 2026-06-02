@@ -129,7 +129,6 @@ class ContactoClienteSerializer(serializers.ModelSerializer):
             "email",
             "phone",
             "shift",
-            "contact_type",
             "status",
             "observations",
             "created_at",

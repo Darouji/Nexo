@@ -95,16 +95,16 @@ class ContactoClienteAdmin(admin.ModelAdmin):
         "shift_mode",
     )
     search_fields = (
-        "city__name",
         "first_name",
         "last_name",
+        "company__name",
+        "city__name",
+        "area__name",
+        "subarea__name",
         "position",
         "email",
         "phone",
         "shift",
         "observations",
-        "company__name",
-        "area__name",
-        "subarea__name",
     )
     ordering = ("last_name", "first_name")

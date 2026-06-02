@@ -123,9 +123,9 @@ class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
         "shift",
         "observations",
         "company__name",
+        "city__name",
         "area__name",
         "subarea__name",
-        "city__name",
         "shift_mode",
     ]
     ordering_fields = [

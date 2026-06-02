@@ -35,7 +35,7 @@ class MineraAdmin(admin.ModelAdmin):
 
 @admin.register(EmpresaCliente)
 class EmpresaClienteAdmin(admin.ModelAdmin):
-    list_display = ("name", "rut", "city", "mining_company", "email", "phone", "status")
+    list_display = ("name", "rut", "mining_company", "city", "email", "phone", "status")
     list_filter = ("status", "city", "mining_company", "mining_company__business_group")
     search_fields = (
         "name",
@@ -74,10 +74,10 @@ class SubAreaClienteAdmin(admin.ModelAdmin):
 @admin.register(ContactoCliente)
 class ContactoClienteAdmin(admin.ModelAdmin):
     list_display = (
-        "city",
         "first_name",
         "last_name",
         "company",
+        "city",
         "area",
         "subarea",
         "position",

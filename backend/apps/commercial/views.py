@@ -107,8 +107,8 @@ class SubAreaClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
 
 class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
     queryset = ContactoCliente.objects.select_related(
-        "city",
         "company",
+        "city",
         "area",
         "subarea",
     ).all()
@@ -135,7 +135,7 @@ class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
         "area__name",
         "status",
         "created_at",
-        "updated_at"
+        "updated_at",
         "subarea__name",
         "city__name",
         "shift_mode",

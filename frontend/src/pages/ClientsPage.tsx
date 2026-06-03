@@ -652,6 +652,27 @@ export function ClientsPage() {
             </TextField>
 
             <TextField
+              select
+              label="Ciudad"
+              value={contactForm.city ?? ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  city: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              fullWidth
+            >
+              <MenuItem value="">Sin ciudad</MenuItem>
+              {cities.map((city) => (
+                <MenuItem key={city.id} value={city.id}>
+                  {city.name}
+                  {city.region ? ` - ${city.region}` : ""}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
               label="Nombre del área"
               value={areaForm.name}
               onChange={(event) =>

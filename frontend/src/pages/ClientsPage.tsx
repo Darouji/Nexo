@@ -96,10 +96,16 @@ export function ClientsPage() {
     last_name: "",
     position: "",
     company: 0,
+    city: null,
     area: null,
+    subarea: null,
     email: "",
     phone: "",
     shift: "",
+    active_days: null,
+    rest_days: null,
+    active_cycle_start_date: null,
+    shift_mode: "SIN_DEFINIR",
     status: "ACTIVO",
     observations: "",
   });
@@ -174,9 +180,14 @@ export function ClientsPage() {
     [
       contact.full_name,
       contact.company_name,
+      contact.city_name,
       contact.area_name,
+      contact.subarea_name,
       contact.position,
+      contact.email,
+      contact.phone,
       contact.shift,
+      contact.shift_mode_display,
       contact.status,
     ]
       .filter(Boolean)
@@ -226,7 +237,13 @@ export function ClientsPage() {
 
       const createdContact = await createContactoCliente({
         ...contactForm,
+        city: contactForm.city || null,
         area: contactForm.area || null,
+        subarea: contactForm.subarea || null,
+        active_days: contactForm.active_days || null,
+        rest_days: contactForm.rest_days || null,
+        active_cycle_start_date: contactForm.active_cycle_start_date || null,
+        shift_mode: contactForm.shift_mode || "SIN_DEFINIR",
       });
 
       setClientContacts((currentContacts) => [
@@ -239,10 +256,16 @@ export function ClientsPage() {
         last_name: "",
         position: "",
         company: 0,
+        city: null,
         area: null,
+        subarea: null,
         email: "",
         phone: "",
         shift: "",
+        active_days: null,
+        rest_days: null,
+        active_cycle_start_date: null,
+        shift_mode: "SIN_DEFINIR",
         status: "ACTIVO",
         observations: "",
       });
@@ -421,9 +444,14 @@ export function ClientsPage() {
                   <TableRow>
                     <TableCell>Nombre</TableCell>
                     <TableCell>Empresa</TableCell>
+                    <TableCell>Ciudad</TableCell>
                     <TableCell>Área</TableCell>
+                    <TableCell>Subárea</TableCell>
                     <TableCell>Cargo</TableCell>
+                    <TableCell>Teléfono</TableCell>
+                    <TableCell>Correo</TableCell>
                     <TableCell>Turno</TableCell>
+                    <TableCell>Modalidad</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
                 </TableHead>
@@ -431,7 +459,7 @@ export function ClientsPage() {
                 <TableBody>
                   {filteredContacts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6}>
+                      <TableCell colSpan={11}>
                         <Typography color="text.secondary">
                           No hay contactos cliente registrados.
                         </Typography>
@@ -442,9 +470,16 @@ export function ClientsPage() {
                       <TableRow key={contact.id} hover>
                         <TableCell>{contact.full_name}</TableCell>
                         <TableCell>{contact.company_name}</TableCell>
+                        <TableCell>{contact.city_name || "-"}</TableCell>
                         <TableCell>{contact.area_name || "-"}</TableCell>
+                        <TableCell>{contact.subarea_name || "-"}</TableCell>
                         <TableCell>{contact.position || "-"}</TableCell>
+                        <TableCell>{contact.email || "-"}</TableCell>
+                        <TableCell>{contact.phone || "-"}</TableCell>
                         <TableCell>{contact.shift || "-"}</TableCell>
+                        <TableCell>
+                          {contact.shift_mode_display || "-"}
+                        </TableCell>
                         <TableCell>
                           <StatusChip status={contact.status} />
                         </TableCell>
@@ -700,15 +735,6 @@ export function ClientsPage() {
             />
 
             <TextField
-              label="Cargo"
-              value={contactForm.position}
-              onChange={(event) =>
-                setContactForm({ ...contactForm, position: event.target.value })
-              }
-              fullWidth
-            />
-
-            <TextField
               select
               label="Empresa"
               value={contactForm.company || ""}
@@ -717,6 +743,7 @@ export function ClientsPage() {
                   ...contactForm,
                   company: Number(event.target.value),
                   area: null,
+                  subarea: null,
                 })
               }
               required
@@ -732,12 +759,34 @@ export function ClientsPage() {
 
             <TextField
               select
+              label="Ciudad"
+              value={contactForm.city ?? ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  city: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              fullWidth
+            >
+              <MenuItem value="">Sin ciudad</MenuItem>
+              {cities.map((city) => (
+                <MenuItem key={city.id} value={city.id}>
+                  {city.name}
+                  {city.region ? ` - ${city.region}` : ""}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
               label="Área"
               value={contactForm.area ?? ""}
               onChange={(event) =>
                 setContactForm({
                   ...contactForm,
                   area: event.target.value ? Number(event.target.value) : null,
+                  subarea: null,
                 })
               }
               fullWidth
@@ -752,6 +801,40 @@ export function ClientsPage() {
                   </MenuItem>
                 ))}
             </TextField>
+
+            <TextField
+              select
+              label="Subárea"
+              value={contactForm.subarea ?? ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  subarea: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+              fullWidth
+              disabled={!contactForm.area}
+            >
+              <MenuItem value="">Sin subárea</MenuItem>
+              {clientSubAreas
+                .filter((subarea) => subarea.area === contactForm.area)
+                .map((subarea) => (
+                  <MenuItem key={subarea.id} value={subarea.id}>
+                    {subarea.name}
+                  </MenuItem>
+                ))}
+            </TextField>
+
+            <TextField
+              label="Cargo"
+              value={contactForm.position}
+              onChange={(event) =>
+                setContactForm({ ...contactForm, position: event.target.value })
+              }
+              fullWidth
+            />
 
             <TextField
               label="Correo"
@@ -779,6 +862,67 @@ export function ClientsPage() {
               }
               fullWidth
             />
+
+            <TextField
+              label="Días activos"
+              type="number"
+              value={contactForm.active_days ?? ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  active_days: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Días descanso"
+              type="number"
+              value={contactForm.rest_days ?? ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  rest_days: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Fecha inicio ciclo activo"
+              type="date"
+              value={contactForm.active_cycle_start_date ?? ""}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  active_cycle_start_date: event.target.value || null,
+                })
+              }
+              slotProps={{ inputLabel: { shrink: true } }}
+              fullWidth
+            />
+
+            <TextField
+              select
+              label="Modalidad"
+              value={contactForm.shift_mode ?? "SIN_DEFINIR"}
+              onChange={(event) =>
+                setContactForm({
+                  ...contactForm,
+                  shift_mode: event.target.value,
+                })
+              }
+              fullWidth
+            >
+              <MenuItem value="SIN_DEFINIR">Sin definir</MenuItem>
+              <MenuItem value="DIA">Día</MenuItem>
+              <MenuItem value="NOCHE">Noche</MenuItem>
+            </TextField>
 
             <TextField
               label="Observaciones"

@@ -27,19 +27,23 @@ import {
 } from "@mui/material";
 
 import {
-  getAreasCliente,
-  getContactosCliente,
-  getEmpresasCliente,
   getGruposEmpresariales,
+  getCiudades,
+  getEmpresasCliente,
   getMineras,
+  getAreasCliente,
+  getSubAreasCliente,
+  getContactosCliente,
   createEmpresaCliente,
   createContactoCliente,
   createAreaCliente,
-  type AreaCliente,
-  type ContactoCliente,
-  type EmpresaCliente,
   type GrupoEmpresarial,
+  type Ciudad,
+  type EmpresaCliente,
   type Minera,
+  type AreaCliente,
+  type SubAreaCliente,
+  type ContactoCliente,
   type CreateEmpresaClientePayload,
   type CreateContactoClientePayload,
   type CreateAreaClientePayload,
@@ -47,9 +51,11 @@ import {
 
 export function ClientsPage() {
   const [businessGroups, setBusinessGroups] = useState<GrupoEmpresarial[]>([]);
+  const [cities, setCities] = useState<Ciudad[]>([]);
   const [miningCompanies, setMiningCompanies] = useState<Minera[]>([]);
   const [clientCompanies, setClientCompanies] = useState<EmpresaCliente[]>([]);
   const [clientAreas, setClientAreas] = useState<AreaCliente[]>([]);
+  const [clientSubAreas, setClientSubAreas] = useState<SubAreaCliente[]>([]);
   const [clientContacts, setClientContacts] = useState<ContactoCliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -63,6 +69,7 @@ export function ClientsPage() {
     name: "",
     rut: "",
     mining_company: null,
+    city: null,
     email: "",
     phone: "",
     address: "",
@@ -103,19 +110,30 @@ export function ClientsPage() {
         setLoading(true);
         setError("");
 
-        const [groupsData, miningData, companiesData, areasData, contactsData] =
-          await Promise.all([
-            getGruposEmpresariales(),
-            getMineras(),
-            getEmpresasCliente(),
-            getAreasCliente(),
-            getContactosCliente(),
-          ]);
+        const [
+          groupsData,
+          citiesData,
+          miningData,
+          companiesData,
+          areasData,
+          subAreasData,
+          contactsData,
+        ] = await Promise.all([
+          getGruposEmpresariales(),
+          getCiudades(),
+          getMineras(),
+          getEmpresasCliente(),
+          getAreasCliente(),
+          getSubAreasCliente(),
+          getContactosCliente(),
+        ]);
 
         setBusinessGroups(groupsData);
+        setCities(citiesData);
         setMiningCompanies(miningData);
         setClientCompanies(companiesData);
         setClientAreas(areasData);
+        setClientSubAreas(subAreasData);
         setClientContacts(contactsData);
       } catch {
         setError("No se pudo cargar la información comercial.");
@@ -144,6 +162,7 @@ export function ClientsPage() {
       company.rut,
       company.mining_company_name,
       company.business_group_name,
+      company.city_name,
       company.phone,
       company.status,
     ]
@@ -172,6 +191,7 @@ export function ClientsPage() {
       const createdCompany = await createEmpresaCliente({
         ...companyForm,
         mining_company: companyForm.mining_company || null,
+        city: companyForm.city || null,
       });
 
       setClientCompanies((currentCompanies) => [
@@ -183,6 +203,7 @@ export function ClientsPage() {
         name: "",
         rut: "",
         mining_company: null,
+        city: null,
         email: "",
         phone: "",
         address: "",
@@ -281,9 +302,11 @@ export function ClientsPage() {
           title="Grupos empresariales"
           value={businessGroups.length}
         />
+        <SummaryCard title="Ciudades" value={cities.length} />
         <SummaryCard title="Mineras" value={miningCompanies.length} />
         <SummaryCard title="Empresas cliente" value={clientCompanies.length} />
         <SummaryCard title="Áreas cliente" value={clientAreas.length} />
+        <SummaryCard title="Subáreas cliente" value={clientSubAreas.length} />
         <SummaryCard title="Contactos cliente" value={clientContacts.length} />
       </Grid>
 
@@ -344,6 +367,7 @@ export function ClientsPage() {
                     <TableCell>RUT</TableCell>
                     <TableCell>Minera</TableCell>
                     <TableCell>Grupo</TableCell>
+                    <TableCell>Ciudad</TableCell>
                     <TableCell>Teléfono</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
@@ -352,7 +376,7 @@ export function ClientsPage() {
                 <TableBody>
                   {filteredCompanies.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6}>
+                      <TableCell colSpan={7}>
                         <Typography color="text.secondary">
                           No hay empresas cliente registradas.
                         </Typography>
@@ -369,6 +393,7 @@ export function ClientsPage() {
                         <TableCell>
                           {company.business_group_name || "-"}
                         </TableCell>
+                        <TableCell>{company.city_name || "-"}</TableCell>
                         <TableCell>{company.phone || "-"}</TableCell>
                         <TableCell>
                           <StatusChip status={company.status} />
@@ -479,6 +504,27 @@ export function ClientsPage() {
               {miningCompanies.map((miningCompany) => (
                 <MenuItem key={miningCompany.id} value={miningCompany.id}>
                   {miningCompany.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              label="Ciudad"
+              value={companyForm.city ?? ""}
+              onChange={(event) =>
+                setCompanyForm({
+                  ...companyForm,
+                  city: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              fullWidth
+            >
+              <MenuItem value="">Sin ciudad</MenuItem>
+              {cities.map((city) => (
+                <MenuItem key={city.id} value={city.id}>
+                  {city.name}
+                  {city.region ? ` - ${city.region}` : ""}
                 </MenuItem>
               ))}
             </TextField>

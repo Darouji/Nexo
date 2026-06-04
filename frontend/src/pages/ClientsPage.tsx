@@ -37,6 +37,7 @@ import {
   createEmpresaCliente,
   createContactoCliente,
   createAreaCliente,
+  createSubAreaCliente,
   type GrupoEmpresarial,
   type Ciudad,
   type EmpresaCliente,
@@ -47,6 +48,7 @@ import {
   type CreateEmpresaClientePayload,
   type CreateContactoClientePayload,
   type CreateAreaClientePayload,
+  type CreateSubAreaClientePayload,
 } from "../services/commercialService";
 
 export function ClientsPage() {
@@ -83,13 +85,8 @@ export function ClientsPage() {
   const [areaDialogOpen, setAreaDialogOpen] = useState(false);
   const [savingArea, setSavingArea] = useState(false);
 
-  const [areaForm, setAreaForm] = useState<CreateAreaClientePayload>({
-    company: 0,
-    name: "",
-    location: "",
-    description: "",
-    status: "ACTIVO",
-  });
+  const [subAreaDialogOpen, setSubAreaDialogOpen] = useState(false);
+  const [savingSubArea, setSavingSubArea] = useState(false);
 
   const [contactForm, setContactForm] = useState<CreateContactoClientePayload>({
     first_name: "",
@@ -108,6 +105,21 @@ export function ClientsPage() {
     shift_mode: "SIN_DEFINIR",
     status: "ACTIVO",
     observations: "",
+  });
+
+  const [areaForm, setAreaForm] = useState<CreateAreaClientePayload>({
+    company: 0,
+    name: "",
+    location: "",
+    description: "",
+    status: "ACTIVO",
+  });
+
+  const [subAreaForm, setSubAreaForm] = useState<CreateSubAreaClientePayload>({
+    area: 0,
+    name: "",
+    description: "",
+    status: "ACTIVO",
   });
 
   useEffect(() => {
@@ -321,6 +333,33 @@ export function ClientsPage() {
     }
   }
 
+  async function handleCreateSubArea() {
+    try {
+      setSavingSubArea(true);
+      setError("");
+
+      const createdSubArea = await createSubAreaCliente(subAreaForm);
+
+      setClientSubAreas((currentSubAreas) => [
+        ...currentSubAreas,
+        createdSubArea,
+      ]);
+
+      setSubAreaForm({
+        area: 0,
+        name: "",
+        description: "",
+        status: "ACTIVO",
+      });
+
+      setSubAreaDialogOpen(false);
+    } catch {
+      setError("No se pudo crear la subárea cliente.");
+    } finally {
+      setSavingSubArea(false);
+    }
+  }
+
   return (
     <Stack spacing={3}>
       <Card elevation={0}>
@@ -381,6 +420,12 @@ export function ClientsPage() {
             </Button>
             <Button variant="outlined" onClick={() => setAreaDialogOpen(true)}>
               Nueva área cliente
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => setSubAreaDialogOpen(true)}
+            >
+              Nueva subárea cliente
             </Button>
           </Stack>
           <Tabs
@@ -515,51 +560,6 @@ export function ClientsPage() {
         </Card>
       )}
 
-      {activeTab === 2 && (
-        <Card elevation={0}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Áreas cliente
-            </Typography>
-
-            <TableContainer component={Paper} elevation={0}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Área</TableCell>
-                    <TableCell>Empresa</TableCell>
-                    <TableCell>Ubicación</TableCell>
-                    <TableCell>Estado</TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {filteredAreas.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4}>
-                        <Typography color="text.secondary">
-                          No hay áreas cliente registradas.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredAreas.map((area) => (
-                      <TableRow key={area.id} hover>
-                        <TableCell>{area.name}</TableCell>
-                        <TableCell>{area.company_name}</TableCell>
-                        <TableCell>{area.location || "-"}</TableCell>
-                        <TableCell>
-                          <StatusChip status={area.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
       {activeTab === 2 && (
         <Card elevation={0}>
           <CardContent>
@@ -855,6 +855,81 @@ export function ClientsPage() {
             disabled={savingArea || !areaForm.company || !areaForm.name.trim()}
           >
             {savingArea ? "Guardando..." : "Guardar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={subAreaDialogOpen}
+        onClose={() => setSubAreaDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nueva subárea cliente</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              select
+              label="Área"
+              value={subAreaForm.area || ""}
+              onChange={(event) =>
+                setSubAreaForm({
+                  ...subAreaForm,
+                  area: Number(event.target.value),
+                })
+              }
+              required
+              fullWidth
+            >
+              <MenuItem value="">Seleccionar área</MenuItem>
+              {clientAreas.map((area) => (
+                <MenuItem key={area.id} value={area.id}>
+                  {area.company_name} - {area.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="Nombre de la subárea"
+              value={subAreaForm.name}
+              onChange={(event) =>
+                setSubAreaForm({
+                  ...subAreaForm,
+                  name: event.target.value,
+                })
+              }
+              required
+              fullWidth
+            />
+
+            <TextField
+              label="Descripción"
+              value={subAreaForm.description}
+              onChange={(event) =>
+                setSubAreaForm({
+                  ...subAreaForm,
+                  description: event.target.value,
+                })
+              }
+              multiline
+              minRows={3}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setSubAreaDialogOpen(false)}>Cancelar</Button>
+
+          <Button
+            variant="contained"
+            onClick={handleCreateSubArea}
+            disabled={
+              savingSubArea || !subAreaForm.area || !subAreaForm.name.trim()
+            }
+          >
+            {savingSubArea ? "Guardando..." : "Guardar"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -803,56 +803,6 @@ export function ClientsPage() {
           </Stack>
         </DialogContent>
 
-        <Dialog
-          open={cityDialogOpen}
-          onClose={() => setCityDialogOpen(false)}
-          fullWidth
-          maxWidth="sm"
-        >
-          <DialogTitle>Nueva ciudad</DialogTitle>
-
-          <DialogContent>
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <TextField
-                label="Nombre de la ciudad"
-                value={cityForm.name}
-                onChange={(event) =>
-                  setCityForm({
-                    ...cityForm,
-                    name: event.target.value,
-                  })
-                }
-                required
-                fullWidth
-              />
-
-              <TextField
-                label="Región"
-                value={cityForm.region}
-                onChange={(event) =>
-                  setCityForm({
-                    ...cityForm,
-                    region: event.target.value,
-                  })
-                }
-                fullWidth
-              />
-            </Stack>
-          </DialogContent>
-
-          <DialogActions>
-            <Button onClick={() => setCityDialogOpen(false)}>Cancelar</Button>
-
-            <Button
-              variant="contained"
-              onClick={handleCreateCity}
-              disabled={savingCity || !cityForm.name.trim()}
-            >
-              {savingCity ? "Guardando..." : "Guardar"}
-            </Button>
-          </DialogActions>
-        </Dialog>
-
         <DialogActions>
           <Button onClick={() => setCompanyDialogOpen(false)}>Cancelar</Button>
 
@@ -862,6 +812,56 @@ export function ClientsPage() {
             disabled={savingCompany || !companyForm.name.trim()}
           >
             {savingCompany ? "Guardando..." : "Guardar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={cityDialogOpen}
+        onClose={() => setCityDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nueva ciudad</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Nombre de la ciudad"
+              value={cityForm.name}
+              onChange={(event) =>
+                setCityForm({
+                  ...cityForm,
+                  name: event.target.value,
+                })
+              }
+              required
+              fullWidth
+            />
+
+            <TextField
+              label="Región"
+              value={cityForm.region}
+              onChange={(event) =>
+                setCityForm({
+                  ...cityForm,
+                  region: event.target.value,
+                })
+              }
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setCityDialogOpen(false)}>Cancelar</Button>
+
+          <Button
+            variant="contained"
+            onClick={handleCreateCity}
+            disabled={savingCity || !cityForm.name.trim()}
+          >
+            {savingCity ? "Guardando..." : "Guardar"}
           </Button>
         </DialogActions>
       </Dialog>

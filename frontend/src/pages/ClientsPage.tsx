@@ -194,6 +194,24 @@ export function ClientsPage() {
       .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
   );
 
+  const filteredAreas = clientAreas.filter((area) =>
+    [area.name, area.company_name, area.location, area.description, area.status]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+  );
+
+  const filteredSubAreas = clientSubAreas.filter((subArea) =>
+    [
+      subArea.name,
+      subArea.area_name,
+      subArea.company_name,
+      subArea.description,
+      subArea.status,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+  );
+
   async function handleCreateCompany() {
     try {
       setSavingCompany(true);
@@ -368,9 +386,13 @@ export function ClientsPage() {
           <Tabs
             value={activeTab}
             onChange={(_, newValue) => setActiveTab(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
           >
             <Tab label="Empresas cliente" />
             <Tab label="Contactos cliente" />
+            <Tab label="Áreas cliente" />
+            <Tab label="Subáreas cliente" />
           </Tabs>
         </CardContent>
       </Card>
@@ -448,8 +470,8 @@ export function ClientsPage() {
                     <TableCell>Área</TableCell>
                     <TableCell>Subárea</TableCell>
                     <TableCell>Cargo</TableCell>
-                    <TableCell>Teléfono</TableCell>
                     <TableCell>Correo</TableCell>
+                    <TableCell>Teléfono</TableCell>
                     <TableCell>Turno</TableCell>
                     <TableCell>Modalidad</TableCell>
                     <TableCell>Estado</TableCell>
@@ -492,6 +514,144 @@ export function ClientsPage() {
           </CardContent>
         </Card>
       )}
+
+      {activeTab === 2 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Áreas cliente
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Área</TableCell>
+                    <TableCell>Empresa</TableCell>
+                    <TableCell>Ubicación</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredAreas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <Typography color="text.secondary">
+                          No hay áreas cliente registradas.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredAreas.map((area) => (
+                      <TableRow key={area.id} hover>
+                        <TableCell>{area.name}</TableCell>
+                        <TableCell>{area.company_name}</TableCell>
+                        <TableCell>{area.location || "-"}</TableCell>
+                        <TableCell>
+                          <StatusChip status={area.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+      {activeTab === 2 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Áreas cliente
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Área</TableCell>
+                    <TableCell>Empresa</TableCell>
+                    <TableCell>Ubicación</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredAreas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <Typography color="text.secondary">
+                          No hay áreas cliente registradas.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredAreas.map((area) => (
+                      <TableRow key={area.id} hover>
+                        <TableCell>{area.name}</TableCell>
+                        <TableCell>{area.company_name}</TableCell>
+                        <TableCell>{area.location || "-"}</TableCell>
+                        <TableCell>
+                          <StatusChip status={area.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 3 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Subáreas cliente
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Subárea</TableCell>
+                    <TableCell>Área</TableCell>
+                    <TableCell>Empresa</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredSubAreas.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <Typography color="text.secondary">
+                          No hay subáreas cliente registradas.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredSubAreas.map((subArea) => (
+                      <TableRow key={subArea.id} hover>
+                        <TableCell>{subArea.name}</TableCell>
+                        <TableCell>{subArea.area_name}</TableCell>
+                        <TableCell>{subArea.company_name}</TableCell>
+                        <TableCell>
+                          <StatusChip status={subArea.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
       <Dialog
         open={companyDialogOpen}
         onClose={() => setCompanyDialogOpen(false)}

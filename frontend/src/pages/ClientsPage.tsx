@@ -35,20 +35,22 @@ import {
   getSubAreasCliente,
   getContactosCliente,
   createEmpresaCliente,
-  createContactoCliente,
+  createCiudad,
   createAreaCliente,
   createSubAreaCliente,
+  createContactoCliente,
   type GrupoEmpresarial,
-  type Ciudad,
   type EmpresaCliente,
+  type Ciudad,
   type Minera,
   type AreaCliente,
   type SubAreaCliente,
   type ContactoCliente,
   type CreateEmpresaClientePayload,
-  type CreateContactoClientePayload,
+  type CreateCiudadPayload,
   type CreateAreaClientePayload,
   type CreateSubAreaClientePayload,
+  type CreateContactoClientePayload,
 } from "../services/commercialService";
 
 export function ClientsPage() {
@@ -88,6 +90,9 @@ export function ClientsPage() {
   const [subAreaDialogOpen, setSubAreaDialogOpen] = useState(false);
   const [savingSubArea, setSavingSubArea] = useState(false);
 
+  const [cityDialogOpen, setCityDialogOpen] = useState(false);
+  const [savingCity, setSavingCity] = useState(false);
+
   const [contactForm, setContactForm] = useState<CreateContactoClientePayload>({
     first_name: "",
     last_name: "",
@@ -105,6 +110,12 @@ export function ClientsPage() {
     shift_mode: "SIN_DEFINIR",
     status: "ACTIVO",
     observations: "",
+  });
+
+  const [cityForm, setCityForm] = useState<CreateCiudadPayload>({
+    name: "",
+    region: "",
+    status: "ACTIVO",
   });
 
   const [areaForm, setAreaForm] = useState<CreateAreaClientePayload>({
@@ -360,6 +371,29 @@ export function ClientsPage() {
     }
   }
 
+  async function handleCreateCity() {
+    try {
+      setSavingCity(true);
+      setError("");
+
+      const createdCity = await createCiudad(cityForm);
+
+      setCities((currentCities) => [...currentCities, createdCity]);
+
+      setCityForm({
+        name: "",
+        region: "",
+        status: "ACTIVO",
+      });
+
+      setCityDialogOpen(false);
+    } catch {
+      setError("No se pudo crear la ciudad.");
+    } finally {
+      setSavingCity(false);
+    }
+  }
+
   return (
     <Stack spacing={3}>
       <Card elevation={0}>
@@ -411,7 +445,9 @@ export function ClientsPage() {
             >
               Nueva empresa cliente
             </Button>
-
+            <Button variant="outlined" onClick={() => setCityDialogOpen(true)}>
+              Nueva ciudad
+            </Button>
             <Button
               variant="outlined"
               onClick={() => setContactDialogOpen(true)}
@@ -766,6 +802,56 @@ export function ClientsPage() {
             />
           </Stack>
         </DialogContent>
+
+        <Dialog
+          open={cityDialogOpen}
+          onClose={() => setCityDialogOpen(false)}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle>Nueva ciudad</DialogTitle>
+
+          <DialogContent>
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <TextField
+                label="Nombre de la ciudad"
+                value={cityForm.name}
+                onChange={(event) =>
+                  setCityForm({
+                    ...cityForm,
+                    name: event.target.value,
+                  })
+                }
+                required
+                fullWidth
+              />
+
+              <TextField
+                label="Región"
+                value={cityForm.region}
+                onChange={(event) =>
+                  setCityForm({
+                    ...cityForm,
+                    region: event.target.value,
+                  })
+                }
+                fullWidth
+              />
+            </Stack>
+          </DialogContent>
+
+          <DialogActions>
+            <Button onClick={() => setCityDialogOpen(false)}>Cancelar</Button>
+
+            <Button
+              variant="contained"
+              onClick={handleCreateCity}
+              disabled={savingCity || !cityForm.name.trim()}
+            >
+              {savingCity ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <DialogActions>
           <Button onClick={() => setCompanyDialogOpen(false)}>Cancelar</Button>

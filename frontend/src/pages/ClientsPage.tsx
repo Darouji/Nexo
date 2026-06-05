@@ -69,6 +69,9 @@ export function ClientsPage() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState(0);
+  const [shiftQueryDate, setShiftQueryDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
 
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
@@ -537,13 +540,24 @@ export function ClientsPage() {
 
       <Card elevation={0}>
         <CardContent>
-          <TextField
-            fullWidth
-            label="Buscar en clientes"
-            placeholder="Buscar empresa, contacto, minera, grupo, área, turno..."
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
+          <Stack spacing={2}>
+            <TextField
+              fullWidth
+              label="Buscar en clientes"
+              placeholder="Buscar empresa, contacto, minera, grupo, área, turno..."
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+            />
+
+            <TextField
+              label="Consultar turno para fecha"
+              type="date"
+              value={shiftQueryDate}
+              onChange={(event) => setShiftQueryDate(event.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+              sx={{ maxWidth: 260 }}
+            />
+          </Stack>
         </CardContent>
       </Card>
 
@@ -924,7 +938,7 @@ export function ClientsPage() {
                     <TableCell>Correo</TableCell>
                     <TableCell>Teléfono</TableCell>
                     <TableCell>Turno</TableCell>
-                    <TableCell>Modalidad</TableCell>
+                    <TableCell>Modalidad / ciclo</TableCell>
                     <TableCell>Estado turno</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
@@ -951,8 +965,11 @@ export function ClientsPage() {
                         <TableCell>{contact.email || "-"}</TableCell>
                         <TableCell>{contact.phone || "-"}</TableCell>
                         <TableCell>{contact.shift || "-"}</TableCell>
+                        <TableCell>{getShiftCycleLabel(contact)}</TableCell>
                         <TableCell>
-                          {contact.shift_mode_display || "-"}
+                          <ShiftStatusChip
+                            status={getShiftStatus(contact, shiftQueryDate)}
+                          />
                         </TableCell>
                         <TableCell>
                           <ShiftStatusChip status={getShiftStatus(contact)} />
@@ -1707,7 +1724,10 @@ export function ClientsPage() {
 
 type ShiftStatus = "EN_TURNO" | "DESCANSO" | "SIN_TURNO";
 
-function getShiftStatus(contact: ContactoCliente): ShiftStatus {
+function getShiftStatus(
+  contact: ContactoCliente,
+  queryDate: string,
+): ShiftStatus {
   if (
     !contact.active_days ||
     !contact.rest_days ||
@@ -1724,13 +1744,13 @@ function getShiftStatus(contact: ContactoCliente): ShiftStatus {
     return "SIN_TURNO";
   }
 
-  const today = new Date();
+  const selectedDate = new Date(`${queryDate}T00:00:00`);
   const startDate = new Date(`${contact.active_cycle_start_date}T00:00:00`);
 
-  today.setHours(0, 0, 0, 0);
+  selectedDate.setHours(0, 0, 0, 0);
   startDate.setHours(0, 0, 0, 0);
 
-  const diffMs = today.getTime() - startDate.getTime();
+  const diffMs = selectedDate.getTime() - startDate.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   const dayInCycle = ((diffDays % cycleDays) + cycleDays) % cycleDays;
@@ -1742,6 +1762,20 @@ function getShiftStatusLabel(status: ShiftStatus) {
   if (status === "EN_TURNO") return "En turno";
   if (status === "DESCANSO") return "Descanso";
   return "Sin turno";
+}
+
+function getShiftCycleLabel(contact: ContactoCliente) {
+  if (!contact.active_days || !contact.rest_days) {
+    return contact.shift_mode_display || "Sin modalidad";
+  }
+
+  const cycleLabel = `${contact.active_days}x${contact.rest_days}`;
+
+  if (!contact.shift_mode_display || contact.shift_mode === "SIN_DEFINIR") {
+    return cycleLabel;
+  }
+
+  return `${contact.shift_mode_display} · ${cycleLabel}`;
 }
 
 type SummaryCardProps = {

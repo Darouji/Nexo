@@ -218,7 +218,9 @@ export function ClientsPage() {
       company.mining_company_name,
       company.business_group_name,
       company.city_name,
+      company.email,
       company.phone,
+      company.address,
       company.status,
     ]
       .filter(Boolean)
@@ -257,6 +259,30 @@ export function ClientsPage() {
       subArea.description,
       subArea.status,
     ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+  );
+
+  const filteredBusinessGroups = businessGroups.filter((businessGroup) =>
+    [businessGroup.name, businessGroup.description, businessGroup.status]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+  );
+
+  const filteredMiningCompanies = miningCompanies.filter((miningCompany) =>
+    [
+      miningCompany.name,
+      miningCompany.business_group_name,
+      miningCompany.rut,
+      miningCompany.observations,
+      miningCompany.status,
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
+  );
+
+  const filteredCities = cities.filter((city) =>
+    [city.name, city.region, city.status]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(normalizedSearch)),
   );
@@ -571,6 +597,9 @@ export function ClientsPage() {
             <Tab label="Contactos cliente" />
             <Tab label="Áreas cliente" />
             <Tab label="Subáreas cliente" />
+            <Tab label="Grupos empresariales" />
+            <Tab label="Mineras" />
+            <Tab label="Ciudades" />
           </Tabs>
         </CardContent>
       </Card>
@@ -591,7 +620,9 @@ export function ClientsPage() {
                     <TableCell>Minera</TableCell>
                     <TableCell>Grupo</TableCell>
                     <TableCell>Ciudad</TableCell>
+                    <TableCell>Correo</TableCell>
                     <TableCell>Teléfono</TableCell>
+                    <TableCell>Dirección</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
                 </TableHead>
@@ -599,7 +630,7 @@ export function ClientsPage() {
                 <TableBody>
                   {filteredCompanies.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={9}>
                         <Typography color="text.secondary">
                           No hay empresas cliente registradas.
                         </Typography>
@@ -617,7 +648,9 @@ export function ClientsPage() {
                           {company.business_group_name || "-"}
                         </TableCell>
                         <TableCell>{company.city_name || "-"}</TableCell>
+                        <TableCell>{company.email || "-"}</TableCell>
                         <TableCell>{company.phone || "-"}</TableCell>
+                        <TableCell>{company.address || "-"}</TableCell>
                         <TableCell>
                           <StatusChip status={company.status} />
                         </TableCell>
@@ -774,6 +807,148 @@ export function ClientsPage() {
                         <TableCell>{subArea.company_name}</TableCell>
                         <TableCell>
                           <StatusChip status={subArea.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 4 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Grupos empresariales
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Grupo empresarial</TableCell>
+                    <TableCell>Descripción</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredBusinessGroups.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3}>
+                        <Typography color="text.secondary">
+                          No hay grupos empresariales registrados.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredBusinessGroups.map((businessGroup) => (
+                      <TableRow key={businessGroup.id} hover>
+                        <TableCell>{businessGroup.name}</TableCell>
+                        <TableCell>
+                          {businessGroup.description || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <StatusChip status={businessGroup.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 5 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Mineras
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Minera</TableCell>
+                    <TableCell>Grupo empresarial</TableCell>
+                    <TableCell>RUT</TableCell>
+                    <TableCell>Observaciones</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredMiningCompanies.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Typography color="text.secondary">
+                          No hay mineras registradas.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredMiningCompanies.map((miningCompany) => (
+                      <TableRow key={miningCompany.id} hover>
+                        <TableCell>{miningCompany.name}</TableCell>
+                        <TableCell>
+                          {miningCompany.business_group_name || "-"}
+                        </TableCell>
+                        <TableCell>{miningCompany.rut || "-"}</TableCell>
+                        <TableCell>
+                          {miningCompany.observations || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <StatusChip status={miningCompany.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 6 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Ciudades
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Ciudad</TableCell>
+                    <TableCell>Región</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredCities.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3}>
+                        <Typography color="text.secondary">
+                          No hay ciudades registradas.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredCities.map((city) => (
+                      <TableRow key={city.id} hover>
+                        <TableCell>{city.name}</TableCell>
+                        <TableCell>{city.region || "-"}</TableCell>
+                        <TableCell>
+                          <StatusChip status={city.status} />
                         </TableCell>
                       </TableRow>
                     ))

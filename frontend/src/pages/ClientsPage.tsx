@@ -552,39 +552,45 @@ export function ClientsPage() {
           <Stack direction="row" spacing={1}>
             <Button
               variant="contained"
-              onClick={() => setCompanyDialogOpen(true)}
-            >
-              Nueva empresa cliente
-            </Button>
-            <Button
-              variant="outlined"
               onClick={() => setBusinessGroupDialogOpen(true)}
             >
               Nuevo grupo empresarial
             </Button>
+
             <Button
               variant="outlined"
               onClick={() => setMiningCompanyDialogOpen(true)}
             >
               Nueva minera
             </Button>
+
+            <Button
+              variant="outlined"
+              onClick={() => setCompanyDialogOpen(true)}
+            >
+              Nueva empresa cliente
+            </Button>
+
             <Button variant="outlined" onClick={() => setCityDialogOpen(true)}>
               Nueva ciudad
             </Button>
-            <Button
-              variant="outlined"
-              onClick={() => setContactDialogOpen(true)}
-            >
-              Nuevo contacto cliente
-            </Button>
+
             <Button variant="outlined" onClick={() => setAreaDialogOpen(true)}>
               Nueva área cliente
             </Button>
+
             <Button
               variant="outlined"
               onClick={() => setSubAreaDialogOpen(true)}
             >
               Nueva subárea cliente
+            </Button>
+
+            <Button
+              variant="outlined"
+              onClick={() => setContactDialogOpen(true)}
+            >
+              Nuevo contacto cliente
             </Button>
           </Stack>
           <Tabs
@@ -593,18 +599,116 @@ export function ClientsPage() {
             variant="scrollable"
             scrollButtons="auto"
           >
-            <Tab label="Empresas cliente" />
-            <Tab label="Contactos cliente" />
-            <Tab label="Áreas cliente" />
-            <Tab label="Subáreas cliente" />
             <Tab label="Grupos empresariales" />
             <Tab label="Mineras" />
+            <Tab label="Empresas cliente" />
             <Tab label="Ciudades" />
+            <Tab label="Áreas cliente" />
+            <Tab label="Subáreas cliente" />
+            <Tab label="Contactos cliente" />
           </Tabs>
         </CardContent>
       </Card>
 
       {activeTab === 0 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Grupos empresariales
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Grupo empresarial</TableCell>
+                    <TableCell>Descripción</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredBusinessGroups.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3}>
+                        <Typography color="text.secondary">
+                          No hay grupos empresariales registrados.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredBusinessGroups.map((businessGroup) => (
+                      <TableRow key={businessGroup.id} hover>
+                        <TableCell>{businessGroup.name}</TableCell>
+                        <TableCell>
+                          {businessGroup.description || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <StatusChip status={businessGroup.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 1 && (
+        <Card elevation={0}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Mineras
+            </Typography>
+
+            <TableContainer component={Paper} elevation={0}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Minera</TableCell>
+                    <TableCell>Grupo empresarial</TableCell>
+                    <TableCell>RUT</TableCell>
+                    <TableCell>Observaciones</TableCell>
+                    <TableCell>Estado</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {filteredMiningCompanies.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5}>
+                        <Typography color="text.secondary">
+                          No hay mineras registradas.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredMiningCompanies.map((miningCompany) => (
+                      <TableRow key={miningCompany.id} hover>
+                        <TableCell>{miningCompany.name}</TableCell>
+                        <TableCell>
+                          {miningCompany.business_group_name || "-"}
+                        </TableCell>
+                        <TableCell>{miningCompany.rut || "-"}</TableCell>
+                        <TableCell>
+                          {miningCompany.observations || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <StatusChip status={miningCompany.status} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {activeTab === 2 && (
         <Card elevation={0}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -664,57 +768,39 @@ export function ClientsPage() {
         </Card>
       )}
 
-      {activeTab === 1 && (
+      {activeTab === 3 && (
         <Card elevation={0}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Contactos cliente
+              Ciudades
             </Typography>
 
             <TableContainer component={Paper} elevation={0}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Nombre</TableCell>
-                    <TableCell>Empresa</TableCell>
                     <TableCell>Ciudad</TableCell>
-                    <TableCell>Área</TableCell>
-                    <TableCell>Subárea</TableCell>
-                    <TableCell>Cargo</TableCell>
-                    <TableCell>Correo</TableCell>
-                    <TableCell>Teléfono</TableCell>
-                    <TableCell>Turno</TableCell>
-                    <TableCell>Modalidad</TableCell>
+                    <TableCell>Región</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
                 </TableHead>
 
                 <TableBody>
-                  {filteredContacts.length === 0 ? (
+                  {filteredCities.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11}>
+                      <TableCell colSpan={3}>
                         <Typography color="text.secondary">
-                          No hay contactos cliente registrados.
+                          No hay ciudades registradas.
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredContacts.map((contact) => (
-                      <TableRow key={contact.id} hover>
-                        <TableCell>{contact.full_name}</TableCell>
-                        <TableCell>{contact.company_name}</TableCell>
-                        <TableCell>{contact.city_name || "-"}</TableCell>
-                        <TableCell>{contact.area_name || "-"}</TableCell>
-                        <TableCell>{contact.subarea_name || "-"}</TableCell>
-                        <TableCell>{contact.position || "-"}</TableCell>
-                        <TableCell>{contact.email || "-"}</TableCell>
-                        <TableCell>{contact.phone || "-"}</TableCell>
-                        <TableCell>{contact.shift || "-"}</TableCell>
+                    filteredCities.map((city) => (
+                      <TableRow key={city.id} hover>
+                        <TableCell>{city.name}</TableCell>
+                        <TableCell>{city.region || "-"}</TableCell>
                         <TableCell>
-                          {contact.shift_mode_display || "-"}
-                        </TableCell>
-                        <TableCell>
-                          <StatusChip status={contact.status} />
+                          <StatusChip status={city.status} />
                         </TableCell>
                       </TableRow>
                     ))
@@ -726,7 +812,7 @@ export function ClientsPage() {
         </Card>
       )}
 
-      {activeTab === 2 && (
+      {activeTab === 4 && (
         <Card elevation={0}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -772,7 +858,7 @@ export function ClientsPage() {
         </Card>
       )}
 
-      {activeTab === 3 && (
+      {activeTab === 5 && (
         <Card elevation={0}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -818,137 +904,61 @@ export function ClientsPage() {
         </Card>
       )}
 
-      {activeTab === 4 && (
-        <Card elevation={0}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Grupos empresariales
-            </Typography>
-
-            <TableContainer component={Paper} elevation={0}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Grupo empresarial</TableCell>
-                    <TableCell>Descripción</TableCell>
-                    <TableCell>Estado</TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {filteredBusinessGroups.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={3}>
-                        <Typography color="text.secondary">
-                          No hay grupos empresariales registrados.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredBusinessGroups.map((businessGroup) => (
-                      <TableRow key={businessGroup.id} hover>
-                        <TableCell>{businessGroup.name}</TableCell>
-                        <TableCell>
-                          {businessGroup.description || "-"}
-                        </TableCell>
-                        <TableCell>
-                          <StatusChip status={businessGroup.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === 5 && (
-        <Card elevation={0}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Mineras
-            </Typography>
-
-            <TableContainer component={Paper} elevation={0}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Minera</TableCell>
-                    <TableCell>Grupo empresarial</TableCell>
-                    <TableCell>RUT</TableCell>
-                    <TableCell>Observaciones</TableCell>
-                    <TableCell>Estado</TableCell>
-                  </TableRow>
-                </TableHead>
-
-                <TableBody>
-                  {filteredMiningCompanies.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5}>
-                        <Typography color="text.secondary">
-                          No hay mineras registradas.
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredMiningCompanies.map((miningCompany) => (
-                      <TableRow key={miningCompany.id} hover>
-                        <TableCell>{miningCompany.name}</TableCell>
-                        <TableCell>
-                          {miningCompany.business_group_name || "-"}
-                        </TableCell>
-                        <TableCell>{miningCompany.rut || "-"}</TableCell>
-                        <TableCell>
-                          {miningCompany.observations || "-"}
-                        </TableCell>
-                        <TableCell>
-                          <StatusChip status={miningCompany.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
-      )}
-
       {activeTab === 6 && (
         <Card elevation={0}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Ciudades
+              Contactos cliente
             </Typography>
 
             <TableContainer component={Paper} elevation={0}>
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Empresa</TableCell>
                     <TableCell>Ciudad</TableCell>
-                    <TableCell>Región</TableCell>
+                    <TableCell>Área</TableCell>
+                    <TableCell>Subárea</TableCell>
+                    <TableCell>Cargo</TableCell>
+                    <TableCell>Correo</TableCell>
+                    <TableCell>Teléfono</TableCell>
+                    <TableCell>Turno</TableCell>
+                    <TableCell>Modalidad</TableCell>
+                    <TableCell>Estado turno</TableCell>
                     <TableCell>Estado</TableCell>
                   </TableRow>
                 </TableHead>
 
                 <TableBody>
-                  {filteredCities.length === 0 ? (
+                  {filteredContacts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3}>
+                      <TableCell colSpan={12}>
                         <Typography color="text.secondary">
-                          No hay ciudades registradas.
+                          No hay contactos cliente registrados.
                         </Typography>
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredCities.map((city) => (
-                      <TableRow key={city.id} hover>
-                        <TableCell>{city.name}</TableCell>
-                        <TableCell>{city.region || "-"}</TableCell>
+                    filteredContacts.map((contact) => (
+                      <TableRow key={contact.id} hover>
+                        <TableCell>{contact.full_name}</TableCell>
+                        <TableCell>{contact.company_name}</TableCell>
+                        <TableCell>{contact.city_name || "-"}</TableCell>
+                        <TableCell>{contact.area_name || "-"}</TableCell>
+                        <TableCell>{contact.subarea_name || "-"}</TableCell>
+                        <TableCell>{contact.position || "-"}</TableCell>
+                        <TableCell>{contact.email || "-"}</TableCell>
+                        <TableCell>{contact.phone || "-"}</TableCell>
+                        <TableCell>{contact.shift || "-"}</TableCell>
                         <TableCell>
-                          <StatusChip status={city.status} />
+                          {contact.shift_mode_display || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <ShiftStatusChip status={getShiftStatus(contact)} />
+                        </TableCell>
+                        <TableCell>
+                          <StatusChip status={contact.status} />
                         </TableCell>
                       </TableRow>
                     ))
@@ -1695,6 +1705,45 @@ export function ClientsPage() {
   );
 }
 
+type ShiftStatus = "EN_TURNO" | "DESCANSO" | "SIN_TURNO";
+
+function getShiftStatus(contact: ContactoCliente): ShiftStatus {
+  if (
+    !contact.active_days ||
+    !contact.rest_days ||
+    !contact.active_cycle_start_date
+  ) {
+    return "SIN_TURNO";
+  }
+
+  const activeDays = contact.active_days;
+  const restDays = contact.rest_days;
+  const cycleDays = activeDays + restDays;
+
+  if (cycleDays <= 0) {
+    return "SIN_TURNO";
+  }
+
+  const today = new Date();
+  const startDate = new Date(`${contact.active_cycle_start_date}T00:00:00`);
+
+  today.setHours(0, 0, 0, 0);
+  startDate.setHours(0, 0, 0, 0);
+
+  const diffMs = today.getTime() - startDate.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  const dayInCycle = ((diffDays % cycleDays) + cycleDays) % cycleDays;
+
+  return dayInCycle < activeDays ? "EN_TURNO" : "DESCANSO";
+}
+
+function getShiftStatusLabel(status: ShiftStatus) {
+  if (status === "EN_TURNO") return "En turno";
+  if (status === "DESCANSO") return "Descanso";
+  return "Sin turno";
+}
+
 type SummaryCardProps = {
   title: string;
   value: number;
@@ -1725,6 +1774,23 @@ type StatusChipProps = {
 function StatusChip({ status }: StatusChipProps) {
   const label = status === "ACTIVO" ? "Activo" : "Inactivo";
   const color = status === "ACTIVO" ? "success" : "default";
+
+  return <Chip size="small" label={label} color={color} variant="outlined" />;
+}
+
+type ShiftStatusChipProps = {
+  status: ShiftStatus;
+};
+
+function ShiftStatusChip({ status }: ShiftStatusChipProps) {
+  const label = getShiftStatusLabel(status);
+
+  const color =
+    status === "EN_TURNO"
+      ? "success"
+      : status === "DESCANSO"
+        ? "warning"
+        : "default";
 
   return <Chip size="small" label={label} color={color} variant="outlined" />;
 }

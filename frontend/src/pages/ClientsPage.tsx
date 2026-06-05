@@ -1618,15 +1618,6 @@ export function ClientsPage() {
             />
 
             <TextField
-              label="Turno"
-              value={contactForm.shift}
-              onChange={(event) =>
-                setContactForm({ ...contactForm, shift: event.target.value })
-              }
-              fullWidth
-            />
-
-            <TextField
               label="Días activos"
               type="number"
               value={contactForm.active_days ?? ""}

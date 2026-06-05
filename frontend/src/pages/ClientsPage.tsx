@@ -69,9 +69,8 @@ export function ClientsPage() {
   const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState(0);
-  const [shiftQueryDate, setShiftQueryDate] = useState(
-    new Date().toISOString().slice(0, 10),
-  );
+  const [selectedShiftContact, setSelectedShiftContact] =
+    useState<ContactoCliente | null>(null);
 
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
@@ -548,15 +547,6 @@ export function ClientsPage() {
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
             />
-
-            <TextField
-              label="Consultar turno para fecha"
-              type="date"
-              value={shiftQueryDate}
-              onChange={(event) => setShiftQueryDate(event.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ maxWidth: 260 }}
-            />
           </Stack>
         </CardContent>
       </Card>
@@ -937,7 +927,6 @@ export function ClientsPage() {
                     <TableCell>Cargo</TableCell>
                     <TableCell>Correo</TableCell>
                     <TableCell>Teléfono</TableCell>
-                    <TableCell>Turno</TableCell>
                     <TableCell>Modalidad / ciclo</TableCell>
                     <TableCell>Estado turno</TableCell>
                     <TableCell>Estado</TableCell>
@@ -947,7 +936,7 @@ export function ClientsPage() {
                 <TableBody>
                   {filteredContacts.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={12}>
+                      <TableCell colSpan={11}>
                         <Typography color="text.secondary">
                           No hay contactos cliente registrados.
                         </Typography>
@@ -964,15 +953,27 @@ export function ClientsPage() {
                         <TableCell>{contact.position || "-"}</TableCell>
                         <TableCell>{contact.email || "-"}</TableCell>
                         <TableCell>{contact.phone || "-"}</TableCell>
-                        <TableCell>{contact.shift || "-"}</TableCell>
-                        <TableCell>{getShiftCycleLabel(contact)}</TableCell>
                         <TableCell>
-                          <ShiftStatusChip
-                            status={getShiftStatus(contact, shiftQueryDate)}
-                          />
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => setSelectedShiftContact(contact)}
+                            disabled={
+                              !contact.active_days ||
+                              !contact.rest_days ||
+                              !contact.active_cycle_start_date
+                            }
+                          >
+                            {getShiftCycleLabel(contact)}
+                          </Button>
                         </TableCell>
                         <TableCell>
-                          <ShiftStatusChip status={getShiftStatus(contact)} />
+                          <ShiftStatusChip
+                            status={getShiftStatus(
+                              contact,
+                              new Date().toISOString().slice(0, 10),
+                            )}
+                          />
                         </TableCell>
                         <TableCell>
                           <StatusChip status={contact.status} />
@@ -1718,6 +1719,46 @@ export function ClientsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog
+        open={Boolean(selectedShiftContact)}
+        onClose={() => setSelectedShiftContact(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Calendario de turno</DialogTitle>
+
+        <DialogContent>
+          {selectedShiftContact && (
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Typography variant="subtitle1">
+                {selectedShiftContact.full_name}
+              </Typography>
+
+              <Typography color="text.secondary">
+                {getShiftCycleLabel(selectedShiftContact)}
+              </Typography>
+
+              <Grid container spacing={1}>
+                {getShiftCalendarDays(selectedShiftContact, 30).map((day) => (
+                  <Grid size={{ xs: 3, sm: 2 }} key={day.date}>
+                    <Chip
+                      label={day.label}
+                      color={day.status === "EN_TURNO" ? "success" : "error"}
+                      variant="outlined"
+                      sx={{ width: "100%" }}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setSelectedShiftContact(null)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
@@ -1827,4 +1868,26 @@ function ShiftStatusChip({ status }: ShiftStatusChipProps) {
         : "default";
 
   return <Chip size="small" label={label} color={color} variant="outlined" />;
+}
+
+function getShiftCalendarDays(contact: ContactoCliente, daysToShow: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return Array.from({ length: daysToShow }, (_, index) => {
+    const currentDate = new Date(today);
+    currentDate.setDate(today.getDate() + index);
+
+    const isoDate = currentDate.toISOString().slice(0, 10);
+    const status = getShiftStatus(contact, isoDate);
+
+    const day = String(currentDate.getDate()).padStart(2, "0");
+    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+
+    return {
+      date: isoDate,
+      label: `${day}/${month}`,
+      status,
+    };
+  });
 }

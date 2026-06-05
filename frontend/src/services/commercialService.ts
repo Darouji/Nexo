@@ -108,6 +108,40 @@ export async function getGruposEmpresariales() {
   return response.data;
 }
 
+export type CreateGrupoEmpresarialPayload = {
+  name: string;
+  description?: string;
+  status?: string;
+};
+
+export async function createGrupoEmpresarial(
+  payload: CreateGrupoEmpresarialPayload,
+) {
+  const response = await api.post<GrupoEmpresarial>(
+    "/commercial/business-groups/",
+    payload,
+  );
+
+  return response.data;
+}
+
+export type CreateMineraPayload = {
+  name: string;
+  business_group?: number | null;
+  rut?: string | null;
+  status?: string;
+  observations?: string;
+};
+
+export async function createMinera(payload: CreateMineraPayload) {
+  const response = await api.post<Minera>(
+    "/commercial/mining-companies/",
+    payload,
+  );
+
+  return response.data;
+}
+
 export async function getCiudades() {
   const response = await api.get<Ciudad[]>("/commercial/cities/");
   return response.data;

@@ -39,6 +39,8 @@ import {
   createAreaCliente,
   createSubAreaCliente,
   createContactoCliente,
+  createGrupoEmpresarial,
+  createMinera,
   type GrupoEmpresarial,
   type EmpresaCliente,
   type Ciudad,
@@ -51,6 +53,8 @@ import {
   type CreateAreaClientePayload,
   type CreateSubAreaClientePayload,
   type CreateContactoClientePayload,
+  type CreateGrupoEmpresarialPayload,
+  type CreateMineraPayload,
 } from "../services/commercialService";
 
 export function ClientsPage() {
@@ -69,18 +73,6 @@ export function ClientsPage() {
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
 
-  const [companyForm, setCompanyForm] = useState<CreateEmpresaClientePayload>({
-    name: "",
-    rut: "",
-    mining_company: null,
-    city: null,
-    email: "",
-    phone: "",
-    address: "",
-    status: "ACTIVO",
-    observations: "",
-  });
-
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
 
@@ -92,6 +84,24 @@ export function ClientsPage() {
 
   const [cityDialogOpen, setCityDialogOpen] = useState(false);
   const [savingCity, setSavingCity] = useState(false);
+
+  const [businessGroupDialogOpen, setBusinessGroupDialogOpen] = useState(false);
+  const [savingBusinessGroup, setSavingBusinessGroup] = useState(false);
+
+  const [miningCompanyDialogOpen, setMiningCompanyDialogOpen] = useState(false);
+  const [savingMiningCompany, setSavingMiningCompany] = useState(false);
+
+  const [companyForm, setCompanyForm] = useState<CreateEmpresaClientePayload>({
+    name: "",
+    rut: "",
+    mining_company: null,
+    city: null,
+    email: "",
+    phone: "",
+    address: "",
+    status: "ACTIVO",
+    observations: "",
+  });
 
   const [contactForm, setContactForm] = useState<CreateContactoClientePayload>({
     first_name: "",
@@ -132,6 +142,22 @@ export function ClientsPage() {
     description: "",
     status: "ACTIVO",
   });
+
+  const [businessGroupForm, setBusinessGroupForm] =
+    useState<CreateGrupoEmpresarialPayload>({
+      name: "",
+      description: "",
+      status: "ACTIVO",
+    });
+
+  const [miningCompanyForm, setMiningCompanyForm] =
+    useState<CreateMineraPayload>({
+      name: "",
+      business_group: null,
+      rut: "",
+      status: "ACTIVO",
+      observations: "",
+    });
 
   useEffect(() => {
     async function loadCommercialData() {
@@ -394,6 +420,65 @@ export function ClientsPage() {
     }
   }
 
+  async function handleCreateBusinessGroup() {
+    try {
+      setSavingBusinessGroup(true);
+      setError("");
+
+      const createdBusinessGroup =
+        await createGrupoEmpresarial(businessGroupForm);
+
+      setBusinessGroups((currentBusinessGroups) => [
+        ...currentBusinessGroups,
+        createdBusinessGroup,
+      ]);
+
+      setBusinessGroupForm({
+        name: "",
+        description: "",
+        status: "ACTIVO",
+      });
+
+      setBusinessGroupDialogOpen(false);
+    } catch {
+      setError("No se pudo crear el grupo empresarial.");
+    } finally {
+      setSavingBusinessGroup(false);
+    }
+  }
+
+  async function handleCreateMiningCompany() {
+    try {
+      setSavingMiningCompany(true);
+      setError("");
+
+      const createdMiningCompany = await createMinera({
+        ...miningCompanyForm,
+        business_group: miningCompanyForm.business_group || null,
+        rut: miningCompanyForm.rut || null,
+      });
+
+      setMiningCompanies((currentMiningCompanies) => [
+        ...currentMiningCompanies,
+        createdMiningCompany,
+      ]);
+
+      setMiningCompanyForm({
+        name: "",
+        business_group: null,
+        rut: "",
+        status: "ACTIVO",
+        observations: "",
+      });
+
+      setMiningCompanyDialogOpen(false);
+    } catch {
+      setError("No se pudo crear la minera.");
+    } finally {
+      setSavingMiningCompany(false);
+    }
+  }
+
   return (
     <Stack spacing={3}>
       <Card elevation={0}>
@@ -444,6 +529,18 @@ export function ClientsPage() {
               onClick={() => setCompanyDialogOpen(true)}
             >
               Nueva empresa cliente
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => setBusinessGroupDialogOpen(true)}
+            >
+              Nuevo grupo empresarial
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => setMiningCompanyDialogOpen(true)}
+            >
+              Nueva minera
             </Button>
             <Button variant="outlined" onClick={() => setCityDialogOpen(true)}>
               Nueva ciudad
@@ -812,6 +909,148 @@ export function ClientsPage() {
             disabled={savingCompany || !companyForm.name.trim()}
           >
             {savingCompany ? "Guardando..." : "Guardar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={businessGroupDialogOpen}
+        onClose={() => setBusinessGroupDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nuevo grupo empresarial</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Nombre del grupo empresarial"
+              value={businessGroupForm.name}
+              onChange={(event) =>
+                setBusinessGroupForm({
+                  ...businessGroupForm,
+                  name: event.target.value,
+                })
+              }
+              required
+              fullWidth
+            />
+
+            <TextField
+              label="Descripción"
+              value={businessGroupForm.description}
+              onChange={(event) =>
+                setBusinessGroupForm({
+                  ...businessGroupForm,
+                  description: event.target.value,
+                })
+              }
+              multiline
+              minRows={3}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setBusinessGroupDialogOpen(false)}>
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleCreateBusinessGroup}
+            disabled={savingBusinessGroup || !businessGroupForm.name.trim()}
+          >
+            {savingBusinessGroup ? "Guardando..." : "Guardar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={miningCompanyDialogOpen}
+        onClose={() => setMiningCompanyDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nueva minera</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Nombre de la minera"
+              value={miningCompanyForm.name}
+              onChange={(event) =>
+                setMiningCompanyForm({
+                  ...miningCompanyForm,
+                  name: event.target.value,
+                })
+              }
+              required
+              fullWidth
+            />
+
+            <TextField
+              select
+              label="Grupo empresarial"
+              value={miningCompanyForm.business_group ?? ""}
+              onChange={(event) =>
+                setMiningCompanyForm({
+                  ...miningCompanyForm,
+                  business_group: event.target.value
+                    ? Number(event.target.value)
+                    : null,
+                })
+              }
+              fullWidth
+            >
+              <MenuItem value="">Sin grupo empresarial</MenuItem>
+              {businessGroups.map((businessGroup) => (
+                <MenuItem key={businessGroup.id} value={businessGroup.id}>
+                  {businessGroup.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              label="RUT"
+              value={miningCompanyForm.rut}
+              onChange={(event) =>
+                setMiningCompanyForm({
+                  ...miningCompanyForm,
+                  rut: event.target.value,
+                })
+              }
+              fullWidth
+            />
+
+            <TextField
+              label="Observaciones"
+              value={miningCompanyForm.observations}
+              onChange={(event) =>
+                setMiningCompanyForm({
+                  ...miningCompanyForm,
+                  observations: event.target.value,
+                })
+              }
+              multiline
+              minRows={3}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setMiningCompanyDialogOpen(false)}>
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={handleCreateMiningCompany}
+            disabled={savingMiningCompany || !miningCompanyForm.name.trim()}
+          >
+            {savingMiningCompany ? "Guardando..." : "Guardar"}
           </Button>
         </DialogActions>
       </Dialog>

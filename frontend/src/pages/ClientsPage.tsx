@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
@@ -71,6 +71,10 @@ export function ClientsPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [selectedShiftContact, setSelectedShiftContact] =
     useState<ContactoCliente | null>(null);
+  const [shiftCalendarMonth, setShiftCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
 
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
   const [savingCompany, setSavingCompany] = useState(false);
@@ -505,6 +509,31 @@ export function ClientsPage() {
     } finally {
       setSavingMiningCompany(false);
     }
+  }
+
+  function handleOpenShiftCalendar(contact: ContactoCliente) {
+    const today = new Date();
+
+    setShiftCalendarMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedShiftContact(contact);
+  }
+
+  function handleCloseShiftCalendar() {
+    setSelectedShiftContact(null);
+  }
+
+  function handlePreviousShiftMonth() {
+    setShiftCalendarMonth(
+      (currentMonth) =>
+        new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1),
+    );
+  }
+
+  function handleNextShiftMonth() {
+    setShiftCalendarMonth(
+      (currentMonth) =>
+        new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1),
+    );
   }
 
   return (
@@ -957,7 +986,7 @@ export function ClientsPage() {
                           <Button
                             variant="text"
                             size="small"
-                            onClick={() => setSelectedShiftContact(contact)}
+                            onClick={() => handleOpenShiftCalendar(contact)}
                             disabled={
                               !contact.active_days ||
                               !contact.rest_days ||
@@ -1713,41 +1742,77 @@ export function ClientsPage() {
 
       <Dialog
         open={Boolean(selectedShiftContact)}
-        onClose={() => setSelectedShiftContact(null)}
+        onClose={handleCloseShiftCalendar}
         fullWidth
-        maxWidth="sm"
+        maxWidth="md"
       >
         <DialogTitle>Calendario de turno</DialogTitle>
 
         <DialogContent>
           {selectedShiftContact && (
             <Stack spacing={2} sx={{ mt: 1 }}>
-              <Typography variant="subtitle1">
-                {selectedShiftContact.full_name}
-              </Typography>
+              <Stack spacing={0.5}>
+                <Typography variant="subtitle1">
+                  {selectedShiftContact.full_name}
+                </Typography>
 
-              <Typography color="text.secondary">
-                {getShiftCycleLabel(selectedShiftContact)}
-              </Typography>
+                <Typography color="text.secondary">
+                  {getShiftCycleLabel(selectedShiftContact)}
+                </Typography>
+              </Stack>
 
-              <Grid container spacing={1}>
-                {getShiftCalendarDays(selectedShiftContact, 30).map((day) => (
-                  <Grid size={{ xs: 3, sm: 2 }} key={day.date}>
-                    <Chip
-                      label={day.label}
-                      color={day.status === "EN_TURNO" ? "success" : "error"}
-                      variant="outlined"
-                      sx={{ width: "100%" }}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                sx={{
+                  alignItems: { xs: "stretch", sm: "center" },
+                  justifyContent: "space-between",
+                }}
+              >
+                <Button variant="outlined" onClick={handlePreviousShiftMonth}>
+                  Mes anterior
+                </Button>
+
+                <Typography variant="h6" sx={{ textAlign: "center" }}>
+                  {getShiftMonthLabel(shiftCalendarMonth)}
+                </Typography>
+
+                <Button variant="outlined" onClick={handleNextShiftMonth}>
+                  Mes siguiente
+                </Button>
+              </Stack>
+
+              <ShiftMonthlyCalendar
+                contact={selectedShiftContact}
+                monthDate={shiftCalendarMonth}
+              />
+
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                <Chip
+                  size="small"
+                  label="Activo"
+                  color="success"
+                  variant="outlined"
+                />
+                <Chip
+                  size="small"
+                  label="Descanso"
+                  color="error"
+                  variant="outlined"
+                />
+                <Chip
+                  size="small"
+                  label="Sin turno"
+                  color="default"
+                  variant="outlined"
+                />
+              </Stack>
             </Stack>
           )}
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setSelectedShiftContact(null)}>Cerrar</Button>
+          <Button onClick={handleCloseShiftCalendar}>Cerrar</Button>
         </DialogActions>
       </Dialog>
     </Stack>
@@ -1861,24 +1926,152 @@ function ShiftStatusChip({ status }: ShiftStatusChipProps) {
   return <Chip size="small" label={label} color={color} variant="outlined" />;
 }
 
-function getShiftCalendarDays(contact: ContactoCliente, daysToShow: number) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+type ShiftCalendarDay = {
+  date: string;
+  dayNumber: number;
+  status: ShiftStatus;
+  isCurrentMonth: boolean;
+};
 
-  return Array.from({ length: daysToShow }, (_, index) => {
-    const currentDate = new Date(today);
-    currentDate.setDate(today.getDate() + index);
+type ShiftMonthlyCalendarProps = {
+  contact: ContactoCliente;
+  monthDate: Date;
+};
 
-    const isoDate = currentDate.toISOString().slice(0, 10);
-    const status = getShiftStatus(contact, isoDate);
+const shiftWeekDays = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
-    const day = String(currentDate.getDate()).padStart(2, "0");
-    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
+function ShiftMonthlyCalendar({
+  contact,
+  monthDate,
+}: ShiftMonthlyCalendarProps) {
+  const calendarDays = useMemo(
+    () => getShiftMonthlyCalendarDays(contact, monthDate),
+    [contact, monthDate],
+  );
 
-    return {
+  return (
+    <Stack spacing={1}>
+      <Grid container spacing={1}>
+        {shiftWeekDays.map((weekDay) => (
+          <Grid size={{ xs: 12 / 7 }} key={weekDay}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: "block",
+                textAlign: "center",
+                fontWeight: 700,
+              }}
+            >
+              {weekDay}
+            </Typography>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Grid container spacing={1}>
+        {calendarDays.map((day) => (
+          <Grid size={{ xs: 12 / 7 }} key={day.date}>
+            <Paper
+              variant="outlined"
+              sx={{
+                minHeight: 64,
+                p: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderColor: getShiftCalendarBorderColor(day.status),
+                bgcolor: day.isCurrentMonth
+                  ? getShiftCalendarBackgroundColor(day.status)
+                  : "action.hover",
+                opacity: day.isCurrentMonth ? 1 : 0.45,
+              }}
+            >
+              <Stack spacing={0.5} sx={{ alignItems: "center" }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {day.dayNumber}
+                </Typography>
+
+                <Typography variant="caption">
+                  {getShiftShortStatusLabel(day.status)}
+                </Typography>
+              </Stack>
+            </Paper>
+          </Grid>
+        ))}
+      </Grid>
+    </Stack>
+  );
+}
+
+function getShiftMonthlyCalendarDays(
+  contact: ContactoCliente,
+  monthDate: Date,
+): ShiftCalendarDay[] {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+
+  const firstCalendarDay = new Date(firstDayOfMonth);
+  const mondayBasedWeekDay = (firstCalendarDay.getDay() + 6) % 7;
+  firstCalendarDay.setDate(firstCalendarDay.getDate() - mondayBasedWeekDay);
+
+  const lastCalendarDay = new Date(lastDayOfMonth);
+  const lastMondayBasedWeekDay = (lastCalendarDay.getDay() + 6) % 7;
+  lastCalendarDay.setDate(
+    lastCalendarDay.getDate() + (6 - lastMondayBasedWeekDay),
+  );
+
+  const days: ShiftCalendarDay[] = [];
+  const currentDate = new Date(firstCalendarDay);
+
+  while (currentDate <= lastCalendarDay) {
+    const isoDate = formatDateToIsoDate(currentDate);
+
+    days.push({
       date: isoDate,
-      label: `${day}/${month}`,
-      status,
-    };
-  });
+      dayNumber: currentDate.getDate(),
+      status: getShiftStatus(contact, isoDate),
+      isCurrentMonth: currentDate.getMonth() === month,
+    });
+
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return days;
+}
+
+function formatDateToIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getShiftMonthLabel(monthDate: Date) {
+  return new Intl.DateTimeFormat("es-CL", {
+    month: "long",
+    year: "numeric",
+  }).format(monthDate);
+}
+
+function getShiftShortStatusLabel(status: ShiftStatus) {
+  if (status === "EN_TURNO") return "Activo";
+  if (status === "DESCANSO") return "Descanso";
+  return "Sin turno";
+}
+
+function getShiftCalendarBorderColor(status: ShiftStatus) {
+  if (status === "EN_TURNO") return "success.main";
+  if (status === "DESCANSO") return "error.main";
+  return "divider";
+}
+
+function getShiftCalendarBackgroundColor(status: ShiftStatus) {
+  if (status === "EN_TURNO") return "success.light";
+  if (status === "DESCANSO") return "error.light";
+  return "action.hover";
 }

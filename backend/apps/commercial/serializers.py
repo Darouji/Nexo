@@ -1,13 +1,12 @@
 from rest_framework import serializers
 
 from .models import (
-    AreaCliente,
     Ciudad,
-    ContactoCliente,
-    EmpresaCliente,
-    GrupoEmpresarial,
+    Holding,
     Minera,
-    SubAreaCliente,
+    Area,
+    Subarea,
+    Contacto,
 )
 
 class CiudadSerializer(serializers.ModelSerializer):
@@ -23,9 +22,9 @@ class CiudadSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-class GrupoEmpresarialSerializer(serializers.ModelSerializer):
+class HoldingSerializer(serializers.ModelSerializer):
     class Meta:
-        model = GrupoEmpresarial
+        model = Holding
         fields = [
             "id",
             "name",
@@ -36,36 +35,9 @@ class GrupoEmpresarialSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
-
 class MineraSerializer(serializers.ModelSerializer):
-    business_group_name = serializers.CharField(
-        source="business_group.name",
-        read_only=True,
-    )
-
-    class Meta:
-        model = Minera
-        fields = [
-            "id",
-            "name",
-            "business_group",
-            "business_group_name",
-            "rut",
-            "status",
-            "observations",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "business_group_name", "created_at", "updated_at"]
-
-
-class EmpresaClienteSerializer(serializers.ModelSerializer):
-    mining_company_name = serializers.CharField(
-        source="mining_company.name",
-        read_only=True,
-    )
-    business_group_name = serializers.CharField(
-        source="mining_company.business_group.name",
+    holding_name = serializers.CharField(
+        source="holding.name",
         read_only=True,
     )
     city_name = serializers.CharField(
@@ -74,16 +46,15 @@ class EmpresaClienteSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = EmpresaCliente
+        model = Minera
         fields = [
             "id",
             "name",
             "rut",
-            "mining_company",
-            "mining_company_name",
+            "holding",
+            "holding_name",
             "city",
             "city_name",
-            "business_group_name",
             "email",
             "phone",
             "address",
@@ -93,27 +64,25 @@ class EmpresaClienteSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = [
-            "id",
-            "mining_company_name",
-            "city_name",
-            "business_group_name",
-            "created_at",
-            "updated_at",
+            "id", 
+            "holding_name", 
+            "city_name", 
+            "created_at", 
+            "updated_at"
         ]
 
-
-class AreaClienteSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(
-        source="company.name",
+class AreaSerializer(serializers.ModelSerializer):
+    minera_name = serializers.CharField(
+        source="minera.name",
         read_only=True,
     )
 
     class Meta:
-        model = AreaCliente
+        model = Area
         fields = [
             "id",
-            "company",
-            "company_name",
+            "minera",
+            "minera_name",
             "name",
             "location",
             "description",
@@ -121,30 +90,30 @@ class AreaClienteSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "company_name", "created_at", "updated_at"]
+        read_only_fields = ["id", "minera_name", "created_at", "updated_at"]
 
-class SubAreaClienteSerializer(serializers.ModelSerializer):
+class SubareaSerializer(serializers.ModelSerializer):
     area_name = serializers.CharField(
         source="area.name",
         read_only=True,
     )
-    company = serializers.IntegerField(
-        source="area.company.id",
+    minera = serializers.IntegerField(
+        source="area.minera.id",
         read_only=True,
     )
-    company_name = serializers.CharField(
-        source="area.company.name",
+    minera_name = serializers.CharField(
+        source="area.minera.name",
         read_only=True,
     )
 
     class Meta:
-        model = SubAreaCliente
+        model = Subarea
         fields = [
             "id",
             "area",
             "area_name",
-            "company",
-            "company_name",
+            "minera",
+            "minera_name",
             "name",
             "description",
             "status",
@@ -154,15 +123,15 @@ class SubAreaClienteSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "area_name",
-            "company",
-            "company_name",
+            "minera",
+            "minera_name",
             "created_at",
             "updated_at",
         ]
 
-class ContactoClienteSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(
-        source="company.name",
+class ContactoSerializer(serializers.ModelSerializer):
+    minera_name = serializers.CharField(
+        source="minera.name",
         read_only=True,
     )
     area_name = serializers.CharField(
@@ -184,15 +153,15 @@ class ContactoClienteSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
 
     class Meta:
-        model = ContactoCliente
+        model = Contacto
         fields = [
             "id",
             "first_name",
             "last_name",
             "full_name",
             "position",
-            "company",
-            "company_name",
+            "minera",
+            "minera_name",
             "city",
             "city_name",
             "area",
@@ -215,7 +184,7 @@ class ContactoClienteSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "full_name",
-            "company_name",
+            "minera_name",
             "area_name",
             "subarea_name",
             "city_name",

@@ -5,23 +5,20 @@ from apps.accounts.permissions import IsConsultaOrOperativoGlobal, IsOperativoGl
 
 from .models import (
     Ciudad,
-    AreaCliente,
-    SubAreaCliente,
-    ContactoCliente,
-    EmpresaCliente,
-    GrupoEmpresarial,
+    Holding,
     Minera,
+    Area,
+    Subarea,
+    Contacto,
 )
 from .serializers import (
     CiudadSerializer,
-    AreaClienteSerializer,
-    SubAreaClienteSerializer,
-    ContactoClienteSerializer,
-    EmpresaClienteSerializer,
-    GrupoEmpresarialSerializer,
+    HoldingSerializer,
     MineraSerializer,
+    AreaSerializer,
+    SubareaSerializer,
+    ContactoSerializer,
 )
-
 
 class CommercialPermissionMixin:
     def get_permissions(self):
@@ -40,79 +37,53 @@ class CiudadViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
     ordering_fields = ["name", "region", "status", "created_at", "updated_at"]
     ordering = ["name"]
 
-class GrupoEmpresarialViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
-    queryset = GrupoEmpresarial.objects.all()
-    serializer_class = GrupoEmpresarialSerializer
+class HoldingViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
+    queryset = Holding.objects.all()
+    serializer_class = HoldingSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "description"]
     ordering_fields = ["name", "status", "created_at", "updated_at"]
     ordering = ["name"]
 
-
 class MineraViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
-    queryset = Minera.objects.select_related("business_group").all()
+    queryset = Minera.objects.select_related("holding", "city").all()
     serializer_class = MineraSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name", "rut", "observations", "business_group__name"]
+    search_fields = ["name", "rut", "email", "phone", "holding__name", "city__name", "observations"]
     ordering_fields = ["name", "rut", "status", "created_at", "updated_at"]
     ordering = ["name"]
 
-
-class EmpresaClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
-    queryset = EmpresaCliente.objects.select_related(
-        "city",
-        "mining_company",
-        "mining_company__business_group",
-    ).all()
-    serializer_class = EmpresaClienteSerializer
+class AreaViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
+    queryset = Area.objects.select_related("minera").all()
+    serializer_class = AreaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = [
-        "name",
-        "rut",
-        "email",
-        "phone",
-        "city__name",
-        "address",
-        "observations",
-        "mining_company__name",
-        "mining_company__business_group__name",
-    ]
-    ordering_fields = ["name", "rut", "city__name", "status", "created_at", "updated_at"]
-    ordering = ["name"]
+    search_fields = ["name", "location", "description", "minera__name"]
+    ordering_fields = ["name", "minera__name", "status", "created_at", "updated_at"]
+    ordering = ["minera__name", "name"]
 
-
-class AreaClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
-    queryset = AreaCliente.objects.select_related("company").all()
-    serializer_class = AreaClienteSerializer
+class SubareaViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
+    queryset = Subarea.objects.select_related("area", "area__minera").all()
+    serializer_class = SubareaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name", "location", "description", "company__name"]
-    ordering_fields = ["name", "company__name", "status", "created_at", "updated_at"]
-    ordering = ["company__name", "name"]
-
-
-class SubAreaClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
-    queryset = SubAreaCliente.objects.select_related("area", "area__company").all()
-    serializer_class = SubAreaClienteSerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["name", "description", "area__name", "area__company__name"]
+    search_fields = ["name", "description", "area__name", "area__minera__name"]
     ordering_fields = [
         "name",
         "area__name",
-        "area__company__name",
+        "area__minera__name",
         "status",
         "created_at",
         "updated_at",
     ]
-    ordering = ["area__company__name", "area__name", "name"]
+    ordering = ["area__minera__name", "area__name", "name"]
 
-class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
-    queryset = ContactoCliente.objects.select_related(
-        "company",
+class ContactoViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
+    queryset = Contacto.objects.select_related(
+        "minera",
         "city",
         "area",
         "subarea",
     ).all()
-    serializer_class = ContactoClienteSerializer
+    serializer_class = ContactoSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
         "first_name",
@@ -122,7 +93,7 @@ class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
         "phone",
         "shift",
         "observations",
-        "company__name",
+        "minera__name",
         "city__name",
         "area__name",
         "subarea__name",
@@ -131,7 +102,7 @@ class ContactoClienteViewSet(CommercialPermissionMixin, viewsets.ModelViewSet):
     ordering_fields = [
         "first_name",
         "last_name",
-        "company__name",
+        "minera__name",
         "area__name",
         "status",
         "created_at",

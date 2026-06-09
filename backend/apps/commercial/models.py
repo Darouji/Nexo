@@ -1,6 +1,5 @@
 from django.db import models
 
-
 class RecordStatus(models.TextChoices):
     ACTIVO = "ACTIVO", "Activo"
     INACTIVO = "INACTIVO", "Inactivo"
@@ -30,7 +29,8 @@ class Ciudad(models.Model):
     def __str__(self):
         return self.name
 
-class GrupoEmpresarial(models.Model):
+
+class Holding(models.Model):
     name = models.CharField(max_length=180, unique=True, verbose_name="Nombre")
     description = models.TextField(blank=True, verbose_name="Descripción")
     status = models.CharField(
@@ -43,8 +43,8 @@ class GrupoEmpresarial(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
-        verbose_name = "Grupo empresarial"
-        verbose_name_plural = "Grupos empresariales"
+        verbose_name = "Holding"
+        verbose_name_plural = "Holdings"
         ordering = ["name"]
 
     def __str__(self):
@@ -52,48 +52,6 @@ class GrupoEmpresarial(models.Model):
 
 
 class Minera(models.Model):
-    name = models.CharField(max_length=180, verbose_name="Nombre")
-    business_group = models.ForeignKey(
-        GrupoEmpresarial,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="mining_companies",
-        verbose_name="Grupo empresarial",
-    )
-    rut = models.CharField(
-        max_length=20,
-        unique=True,
-        blank=True,
-        null=True,
-        verbose_name="RUT",
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=RecordStatus.choices,
-        default=RecordStatus.ACTIVO,
-        verbose_name="Estado",
-    )
-    observations = models.TextField(blank=True, verbose_name="Observaciones")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
-
-    class Meta:
-        verbose_name = "Minera"
-        verbose_name_plural = "Mineras"
-        ordering = ["name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["name", "business_group"],
-                name="unique_minera_by_group",
-            )
-        ]
-
-    def __str__(self):
-        return self.name
-
-
-class EmpresaCliente(models.Model):
     name = models.CharField(max_length=180, verbose_name="Nombre / Razón social")
     rut = models.CharField(
         max_length=20,
@@ -102,20 +60,20 @@ class EmpresaCliente(models.Model):
         null=True,
         verbose_name="RUT",
     )
-    mining_company = models.ForeignKey(
-        Minera,
+    holding = models.ForeignKey(
+        Holding,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="client_companies",
-        verbose_name="Minera relacionada",
+        related_name="mineras",
+        verbose_name="Holding",
     )
     city = models.ForeignKey(
         Ciudad,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="client_companies",
+        related_name="mineras",
         verbose_name="Ciudad",
     )
     email = models.EmailField(blank=True, verbose_name="Correo")
@@ -132,20 +90,20 @@ class EmpresaCliente(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
-        verbose_name = "Empresa cliente"
-        verbose_name_plural = "Empresas cliente"
+        verbose_name = "Minera"
+        verbose_name_plural = "Mineras"
         ordering = ["name"]
 
     def __str__(self):
         return self.name
 
 
-class AreaCliente(models.Model):
-    company = models.ForeignKey(
-        EmpresaCliente,
+class Area(models.Model):
+    minera = models.ForeignKey(
+        Minera,
         on_delete=models.PROTECT,
         related_name="areas",
-        verbose_name="Empresa",
+        verbose_name="Minera",
     )
     name = models.CharField(max_length=160, verbose_name="Nombre")
     location = models.CharField(max_length=180, blank=True, verbose_name="Ubicación")
@@ -160,22 +118,23 @@ class AreaCliente(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
-        verbose_name = "Área cliente"
-        verbose_name_plural = "Áreas cliente"
-        ordering = ["company__name", "name"]
+        verbose_name = "Área"
+        verbose_name_plural = "Áreas"
+        ordering = ["minera__name", "name"]
         constraints = [
             models.UniqueConstraint(
-                fields=["company", "name"],
-                name="unique_area_by_company",
+                fields=["minera", "name"],
+                name="unique_area_by_minera",
             )
         ]
 
     def __str__(self):
-        return f"{self.name} - {self.company.name}"
-    
-class SubAreaCliente(models.Model):
+        return f"{self.name} - {self.minera.name}"
+
+
+class Subarea(models.Model):
     area = models.ForeignKey(
-        AreaCliente,
+        Area,
         on_delete=models.PROTECT,
         related_name="subareas",
         verbose_name="Área",
@@ -192,9 +151,9 @@ class SubAreaCliente(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
-        verbose_name = "Subárea cliente"
-        verbose_name_plural = "Subáreas cliente"
-        ordering = ["area__company__name", "area__name", "name"]
+        verbose_name = "Subárea"
+        verbose_name_plural = "Subáreas"
+        ordering = ["area__minera__name", "area__name", "name"]
         constraints = [
             models.UniqueConstraint(
                 fields=["area", "name"],
@@ -205,30 +164,31 @@ class SubAreaCliente(models.Model):
     def __str__(self):
         return f"{self.name} - {self.area.name}"
 
-class ContactoCliente(models.Model):
+
+class Contacto(models.Model):
     first_name = models.CharField(max_length=120, verbose_name="Nombres")
     last_name = models.CharField(max_length=120, blank=True, verbose_name="Apellidos")
     position = models.CharField(max_length=120, blank=True, verbose_name="Cargo")
-    company = models.ForeignKey(
-        EmpresaCliente,
+    minera = models.ForeignKey(
+        Minera,
         on_delete=models.PROTECT,
-        related_name="contacts",
-        verbose_name="Empresa",
+        related_name="contactos",
+        verbose_name="Minera",
     )
     area = models.ForeignKey(
-        AreaCliente,
+        Area,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="contacts",
+        related_name="contactos",
         verbose_name="Área",
     )
     subarea = models.ForeignKey(
-        SubAreaCliente,
+        Subarea,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="contacts",
+        related_name="contactos",
         verbose_name="Subárea",
     )
     city = models.ForeignKey(
@@ -236,7 +196,7 @@ class ContactoCliente(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="client_contacts",
+        related_name="contactos",
         verbose_name="Ciudad",
     )
     email = models.EmailField(blank=True, verbose_name="Correo")
@@ -275,8 +235,8 @@ class ContactoCliente(models.Model):
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
-        verbose_name = "Contacto cliente"
-        verbose_name_plural = "Contactos cliente"
+        verbose_name = "Contacto"
+        verbose_name_plural = "Contactos"
         ordering = ["last_name", "first_name"]
 
     def __str__(self):

@@ -2,13 +2,15 @@ from django.db import models
 from django.conf import settings
 from apps.commercial.models import Minera, Area, Subarea, Contacto
 from apps.inventory.models import Producto
+from apps.core.models import BaseModel
+
 
 class TipoDocumento(models.TextChoices):
     GUIA_DESPACHO = "GUIA_DESPACHO", "Guía de Despacho"
     HES = "HES", "HES"
     OTRO = "OTRO", "Otro"
 
-class Venta(models.Model):
+class Venta(BaseModel):
     # Operador que realiza la venta
     operador = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
@@ -44,8 +46,6 @@ class Venta(models.Model):
 
     # Soft Delete (Anular en lugar de borrar)
     is_active = models.BooleanField(default=True, verbose_name="Activa")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Venta"
@@ -56,7 +56,7 @@ class Venta(models.Model):
         return f"Venta {self.id} - {self.minera.name} ({self.fecha_factura})"
 
 
-class DetalleVenta(models.Model):
+class DetalleVenta(BaseModel):
     venta = models.ForeignKey(Venta, on_delete=models.CASCADE, related_name="detalles", verbose_name="Venta")
     producto = models.ForeignKey(Producto, on_delete=models.PROTECT, related_name="ventas_detalle", verbose_name="Producto")
     

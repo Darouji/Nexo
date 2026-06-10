@@ -134,7 +134,10 @@ export function AppLayout({
         }}
       >
         <Box sx={{ p: 3 }}>
-          <Typography variant="h5" sx={{ fontWeight: 800 }}>
+          <Typography
+            variant="h5"
+            sx={{ fontWeight: 800, color: colors.text.primary }}
+          >
             Serkan V2
           </Typography>
 
@@ -146,7 +149,7 @@ export function AppLayout({
           </Typography>
         </Box>
 
-        <Divider sx={{ borderColor: "rgba(255,255,255,0.12)" }} />
+        <Divider sx={{ borderColor: colors.border.light }} />
 
         <List sx={{ px: 1.5, py: 2 }}>
           {visibleMenuItems.map((item) => (
@@ -159,14 +162,14 @@ export function AppLayout({
                 mb: 0.5,
                 color: colors.text.secondary,
                 "&.Mui-selected": {
-                  bgcolor: "rgba(0, 240, 255, 0.08)",
-                  color: "#FFFFFF",
+                  bgcolor: colors.primary.activeTab,
+                  color: colors.primary.main,
                 },
                 "&.Mui-selected:hover": {
-                  bgcolor: colors.background.header,
+                  bgcolor: colors.primary.activeTab,
                 },
                 "&:hover": {
-                  bgcolor: "rgba(255,255,255,0.08)",
+                  bgcolor: "rgba(255,255,255,0.04)",
                 },
               }}
             >
@@ -185,14 +188,16 @@ export function AppLayout({
           elevation={0}
           color="inherit"
           sx={{
-            borderBottom: `1px solid ${colors.border}`,
+            borderBottom: `1px solid ${colors.border.light}`,
             bgcolor: colors.background.header,
           }}
         >
           <Toolbar sx={{ justifyContent: "space-between" }}>
             <Box>
-              <Typography variant="h6">{activeSection}</Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="h6" sx={{ color: colors.text.primary }}>
+                {activeSection}
+              </Typography>
+              <Typography variant="body2" sx={{ color: colors.text.secondary }}>
                 Sección actual de la plataforma
               </Typography>
             </Box>
@@ -206,14 +211,21 @@ export function AppLayout({
             >
               {user && (
                 <Box sx={{ textAlign: "right" }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 700, color: colors.text.primary }}
+                  >
                     {user.username}
                   </Typography>
 
                   <Chip
                     size="small"
                     label={user.profile?.role_display || "Sin rol"}
-                    color="primary"
+                    sx={{
+                      color: colors.primary.main,
+                      borderColor: colors.primary.main,
+                      bgcolor: colors.primary.activeTab,
+                    }}
                     variant="outlined"
                   />
                 </Box>
@@ -221,7 +233,14 @@ export function AppLayout({
 
               <Button
                 variant="outlined"
-                color="error"
+                sx={{
+                  color: colors.status.error,
+                  borderColor: colors.status.error,
+                  "&:hover": {
+                    bgcolor: "rgba(255, 0, 60, 0.08)",
+                    borderColor: colors.status.error,
+                  },
+                }}
                 startIcon={<LogoutIcon />}
                 onClick={onLogout}
               >

@@ -1,4 +1,5 @@
 from django.db import models
+from apps.core.models import BaseModel
 
 class RecordStatus(models.TextChoices):
     ACTIVO = "ACTIVO", "Activo"
@@ -9,7 +10,7 @@ class ShiftMode(models.TextChoices):
     NOCHE = "NOCHE", "Noche"
     SIN_DEFINIR = "SIN_DEFINIR", "Sin definir"
 
-class Ciudad(models.Model):
+class Ciudad(BaseModel):
     name = models.CharField(max_length=120, unique=True, verbose_name="Nombre")
     region = models.CharField(max_length=120, blank=True, verbose_name="Región")
     status = models.CharField(
@@ -18,8 +19,6 @@ class Ciudad(models.Model):
         default=RecordStatus.ACTIVO,
         verbose_name="Estado",
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
         verbose_name = "Ciudad"
@@ -30,7 +29,7 @@ class Ciudad(models.Model):
         return self.name
 
 
-class Holding(models.Model):
+class Holding(BaseModel):
     name = models.CharField(max_length=180, unique=True, verbose_name="Nombre")
     description = models.TextField(blank=True, verbose_name="Descripción")
     status = models.CharField(
@@ -39,8 +38,6 @@ class Holding(models.Model):
         default=RecordStatus.ACTIVO,
         verbose_name="Estado",
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
         verbose_name = "Holding"
@@ -51,7 +48,7 @@ class Holding(models.Model):
         return self.name
 
 
-class Minera(models.Model):
+class Minera(BaseModel):
     name = models.CharField(max_length=180, verbose_name="Nombre / Razón social")
     rut = models.CharField(
         max_length=20,
@@ -86,8 +83,6 @@ class Minera(models.Model):
         verbose_name="Estado",
     )
     observations = models.TextField(blank=True, verbose_name="Observaciones")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
         verbose_name = "Minera"
@@ -98,7 +93,7 @@ class Minera(models.Model):
         return self.name
 
 
-class Area(models.Model):
+class Area(BaseModel):
     minera = models.ForeignKey(
         Minera,
         on_delete=models.PROTECT,
@@ -114,8 +109,6 @@ class Area(models.Model):
         default=RecordStatus.ACTIVO,
         verbose_name="Estado",
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
         verbose_name = "Área"
@@ -132,7 +125,7 @@ class Area(models.Model):
         return f"{self.name} - {self.minera.name}"
 
 
-class Subarea(models.Model):
+class Subarea(BaseModel):
     area = models.ForeignKey(
         Area,
         on_delete=models.PROTECT,
@@ -147,8 +140,6 @@ class Subarea(models.Model):
         default=RecordStatus.ACTIVO,
         verbose_name="Estado",
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
         verbose_name = "Subárea"
@@ -165,7 +156,7 @@ class Subarea(models.Model):
         return f"{self.name} - {self.area.name}"
 
 
-class Contacto(models.Model):
+class Contacto(BaseModel):
     first_name = models.CharField(max_length=120, verbose_name="Nombres")
     last_name = models.CharField(max_length=120, blank=True, verbose_name="Apellidos")
     position = models.CharField(max_length=120, blank=True, verbose_name="Cargo")
@@ -231,8 +222,6 @@ class Contacto(models.Model):
         verbose_name="Estado",
     )
     observations = models.TextField(blank=True, verbose_name="Observaciones")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Fecha de creación")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Última actualización")
 
     class Meta:
         verbose_name = "Contacto"

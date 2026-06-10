@@ -1,10 +1,9 @@
 from django.db import models
 from django.conf import settings
+from apps.core.models import BaseModel
 
-class Categoria(models.Model):
+class Categoria(BaseModel):
     name = models.CharField(max_length=150, unique=True, verbose_name="Categoría")
-    is_active = models.BooleanField(default=True, verbose_name="Activa")
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Categoría"
@@ -19,7 +18,7 @@ class ProductoStatus(models.TextChoices):
     DESCONTINUADO = "DESCONTINUADO", "Descontinuado"
     EN_REPOSICION = "EN_REPOSICION", "En Reposición"
 
-class Producto(models.Model):
+class Producto(BaseModel):
     categoria = models.ForeignKey(
         Categoria, 
         on_delete=models.PROTECT, 
@@ -42,9 +41,6 @@ class Producto(models.Model):
         default=ProductoStatus.EN_USO, 
         verbose_name="Estado"
     )
-    is_active = models.BooleanField(default=True, verbose_name="Activo")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = "Producto"
@@ -54,7 +50,7 @@ class Producto(models.Model):
     def __str__(self):
         return f"{self.categoria.name} - {self.modelo}"
 
-class MovimientoKardex(models.Model):
+class MovimientoKardex(BaseModel):
     producto = models.ForeignKey(
         Producto, 
         on_delete=models.PROTECT, 

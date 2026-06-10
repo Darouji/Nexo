@@ -1,39 +1,39 @@
-// Design Tokens - Paleta "Cyberpunk Sobrio"
+// Design Tokens - Paleta "Cyberpunk Profesional" (Sin Azules Estándar)
 export const colors = {
   background: {
-    main: "#0D0E15",
-    paper: "#151621",
-    header: "#1A1B28",
+    main: "#0A0A0F", // Fondo oscuro absoluto para mitigar fatiga visual
+    paper: "#12121A", // Contenedores, tarjetas y fondo de la Malla de datos
+    header: "#181824", // Barra superior de navegación unificada
   },
   primary: {
-    main: "#00F0FF",
-    hover: "#00B8C4",
-    activeTab: "rgba(0, 240, 255, 0.08)", // Variable centralizada para el menú activo
-    contrastText: "#000000",
+    main: "#E000B8", // Magenta Cyberpunk plano (Acentos del menú activo y selección)
+    hover: "#B50095",
+    activeTab: "rgba(224, 0, 184, 0.08)",
+    contrastText: "#FFFFFF",
   },
   secondary: {
-    main: "#FF0055",
-    hover: "#CC0044",
+    main: "#FF6200", // Naranja de advertencia o botones de acción secundaria
+    hover: "#D15000",
     contrastText: "#FFFFFF",
   },
   accent: {
-    main: "#FCE205",
-    hover: "#C2AD00",
+    main: "#00FF88", // Verde neón plano para confirmaciones o éxitos
+    hover: "#00D16F",
     contrastText: "#000000",
   },
   status: {
-    success: "#00FF66",
-    error: "#FF003C",
-    warning: "#FF8800",
-    info: "#00A2FF",
+    success: "#00FF88", // Cumple semáforo de faena operativo
+    error: "#FF0055",
+    warning: "#FFAA00",
+    info: "#A300FF", // Púrpura profundo para elementos informativos alternos
   },
   text: {
-    primary: "#E0E4F5",
-    secondary: "#8B92B2",
-    muted: "#4A4E69",
+    primary: "#FFFFFF", // Blanco puro (Esencial para la óptima lectura de mayores de 50 años)
+    secondary: "#A9AFC2", // Gris claro de alto contraste para etiquetas descriptivas
+    muted: "#545866",
   },
   border: {
-    light: "#2A2C3D",
-    focus: "#00F0FF",
+    light: "#222333", // Separadores sutiles pero visibles para delimitar celdas tipo Excel
+    focus: "#E000B8",
   },
 };

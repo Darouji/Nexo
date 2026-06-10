@@ -4,43 +4,19 @@ import {
   Button,
   Chip,
   Container,
-  Divider,
-  Drawer,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   Toolbar,
   Typography,
+  Tabs,
+  Tab,
 } from "@mui/material";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import PeopleIcon from "@mui/icons-material/People";
-import BusinessIcon from "@mui/icons-material/Business";
-import InventoryIcon from "@mui/icons-material/Inventory";
-import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
-import UploadFileIcon from "@mui/icons-material/UploadFile";
-import DescriptionIcon from "@mui/icons-material/Description";
 import LogoutIcon from "@mui/icons-material/Logout";
 import type { ReactNode } from "react";
 import type { AuthUser } from "../types/auth";
 import { colors } from "../theme/colors";
-import BadgeIcon from "@mui/icons-material/Badge";
-
-const drawerWidth = 280;
-
-type AppLayoutProps = {
-  user: AuthUser | null;
-  activeSection: string;
-  onSectionChange: (section: string) => void;
-  onLogout: () => void;
-  children: ReactNode;
-};
 
 const menuItems = [
   {
     label: "Dashboard",
-    icon: <DashboardIcon />,
     roles: [
       "ADMINISTRADOR",
       "FINANZAS_COMERCIAL",
@@ -52,42 +28,34 @@ const menuItems = [
   },
   {
     label: "Usuarios",
-    icon: <PeopleIcon />,
     roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
   },
   {
     label: "Colaboradores",
-    icon: <BadgeIcon />,
     roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
   },
   {
     label: "Clientes",
-    icon: <BusinessIcon />,
     roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO"],
   },
   {
     label: "Productos",
-    icon: <InventoryIcon />,
     roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO"],
   },
   {
     label: "Ventas / Ingresos",
-    icon: <ReceiptLongIcon />,
     roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
   },
   {
     label: "Compras / Egresos",
-    icon: <ShoppingCartIcon />,
     roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
   },
   {
     label: "Importaciones Excel",
-    icon: <UploadFileIcon />,
     roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
   },
   {
     label: "Documentos",
-    icon: <DescriptionIcon />,
     roles: [
       "ADMINISTRADOR",
       "FINANZAS_COMERCIAL",
@@ -97,6 +65,14 @@ const menuItems = [
     ],
   },
 ];
+
+type AppLayoutProps = {
+  user: AuthUser | null;
+  activeSection: string;
+  onSectionChange: (section: string) => void;
+  onLogout: () => void;
+  children: ReactNode;
+};
 
 export function AppLayout({
   user,
@@ -111,148 +87,149 @@ export function AppLayout({
     role ? item.roles.includes(role) : false,
   );
 
+  const currentTabIndex = visibleMenuItems.findIndex(
+    (item) => item.label === activeSection,
+  );
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    if (newValue >= 0 && newValue < visibleMenuItems.length) {
+      onSectionChange(visibleMenuItems[newValue].label);
+    }
+  };
+
   return (
     <Box
       sx={{
-        display: "flex",
         minHeight: "100vh",
         bgcolor: "background.default",
+        display: "flex",
+        flexDirection: "column",
       }}
     >
-      <Drawer
-        variant="permanent"
+      {/* Banner Superior Unificado */}
+      <AppBar
+        position="static"
+        elevation={0}
         sx={{
-          width: drawerWidth,
-          flexShrink: 0,
-          "& .MuiDrawer-paper": {
-            width: drawerWidth,
-            boxSizing: "border-box",
-            bgcolor: colors.background.paper,
-            color: colors.text.secondary,
-            borderRight: "none",
-          },
+          bgcolor: colors.background.header,
+          borderBottom: `2px solid ${colors.border.light}`,
         }}
       >
-        <Box sx={{ p: 3 }}>
-          <Typography
-            variant="h5"
-            sx={{ fontWeight: 800, color: colors.text.primary }}
-          >
-            Serkan V2
-          </Typography>
-
-          <Typography
-            variant="body2"
-            sx={{ color: colors.text.muted, mt: 0.5 }}
-          >
-            Plataforma interna
-          </Typography>
-        </Box>
-
-        <Divider sx={{ borderColor: colors.border.light }} />
-
-        <List sx={{ px: 1.5, py: 2 }}>
-          {visibleMenuItems.map((item) => (
-            <ListItemButton
-              key={item.label}
-              selected={item.label === activeSection}
-              onClick={() => onSectionChange(item.label)}
-              sx={{
-                borderRadius: 2,
-                mb: 0.5,
-                color: colors.text.secondary,
-                "&.Mui-selected": {
-                  bgcolor: colors.primary.activeTab,
-                  color: colors.primary.main,
-                },
-                "&.Mui-selected:hover": {
-                  bgcolor: colors.primary.activeTab,
-                },
-                "&:hover": {
-                  bgcolor: "rgba(255,255,255,0.04)",
-                },
-              }}
-            >
-              <ListItemIcon sx={{ color: "inherit", minWidth: 40 }}>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.label} />
-            </ListItemButton>
-          ))}
-        </List>
-      </Drawer>
-
-      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <AppBar
-          position="static"
-          elevation={0}
-          color="inherit"
-          sx={{
-            borderBottom: `1px solid ${colors.border.light}`,
-            bgcolor: colors.background.header,
-          }}
-        >
-          <Toolbar sx={{ justifyContent: "space-between" }}>
+        <Toolbar sx={{ justifyContent: "space-between", py: 1, px: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Box>
-              <Typography variant="h6" sx={{ color: colors.text.primary }}>
-                {activeSection}
+              <Typography
+                variant="h5"
+                sx={{
+                  fontWeight: 900,
+                  color: colors.text.primary,
+                  letterSpacing: "0.5px",
+                }}
+              >
+                SERKAN
               </Typography>
-              <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-                Sección actual de la plataforma
+              <Typography
+                variant="caption"
+                sx={{
+                  color: colors.primary.main,
+                  fontWeight: 700,
+                  tracking: 1,
+                }}
+              >
+                V2 // CONTROL OPERATIVO
               </Typography>
             </Box>
+          </Box>
 
-            <Box
+          {/* Información del Usuario Conectado */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
+            {user && (
+              <Box sx={{ textAlign: "right" }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: colors.text.primary }}
+                >
+                  {user.first_name} {user.last_name}
+                </Typography>
+                <Chip
+                  size="small"
+                  label={user.profile?.role_display || "Sin rol"}
+                  sx={{
+                    color: colors.accent.main,
+                    borderColor: colors.accent.main,
+                    bgcolor: "rgba(0, 255, 136, 0.05)",
+                    fontWeight: 700,
+                    borderRadius: 0,
+                    mt: 0.5,
+                  }}
+                  variant="outlined"
+                />
+              </Box>
+            )}
+
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<LogoutIcon />}
+              onClick={onLogout}
               sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 2,
+                color: colors.status.error,
+                borderColor: colors.status.error,
+                borderRadius: 0,
+                fontWeight: 700,
+                "&:hover": {
+                  bgcolor: "rgba(255, 0, 85, 0.08)",
+                  borderColor: colors.status.error,
+                },
               }}
             >
-              {user && (
-                <Box sx={{ textAlign: "right" }}>
-                  <Typography
-                    variant="body2"
-                    sx={{ fontWeight: 700, color: colors.text.primary }}
-                  >
-                    {user.username}
-                  </Typography>
+              Salir
+            </Button>
+          </Box>
+        </Toolbar>
 
-                  <Chip
-                    size="small"
-                    label={user.profile?.role_display || "Sin rol"}
-                    sx={{
-                      color: colors.primary.main,
-                      borderColor: colors.primary.main,
-                      bgcolor: colors.primary.activeTab,
-                    }}
-                    variant="outlined"
-                  />
-                </Box>
-              )}
+        {/* Menú Horizontal de Pestañas Grandes y Claras */}
+        <Box sx={{ px: 2, bgcolor: colors.background.main }}>
+          <Tabs
+            value={currentTabIndex >= 0 ? currentTabIndex : 0}
+            onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            textColor="inherit"
+            indicatorColor="primary"
+            sx={{
+              "& .MuiTabs-indicator": {
+                height: 3,
+                bgcolor: colors.primary.main,
+              },
+              "& .MuiTab-root": {
+                color: colors.text.secondary,
+                fontWeight: 700,
+                fontSize: "0.95rem",
+                py: 2,
+                px: 3,
+                minHeight: 50,
+                "&:hover": {
+                  color: colors.text.primary,
+                  bgcolor: "rgba(255, 255, 255, 0.02)",
+                },
+                "&.Mui-selected": {
+                  color: colors.primary.main,
+                  bgcolor: colors.primary.activeTab,
+                },
+              },
+            }}
+          >
+            {visibleMenuItems.map((item) => (
+              <Tab key={item.label} label={item.label} />
+            ))}
+          </Tabs>
+        </Box>
+      </AppBar>
 
-              <Button
-                variant="outlined"
-                sx={{
-                  color: colors.status.error,
-                  borderColor: colors.status.error,
-                  "&:hover": {
-                    bgcolor: "rgba(255, 0, 60, 0.08)",
-                    borderColor: colors.status.error,
-                  },
-                }}
-                startIcon={<LogoutIcon />}
-                onClick={onLogout}
-              >
-                Salir
-              </Button>
-            </Box>
-          </Toolbar>
-        </AppBar>
-
-        <Container maxWidth="xl" sx={{ py: 4 }}>
-          {children}
-        </Container>
+      {/* Espacio del Contenido Principal Expandido */}
+      <Box component="main" sx={{ flexGrow: 1, py: 4 }}>
+        <Container maxWidth="xl">{children}</Container>
       </Box>
     </Box>
   );

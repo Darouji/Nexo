@@ -51,14 +51,14 @@ const menuItems = [
     ],
   },
   {
-  label: "Usuarios",
-  icon: <PeopleIcon />,
-  roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
+    label: "Usuarios",
+    icon: <PeopleIcon />,
+    roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
   },
   {
-  label: "Colaboradores",
-  icon: <BadgeIcon />,
-  roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
+    label: "Colaboradores",
+    icon: <BadgeIcon />,
+    roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
   },
   {
     label: "Clientes",
@@ -108,11 +108,17 @@ export function AppLayout({
   const role = user?.profile?.role;
 
   const visibleMenuItems = menuItems.filter((item) =>
-    role ? item.roles.includes(role) : false
+    role ? item.roles.includes(role) : false,
   );
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+    <Box
+      sx={{
+        display: "flex",
+        minHeight: "100vh",
+        bgcolor: "background.default",
+      }}
+    >
       <Drawer
         variant="permanent"
         sx={{
@@ -121,8 +127,8 @@ export function AppLayout({
           "& .MuiDrawer-paper": {
             width: drawerWidth,
             boxSizing: "border-box",
-            bgcolor: colors.sidebar,
-            color: colors.sidebarText,
+            bgcolor: colors.background.paper,
+            color: colors.text.secondary,
             borderRight: "none",
           },
         }}
@@ -132,7 +138,10 @@ export function AppLayout({
             Serkan V2
           </Typography>
 
-          <Typography variant="body2" sx={{ color: colors.textMuted, mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            sx={{ color: colors.text.muted, mt: 0.5 }}
+          >
             Plataforma interna
           </Typography>
         </Box>
@@ -142,19 +151,19 @@ export function AppLayout({
         <List sx={{ px: 1.5, py: 2 }}>
           {visibleMenuItems.map((item) => (
             <ListItemButton
-                key={item.label}
-                selected={item.label === activeSection}
-                onClick={() => onSectionChange(item.label)}
+              key={item.label}
+              selected={item.label === activeSection}
+              onClick={() => onSectionChange(item.label)}
               sx={{
                 borderRadius: 2,
                 mb: 0.5,
-                color: colors.sidebarText,
+                color: colors.text.secondary,
                 "&.Mui-selected": {
-                  bgcolor: colors.sidebarActive,
+                  bgcolor: "rgba(0, 240, 255, 0.08)",
                   color: "#FFFFFF",
                 },
                 "&.Mui-selected:hover": {
-                  bgcolor: colors.sidebarActive,
+                  bgcolor: colors.background.header,
                 },
                 "&:hover": {
                   bgcolor: "rgba(255,255,255,0.08)",
@@ -177,7 +186,7 @@ export function AppLayout({
           color="inherit"
           sx={{
             borderBottom: `1px solid ${colors.border}`,
-            bgcolor: colors.surface,
+            bgcolor: colors.background.header,
           }}
         >
           <Toolbar sx={{ justifyContent: "space-between" }}>
@@ -189,35 +198,35 @@ export function AppLayout({
             </Box>
 
             <Box
-            sx={{
+              sx={{
                 display: "flex",
                 alignItems: "center",
                 gap: 2,
-            }}
+              }}
             >
-            {user && (
+              {user && (
                 <Box sx={{ textAlign: "right" }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
                     {user.username}
-                </Typography>
+                  </Typography>
 
-                <Chip
+                  <Chip
                     size="small"
                     label={user.profile?.role_display || "Sin rol"}
                     color="primary"
                     variant="outlined"
-                />
+                  />
                 </Box>
-            )}
+              )}
 
-            <Button
+              <Button
                 variant="outlined"
                 color="error"
                 startIcon={<LogoutIcon />}
                 onClick={onLogout}
-            >
+              >
                 Salir
-            </Button>
+              </Button>
             </Box>
           </Toolbar>
         </AppBar>

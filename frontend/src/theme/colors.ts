@@ -1,28 +1,45 @@
+// Design Tokens - Paleta "Cyberpunk Sobrio"
 export const colors = {
-  primary: "#0F4C81",
-  primaryDark: "#0B355A",
-  primaryLight: "#D9EAF7",
+  // Fondos oscuros (Sin ser negro puro para menor fatiga visual)
+  background: {
+    main: "#0D0E15", // Fondo principal de la app
+    paper: "#151621", // Fondo de tarjetas, modales y menú
+    header: "#1A1B28", // Fondo de la barra superior (Omnibox)
+  },
 
-  secondary: "#F59E0B",
-  secondaryDark: "#B45309",
-  secondaryLight: "#FEF3C7",
+  // Acentos Cyberpunk (Planos, sin efecto glow)
+  primary: {
+    main: "#00F0FF", // Cian eléctrico (Botones primarios, enlaces activos)
+    hover: "#00B8C4",
+    contrastText: "#000000",
+  },
+  secondary: {
+    main: "#FF0055", // Magenta/Rosado intenso (Notificaciones, botones secundarios)
+    hover: "#CC0044",
+    contrastText: "#FFFFFF",
+  },
+  accent: {
+    main: "#FCE205", // Amarillo Cyberpunk (Alertas, etiquetas destacadas)
+    hover: "#C2AD00",
+    contrastText: "#000000",
+  },
 
-  background: "#F4F6F8",
-  surface: "#FFFFFF",
-  surfaceSoft: "#F9FAFB",
+  // Estados Operativos (Semáforo de Faena y Mallas)
+  status: {
+    success: "#00FF66", // Verde (En turno, Activo, Pagado)
+    error: "#FF003C", // Rojo (Descanso, Inactivo, Vencido)
+    warning: "#FF8800", // Naranja (Stock crítico, Excepciones)
+    info: "#00A2FF", // Azul (Información general)
+  },
 
-  textPrimary: "#111827",
-  textSecondary: "#6B7280",
-  textMuted: "#9CA3AF",
-
-  border: "#E5E7EB",
-
-  success: "#16A34A",
-  warning: "#F59E0B",
-  error: "#DC2626",
-  info: "#2563EB",
-
-  sidebar: "#0F172A",
-  sidebarText: "#E5E7EB",
-  sidebarActive: "#1D4ED8",
+  // Textos y bordes
+  text: {
+    primary: "#E0E4F5", // Texto principal (Casi blanco)
+    secondary: "#8B92B2", // Texto secundario (Gris azulado)
+    muted: "#4A4E69", // Texto deshabilitado o marcas de agua
+  },
+  border: {
+    light: "#2A2C3D", // Bordes sutiles para separadores de tablas
+    focus: "#00F0FF", // Borde activo para inputs
+  },
 };

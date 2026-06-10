@@ -1,11 +1,11 @@
-from django.conf import settings
-from django.db.models.signals import post_save
-from django.dispatch import receiver
+"""
+Signals de accounts.
 
-from .models import UserProfile
+Actualmente no se usan signals para crear perfiles automáticamente,
+porque SERKAN V2 separa explícitamente:
+- Usuario interno
+- Colaborador interno
+- Contacto externo
 
-
-@receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        UserProfile.objects.create(user=instance)
+Crear Usuario no debe crear Colaborador ni Contacto.
+"""

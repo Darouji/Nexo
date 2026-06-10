@@ -1,29 +1,79 @@
 from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import UserProfile
+from .models import User
 
 
-@admin.register(UserProfile)
-class UserProfileAdmin(admin.ModelAdmin):
-    list_display = (
-        "user",
+@admin.register(User)
+class UserAdmin(DjangoUserAdmin):
+    list_display = [
+        "username",
+        "email",
+        "first_name",
+        "last_name",
         "role",
-        "collaborator",
-        "is_active_profile",
+        "status",
+        "is_active",
+        "is_staff",
+        "last_login",
+    ]
+    list_filter = [
+        "role",
+        "status",
+        "is_active",
+        "is_staff",
+        "is_superuser",
+    ]
+    search_fields = [
+        "username",
+        "email",
+        "first_name",
+        "last_name",
         "phone",
         "position",
-        "area",
+        "department",
+    ]
+    ordering = ["username"]
+
+    fieldsets = DjangoUserAdmin.fieldsets + (
+        (
+            "Datos internos SERKAN",
+            {
+                "fields": (
+                    "role",
+                    "status",
+                    "phone",
+                    "position",
+                    "department",
+                    "observations",
+                    "created_by",
+                    "updated_by",
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    add_fieldsets = DjangoUserAdmin.add_fieldsets + (
+        (
+            "Datos internos SERKAN",
+            {
+                "fields": (
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "role",
+                    "status",
+                    "phone",
+                    "position",
+                    "department",
+                )
+            },
+        ),
+    )
+
+    readonly_fields = [
         "created_at",
         "updated_at",
-    )
-    list_filter = ("role", "is_active_profile")
-    search_fields = (
-        "user__username",
-        "user__email",
-        "collaborator__first_name",
-        "collaborator__last_name",
-        "phone",
-        "position",
-        "area",
-    )
-    ordering = ("user__username",)
+    ]

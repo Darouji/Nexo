@@ -45,7 +45,7 @@ INSTALLED_APPS = [
 
     # Local apps
     "apps.core",
-    "apps.accounts",
+    "apps.accounts.apps.AccountsConfig",
     "apps.collaborators",
     "apps.commercial",
     "apps.inventory",
@@ -135,6 +135,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = "accounts.User"
 
 # Django REST Framework
 REST_FRAMEWORK = {

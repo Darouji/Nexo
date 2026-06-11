@@ -1,7 +1,12 @@
 import time
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.models import update_last_login
 from django.core.cache import cache
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action, api_view, permission_classes
@@ -80,6 +85,36 @@ def register_failed_login(cache_key):
 def clear_failed_login_attempts(cache_key):
     cache.delete(cache_key)
 
+def build_login_response_payload(*, token, user):
+    """
+    Construye una respuesta de login útil para el frontend.
+
+    El token sigue usando el formato:
+        Authorization: Token <token>
+
+    Pero ahora el frontend también sabe cuándo expira.
+    """
+
+    expire_hours = getattr(settings, "DRF_TOKEN_EXPIRE_HOURS", 12)
+    expires_at = None
+    expires_in_seconds = None
+
+    if expire_hours and expire_hours > 0:
+        expires_at = token.created + timedelta(hours=expire_hours)
+        expires_in_seconds = max(
+            0,
+            int((expires_at - timezone.now()).total_seconds()),
+        )
+
+    return {
+        "token": token.key,
+        "token_type": "Token",
+        "token_created_at": token.created,
+        "token_expires_at": expires_at,
+        "token_expires_in_seconds": expires_in_seconds,
+        "token_expire_hours": expire_hours,
+        "user": UserSerializer(user).data,
+    }
 
 def create_auth_audit_log(
     *,
@@ -238,6 +273,8 @@ def login_view(request):
     Token.objects.filter(user=user).delete()
     token = Token.objects.create(user=user)
 
+    update_last_login(None, user)
+
     create_auth_audit_log(
         request=request,
         action=AuditAction.LOGIN,
@@ -247,12 +284,7 @@ def login_view(request):
         reason="Inicio de sesión correcto.",
     )
 
-    return Response(
-        {
-            "token": token.key,
-            "user": UserSerializer(user).data,
-        }
-    )
+    return Response(build_login_response_payload(token=token, user=user))
 
 
 @api_view(["POST"])

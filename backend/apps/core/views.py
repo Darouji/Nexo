@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsConsultaOrOperativoGlobal
+from apps.accounts.permissions import CanViewAuditLogs, IsConsultaOrOperativoGlobal
 
 from .models import AuditLog, RecordChangeLog
 from .search import global_search
@@ -59,7 +59,7 @@ def dashboard_statistics(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated, IsConsultaOrOperativoGlobal])
+@permission_classes([IsAuthenticated, CanViewAuditLogs])
 def audit_activity(request):
     """
     Actividad reciente global del sistema.
@@ -94,7 +94,7 @@ def audit_activity(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated, IsConsultaOrOperativoGlobal])
+@permission_classes([IsAuthenticated, CanViewAuditLogs])
 def record_change_history(request):
     """
     Historial campo a campo de un registro específico.

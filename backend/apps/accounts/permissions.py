@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from apps.core.models import BaseStatus
 
@@ -56,6 +56,31 @@ class IsAdminOrRRHH(BasePermission):
             [
                 UserRole.ADMINISTRADOR,
                 UserRole.RRHH,
+            ],
+        )
+
+
+class CanViewAuditLogs(BasePermission):
+    """
+    Permiso para ver auditoría y trazabilidad sensible.
+
+    Decisión funcional SERKAN:
+    Administrador, Informático, RRHH y Finanzas/Comercial tienen acceso
+    amplio debido al tamaño reducido del equipo interno.
+
+    No se entrega este acceso a OPERATIVO ni CONSULTA.
+    """
+
+    message = "No tiene permisos para ver auditoría del sistema."
+
+    def has_permission(self, request, view):
+        return user_has_role(
+            request.user,
+            [
+                UserRole.ADMINISTRADOR,
+                UserRole.INFORMATICO,
+                UserRole.RRHH,
+                UserRole.FINANZAS_COMERCIAL,
             ],
         )
 

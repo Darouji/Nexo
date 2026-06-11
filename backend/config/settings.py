@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     "apps.commercial",
     "apps.inventory",
     "apps.sales",
+    "apps.documents.apps.DocumentsConfig",
+    "apps.imports.apps.ImportsConfig",
 ]
 
 MIDDLEWARE = [
@@ -151,3 +153,6 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
 ]
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

@@ -169,6 +169,8 @@ def create_sale_with_details(*, sale_data, details_data, user=None):
 
         calculate_sale_totals(venta)
 
+        stock_was_discounted = False
+
         for detail in created_details:
             if not detail.producto.controla_stock:
                 continue
@@ -181,8 +183,11 @@ def create_sale_with_details(*, sale_data, details_data, user=None):
                 reference=venta,
             )
 
-        venta.stock_descontado = True
-        venta.save(update_fields=["stock_descontado", "updated_at"])
+            stock_was_discounted = True
+
+        if stock_was_discounted:
+            venta.stock_descontado = True
+            venta.save(update_fields=["stock_descontado", "updated_at"])
 
         refresh_sale_alerts(venta, user=operator)
 

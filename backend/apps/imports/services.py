@@ -116,20 +116,22 @@ def read_import_rows(batch):
 
 def read_xlsx_rows(batch):
     batch.file.open("rb")
+    workbook = None
 
     try:
         workbook = load_workbook(batch.file, read_only=True, data_only=True)
         worksheet = workbook.active
 
-        rows = list(worksheet.iter_rows(values_only=True))
+        row_iterator = worksheet.iter_rows(values_only=True)
+        header_row = next(row_iterator, None)
 
-        if not rows:
+        if header_row is None:
             return []
 
-        headers = [canonical_header(value) for value in rows[0]]
+        headers = [canonical_header(value) for value in header_row]
         output = []
 
-        for index, row in enumerate(rows[1:], start=2):
+        for index, row in enumerate(row_iterator, start=2):
             if row_is_empty(row):
                 continue
 
@@ -149,7 +151,11 @@ def read_xlsx_rows(batch):
             )
 
         return output
+
     finally:
+        if workbook is not None:
+            workbook.close()
+
         batch.file.close()
 
 

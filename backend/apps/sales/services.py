@@ -4,7 +4,8 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core.models import AlertSeverity, BaseStatus
+from apps.core.audit import capture_field_values, create_record_change_logs_from_snapshot
+from apps.core.models import AlertSeverity, AuditOrigin, BaseStatus
 from apps.inventory.services import register_sale_annulment_reverse, register_sale_exit
 
 from .models import (
@@ -204,6 +205,7 @@ def update_sale_metadata(*, venta, sale_data, user=None):
     - No permite modificar una venta anulada desde este flujo.
     - Refresca alertas específicas para que Inicio, Ventas y Estadísticas
       no muestren problemas ya corregidos.
+    - Registra cambios reales campo a campo en RecordChangeLog.
     """
 
     operator = get_operator(user)
@@ -216,11 +218,23 @@ def update_sale_metadata(*, venta, sale_data, user=None):
                 {"sale_status": "No se puede editar una venta anulada desde este flujo."}
             )
 
+        changed_fields = list(sale_data.keys())
+        old_values = capture_field_values(locked_sale, changed_fields)
+
         for field, value in sale_data.items():
             setattr(locked_sale, field, value)
 
         locked_sale.updated_by = operator
         locked_sale.save()
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_sale,
+            old_values=old_values,
+            fields=changed_fields,
+            user=operator,
+            origin=AuditOrigin.API,
+            reason="Actualización de datos generales de venta.",
+        )
 
         refresh_sale_alerts(locked_sale, user=operator)
 

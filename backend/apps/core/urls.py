@@ -7,5 +7,6 @@ urlpatterns = [
     path("search/", omnibox_search, name="global-search"),
     path("omnibox/", omnibox_search, name="omnibox-search"),
     path("stats/", dashboard_statistics, name="dashboard-statistics"),
+    path("inicio/", dashboard_statistics, name="inicio-statistics"),
     path("dashboard/", dashboard_statistics, name="dashboard"),
 ]

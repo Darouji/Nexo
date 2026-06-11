@@ -4,7 +4,7 @@ from rest_framework import serializers
 from apps.inventory.models import Producto
 
 from .models import DetalleVenta, Venta, VentaAlert
-from .services import create_sale_with_details
+from .services import create_sale_with_details, update_sale_metadata
 
 
 def raise_drf_validation_error(error):
@@ -206,7 +206,17 @@ class VentaSerializer(serializers.ModelSerializer):
                 }
             )
 
-        return super().update(instance, validated_data)
+        request = self.context.get("request")
+        user = request.user if request else None
+
+        try:
+            return update_sale_metadata(
+                venta=instance,
+                sale_data=validated_data,
+                user=user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
 
 
 class AnularVentaSerializer(serializers.Serializer):

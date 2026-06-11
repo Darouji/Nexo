@@ -187,6 +187,39 @@ def create_sale_with_details(*, sale_data, details_data, user=None):
         refresh_sale_alerts(venta, user=operator)
 
         return venta
+    
+
+def update_sale_metadata(*, venta, sale_data, user=None):
+    """
+    Actualiza campos generales de una venta y recalcula sus alertas.
+
+    Regla:
+    - No edita líneas de venta.
+    - No toca Kardex.
+    - No permite modificar una venta anulada desde este flujo.
+    - Refresca alertas específicas para que Inicio, Ventas y Estadísticas
+      no muestren problemas ya corregidos.
+    """
+
+    operator = get_operator(user)
+
+    with transaction.atomic():
+        locked_sale = Venta.objects.select_for_update().get(pk=venta.pk)
+
+        if locked_sale.sale_status == VentaStatus.ANULADA:
+            raise ValidationError(
+                {"sale_status": "No se puede editar una venta anulada desde este flujo."}
+            )
+
+        for field, value in sale_data.items():
+            setattr(locked_sale, field, value)
+
+        locked_sale.updated_by = operator
+        locked_sale.save()
+
+        refresh_sale_alerts(locked_sale, user=operator)
+
+        return locked_sale
 
 
 def concretar_sale(*, venta, user=None):

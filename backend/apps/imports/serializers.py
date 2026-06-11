@@ -1,7 +1,12 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
-from .models import ImportBatch, ImportRow
+from .models import (
+    ImportBatch,
+    ImportBatchStatus,
+    ImportRow,
+    calculate_file_sha256,
+)
 from .services import prevalidate_import_batch, process_import_batch
 
 
@@ -111,6 +116,41 @@ class ImportBatchSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate(self, attrs):
+        if self.instance is not None:
+            return attrs
+
+        target = attrs.get("target")
+        file = attrs.get("file")
+
+        if target and file:
+            file_sha256 = calculate_file_sha256(file)
+
+            existing_batch = (
+                ImportBatch.objects.filter(
+                    target=target,
+                    file_sha256=file_sha256,
+                )
+                .exclude(batch_status=ImportBatchStatus.CANCELADO)
+                .order_by("-created_at")
+                .first()
+            )
+
+            if existing_batch:
+                raise serializers.ValidationError(
+                    {
+                        "file": (
+                            "Este archivo ya fue cargado anteriormente "
+                            f"en la importación #{existing_batch.pk} "
+                            f"con estado {existing_batch.get_batch_status_display()}."
+                        )
+                    }
+                )
+
+            attrs["_calculated_file_sha256"] = file_sha256
+
+        return attrs
+
     def get_processed_by_name(self, obj):
         if not obj.processed_by:
             return ""
@@ -125,12 +165,20 @@ class ImportBatchSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get("request")
         user = request.user if request else None
+        calculated_file_sha256 = validated_data.pop("_calculated_file_sha256", "")
 
-        return ImportBatch.objects.create(
+        batch = ImportBatch(
             created_by=user,
             updated_by=user,
             **validated_data,
         )
+
+        if calculated_file_sha256:
+            batch.file_sha256 = calculated_file_sha256
+
+        batch.save()
+
+        return batch
 
 
 class EmptyImportActionSerializer(serializers.Serializer):

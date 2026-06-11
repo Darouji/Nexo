@@ -1,4 +1,6 @@
+import time
 from django.contrib.auth import authenticate, get_user_model
+from django.core.cache import cache
 from django.db import transaction
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
@@ -18,6 +20,66 @@ from .serializers import (
 
 User = get_user_model()
 
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCK_SECONDS = 15 * 60
+
+
+def get_request_ip(request):
+    forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    return request.META.get("REMOTE_ADDR", "unknown")
+
+
+def get_login_rate_limit_key(request, username):
+    ip_address = get_request_ip(request)
+    normalized_username = (username or "").strip().lower()[:150]
+
+    return f"serkan-login:{ip_address}:{normalized_username}"
+
+
+def get_login_rate_limit_status(cache_key):
+    data = cache.get(cache_key) or {}
+    blocked_until = float(data.get("blocked_until", 0))
+    now = time.time()
+
+    if blocked_until > now:
+        remaining_seconds = int(blocked_until - now)
+        return True, remaining_seconds
+
+    return False, 0
+
+
+def register_failed_login(cache_key):
+    data = cache.get(cache_key) or {}
+    attempts = int(data.get("attempts", 0)) + 1
+
+    if attempts >= LOGIN_MAX_ATTEMPTS:
+        cache.set(
+            cache_key,
+            {
+                "attempts": attempts,
+                "blocked_until": time.time() + LOGIN_LOCK_SECONDS,
+            },
+            timeout=LOGIN_LOCK_SECONDS,
+        )
+        return
+
+    cache.set(
+        cache_key,
+        {
+            "attempts": attempts,
+            "blocked_until": 0,
+        },
+        timeout=LOGIN_LOCK_SECONDS,
+    )
+
+
+def clear_failed_login_attempts(cache_key):
+    cache.delete(cache_key)
+
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -31,9 +93,25 @@ def login_view(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    rate_limit_key = get_login_rate_limit_key(request, username)
+    is_blocked, remaining_seconds = get_login_rate_limit_status(rate_limit_key)
+
+    if is_blocked:
+        return Response(
+            {
+                "detail": (
+                    "Demasiados intentos fallidos. "
+                    f"Intente nuevamente en {remaining_seconds} segundos."
+                )
+            },
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+
     user = authenticate(username=username, password=password)
 
     if user is None:
+        register_failed_login(rate_limit_key)
+
         return Response(
             {"detail": "Credenciales inválidas."},
             status=status.HTTP_400_BAD_REQUEST,
@@ -50,6 +128,8 @@ def login_view(request):
             {"detail": "El usuario no se encuentra activo internamente."},
             status=status.HTTP_403_FORBIDDEN,
         )
+
+    clear_failed_login_attempts(rate_limit_key)
 
     token, _ = Token.objects.get_or_create(user=user)
 

@@ -8,7 +8,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.models import BaseStatus
+from apps.core.models import AuditAction, AuditLog, AuditOrigin, BaseStatus
 
 from .permissions import CanManageUsers, IsAuthenticatedAndActive
 from .serializers import (
@@ -81,6 +81,60 @@ def clear_failed_login_attempts(cache_key):
     cache.delete(cache_key)
 
 
+def create_auth_audit_log(
+    *,
+    request,
+    action,
+    user=None,
+    username="",
+    success=True,
+    reason="",
+    extra_metadata=None,
+):
+    """
+    Registra eventos de autenticación sin romper el flujo principal.
+
+    Importante:
+    - Si falla la auditoría, nunca debe fallar el login/logout.
+    - El actor solo se asigna cuando hay usuario real autenticado.
+    - Los intentos fallidos quedan sin actor, pero con username en metadata.
+    """
+
+    try:
+        ip_address = get_request_ip(request)
+
+        if ip_address == "unknown":
+            ip_address = None
+
+        metadata = {
+            "success": success,
+            "username": username,
+            "path": request.path,
+            "method": request.method,
+        }
+
+        if extra_metadata:
+            metadata.update(extra_metadata)
+
+        AuditLog.objects.create(
+            actor=user if user and getattr(user, "is_authenticated", False) else None,
+            action=action,
+            origin=AuditOrigin.API,
+            module="auth",
+            model_name="User",
+            object_id=str(user.pk) if user else "",
+            object_repr=str(user) if user else username,
+            ip_address=ip_address,
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
+            reason=reason,
+            metadata=metadata,
+        )
+
+    except Exception:
+        # La auditoría nunca debe impedir iniciar o cerrar sesión.
+        pass
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
@@ -88,6 +142,15 @@ def login_view(request):
     password = request.data.get("password", "")
 
     if not username or not password:
+        create_auth_audit_log(
+            request=request,
+            action=AuditAction.LOGIN,
+            username=username,
+            success=False,
+            reason="Intento de login sin usuario o contraseña.",
+            extra_metadata={"failure_type": "missing_credentials"},
+        )
+
         return Response(
             {"detail": "Debe ingresar usuario y contraseña."},
             status=status.HTTP_400_BAD_REQUEST,
@@ -97,6 +160,18 @@ def login_view(request):
     is_blocked, remaining_seconds = get_login_rate_limit_status(rate_limit_key)
 
     if is_blocked:
+        create_auth_audit_log(
+            request=request,
+            action=AuditAction.LOGIN,
+            username=username,
+            success=False,
+            reason="Login bloqueado temporalmente por demasiados intentos fallidos.",
+            extra_metadata={
+                "failure_type": "rate_limited",
+                "remaining_seconds": remaining_seconds,
+            },
+        )
+
         return Response(
             {
                 "detail": (
@@ -112,18 +187,47 @@ def login_view(request):
     if user is None:
         register_failed_login(rate_limit_key)
 
+        create_auth_audit_log(
+            request=request,
+            action=AuditAction.LOGIN,
+            username=username,
+            success=False,
+            reason="Credenciales inválidas.",
+            extra_metadata={"failure_type": "invalid_credentials"},
+        )
+
         return Response(
             {"detail": "Credenciales inválidas."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     if not user.is_active:
+        create_auth_audit_log(
+            request=request,
+            action=AuditAction.LOGIN,
+            user=user,
+            username=username,
+            success=False,
+            reason="Usuario Django desactivado.",
+            extra_metadata={"failure_type": "django_user_inactive"},
+        )
+
         return Response(
             {"detail": "El usuario está desactivado."},
             status=status.HTTP_403_FORBIDDEN,
         )
 
     if user.status != BaseStatus.ACTIVO:
+        create_auth_audit_log(
+            request=request,
+            action=AuditAction.LOGIN,
+            user=user,
+            username=username,
+            success=False,
+            reason="Usuario interno no activo.",
+            extra_metadata={"failure_type": "internal_user_inactive"},
+        )
+
         return Response(
             {"detail": "El usuario no se encuentra activo internamente."},
             status=status.HTTP_403_FORBIDDEN,
@@ -131,7 +235,17 @@ def login_view(request):
 
     clear_failed_login_attempts(rate_limit_key)
 
-    token, _ = Token.objects.get_or_create(user=user)
+    Token.objects.filter(user=user).delete()
+    token = Token.objects.create(user=user)
+
+    create_auth_audit_log(
+        request=request,
+        action=AuditAction.LOGIN,
+        user=user,
+        username=username,
+        success=True,
+        reason="Inicio de sesión correcto.",
+    )
 
     return Response(
         {
@@ -144,7 +258,17 @@ def login_view(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
+    create_auth_audit_log(
+        request=request,
+        action=AuditAction.LOGOUT,
+        user=request.user,
+        username=request.user.username,
+        success=True,
+        reason="Cierre de sesión correcto.",
+    )
+
     Token.objects.filter(user=request.user).delete()
+
     return Response({"detail": "Sesión cerrada correctamente."})
 
 

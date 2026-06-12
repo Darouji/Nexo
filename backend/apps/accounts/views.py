@@ -13,6 +13,7 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from apps.core.exceptions import api_error_response
 from apps.core.models import AuditAction, AuditLog, AuditOrigin, BaseStatus
 
 from .permissions import CanManageUsers, IsAuthenticatedAndActive
@@ -85,6 +86,7 @@ def register_failed_login(cache_key):
 def clear_failed_login_attempts(cache_key):
     cache.delete(cache_key)
 
+
 def build_login_response_payload(*, token, user):
     """
     Construye una respuesta de login útil para el frontend.
@@ -116,6 +118,7 @@ def build_login_response_payload(*, token, user):
         "user": UserSerializer(user).data,
     }
 
+
 def create_auth_audit_log(
     *,
     request,
@@ -146,6 +149,7 @@ def create_auth_audit_log(
             "username": username,
             "path": request.path,
             "method": request.method,
+            "request_id": getattr(request, "request_id", ""),
         }
 
         if extra_metadata:
@@ -186,9 +190,11 @@ def login_view(request):
             extra_metadata={"failure_type": "missing_credentials"},
         )
 
-        return Response(
-            {"detail": "Debe ingresar usuario y contraseña."},
-            status=status.HTTP_400_BAD_REQUEST,
+        return api_error_response(
+            request=request,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="missing_credentials",
+            message="Debe ingresar usuario y contraseña.",
         )
 
     rate_limit_key = get_login_rate_limit_key(request, username)
@@ -207,14 +213,20 @@ def login_view(request):
             },
         )
 
-        return Response(
-            {
-                "detail": (
-                    "Demasiados intentos fallidos. "
-                    f"Intente nuevamente en {remaining_seconds} segundos."
-                )
+        message = (
+            "Demasiados intentos fallidos. "
+            f"Intente nuevamente en {remaining_seconds} segundos."
+        )
+
+        return api_error_response(
+            request=request,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            code="login_rate_limited",
+            message=message,
+            details={
+                "detail": message,
+                "remaining_seconds": remaining_seconds,
             },
-            status=status.HTTP_429_TOO_MANY_REQUESTS,
         )
 
     user = authenticate(username=username, password=password)
@@ -231,9 +243,11 @@ def login_view(request):
             extra_metadata={"failure_type": "invalid_credentials"},
         )
 
-        return Response(
-            {"detail": "Credenciales inválidas."},
-            status=status.HTTP_400_BAD_REQUEST,
+        return api_error_response(
+            request=request,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_credentials",
+            message="Credenciales inválidas.",
         )
 
     if not user.is_active:
@@ -247,9 +261,11 @@ def login_view(request):
             extra_metadata={"failure_type": "django_user_inactive"},
         )
 
-        return Response(
-            {"detail": "El usuario está desactivado."},
-            status=status.HTTP_403_FORBIDDEN,
+        return api_error_response(
+            request=request,
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="django_user_inactive",
+            message="El usuario está desactivado.",
         )
 
     if user.status != BaseStatus.ACTIVO:
@@ -263,9 +279,11 @@ def login_view(request):
             extra_metadata={"failure_type": "internal_user_inactive"},
         )
 
-        return Response(
-            {"detail": "El usuario no se encuentra activo internamente."},
-            status=status.HTTP_403_FORBIDDEN,
+        return api_error_response(
+            request=request,
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="internal_user_inactive",
+            message="El usuario no se encuentra activo internamente.",
         )
 
     clear_failed_login_attempts(rate_limit_key)
@@ -406,11 +424,12 @@ class UserViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        if instance == request.user:
-            return Response(
-                {"detail": "No puedes desactivar tu propio usuario."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        return api_error_response(
+            request=request,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            code="invalid_credentials",
+            message="Credenciales inválidas.",
+        )
 
         with transaction.atomic():
             instance.deactivate(user=request.user)

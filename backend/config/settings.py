@@ -4,7 +4,6 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
@@ -42,7 +41,9 @@ def env_int(name, default):
 
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 
-DEV_FALLBACK_SECRET_KEY = "django-insecure-serkan-v2-local-dev-only-change-in-production"
+DEV_FALLBACK_SECRET_KEY = (
+    "django-insecure-serkan-v2-local-dev-only-change-in-production"
+)
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEV_FALLBACK_SECRET_KEY)
 
 if not DEBUG and SECRET_KEY == DEV_FALLBACK_SECRET_KEY:
@@ -70,12 +71,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
     # Third-party
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
-
     # Local apps
     "apps.core",
     "apps.accounts.apps.AccountsConfig",
@@ -191,6 +190,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": env_int("DRF_PAGE_SIZE", 50),
+    "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -216,7 +216,9 @@ CSRF_TRUSTED_ORIGINS = env_list(
 SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", default=not DEBUG)
 CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", default=not DEBUG)
 
-SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", default=False if DEBUG else True)
+SECURE_SSL_REDIRECT = env_bool(
+    "DJANGO_SECURE_SSL_REDIRECT", default=False if DEBUG else True
+)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 SECURE_HSTS_SECONDS = env_int(
@@ -250,9 +252,14 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = env_int(
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
+    "filters": {
+        "request_id": {
+            "()": "apps.core.logging_filters.RequestIdLogFilter",
+        },
+    },
     "formatters": {
         "simple": {
-            "format": "[{levelname}] {asctime} {name}: {message}",
+            "format": "[{levelname}] {asctime} {name} [request_id={request_id}]: {message}",
             "style": "{",
         },
     },
@@ -260,6 +267,7 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "simple",
+            "filters": ["request_id"],
         },
     },
     "root": {
@@ -268,6 +276,11 @@ LOGGING = {
     },
     "loggers": {
         "django.server": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+            "propagate": False,
+        },
+        "django.request": {
             "handlers": ["console"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
             "propagate": False,

@@ -1,4 +1,7 @@
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
+from django.db import connection
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -24,6 +27,29 @@ def parse_limit(value, *, default=50, maximum=200):
     return min(limit, maximum)
 
 
+def database_health_check():
+    """
+    Verifica conectividad básica con la base de datos.
+    """
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+
+        return {
+            "status": "ok",
+            "message": "Base de datos disponible.",
+        }
+
+    except Exception as error:
+        return {
+            "status": "error",
+            "message": "No se pudo conectar a la base de datos.",
+            "details": str(error),
+        }
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def health_check(request):
@@ -33,6 +59,40 @@ def health_check(request):
             "message": "API Serkan V2 funcionando",
             "version": "0.1.0",
         }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, CanViewAuditLogs])
+def full_health_check(request):
+    database_status = database_health_check()
+
+    checks = {
+        "api": {
+            "status": "ok",
+            "message": "API disponible.",
+        },
+        "database": database_status,
+        "settings": {
+            "debug": settings.DEBUG,
+            "database_engine": settings.DATABASES["default"]["ENGINE"],
+            "allowed_hosts_configured": bool(settings.ALLOWED_HOSTS),
+            "token_expire_hours": getattr(settings, "DRF_TOKEN_EXPIRE_HOURS", None),
+            "timezone": settings.TIME_ZONE,
+        },
+    }
+
+    has_errors = any(check.get("status") == "error" for check in checks.values())
+
+    return Response(
+        {
+            "status": "error" if has_errors else "ok",
+            "generated_at": timezone.now(),
+            "checks": checks,
+        },
+        status=status.HTTP_503_SERVICE_UNAVAILABLE
+        if has_errors
+        else status.HTTP_200_OK,
     )
 
 

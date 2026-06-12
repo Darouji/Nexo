@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from apps.core.exceptions import api_error_response
 from apps.core.models import AuditAction, AuditLog, AuditOrigin, BaseStatus
 
+from .access import build_access_payload, build_token_status
 from .permissions import CanManageUsers, IsAuthenticatedAndActive
 from .serializers import (
     ChangePasswordSerializer,
@@ -116,6 +117,7 @@ def build_login_response_payload(*, token, user):
         "token_expires_in_seconds": expires_in_seconds,
         "token_expire_hours": expire_hours,
         "user": UserSerializer(user).data,
+        "access": build_access_payload(user),
     }
 
 
@@ -326,6 +328,28 @@ def logout_view(request):
 @permission_classes([IsAuthenticatedAndActive])
 def me_view(request):
     return Response(UserSerializer(request.user).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticatedAndActive])
+def session_view(request):
+    """
+    Devuelve la sesión actual preparada para frontend.
+
+    React puede usar este endpoint para:
+    - restaurar sesión al recargar la página
+    - construir menú según rol
+    - conocer permisos visuales
+    - conocer expiración del token
+    """
+
+    return Response(
+        {
+            "user": UserSerializer(request.user).data,
+            "access": build_access_payload(request.user),
+            "session": build_token_status(getattr(request, "auth", None)),
+        }
+    )
 
 
 @api_view(["POST"])

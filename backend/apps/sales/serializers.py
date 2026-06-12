@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
 from apps.inventory.models import Producto
@@ -19,7 +20,9 @@ def raise_drf_validation_error(error):
 
 class DetalleVentaSerializer(serializers.ModelSerializer):
     producto_modelo = serializers.CharField(source="producto.modelo", read_only=True)
-    producto_categoria = serializers.CharField(source="producto.categoria.name", read_only=True)
+    producto_categoria = serializers.CharField(
+        source="producto.categoria.name", read_only=True
+    )
     producto_controla_stock = serializers.BooleanField(
         source="producto.controla_stock",
         read_only=True,
@@ -63,7 +66,9 @@ class DetalleVentaInputSerializer(serializers.Serializer):
 
 class VentaAlertSerializer(serializers.ModelSerializer):
     code_display = serializers.CharField(source="get_code_display", read_only=True)
-    severity_display = serializers.CharField(source="get_severity_display", read_only=True)
+    severity_display = serializers.CharField(
+        source="get_severity_display", read_only=True
+    )
 
     class Meta:
         model = VentaAlert
@@ -95,7 +100,9 @@ class VentaSerializer(serializers.ModelSerializer):
     contacto_name = serializers.CharField(source="contacto.full_name", read_only=True)
 
     operador_nombre = serializers.SerializerMethodField()
-    sale_status_display = serializers.CharField(source="get_sale_status_display", read_only=True)
+    sale_status_display = serializers.CharField(
+        source="get_sale_status_display", read_only=True
+    )
     tipo_documento_display = serializers.CharField(
         source="get_tipo_documento_display",
         read_only=True,
@@ -167,6 +174,7 @@ class VentaSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_operador_nombre(self, obj):
         if not obj.operador:
             return ""

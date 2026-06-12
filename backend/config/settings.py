@@ -75,6 +75,8 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "corsheaders",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
     # Local apps
     "apps.core",
     "apps.accounts.apps.AccountsConfig",
@@ -179,6 +181,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 
 DRF_TOKEN_EXPIRE_HOURS = env_int("DRF_TOKEN_EXPIRE_HOURS", 12)
+ENABLE_API_DOCS = env_bool("DJANGO_ENABLE_API_DOCS", default=DEBUG)
 
 
 REST_FRAMEWORK = {
@@ -191,6 +194,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": env_int("DRF_PAGE_SIZE", 50),
     "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -286,4 +290,50 @@ LOGGING = {
             "propagate": False,
         },
     },
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "SERKAN V2 API",
+    "DESCRIPTION": (
+        "API interna de SERKAN V2. "
+        "Django REST Framework es la fuente de verdad para autenticación, "
+        "permisos, validaciones, auditoría, trazabilidad, inventario, ventas, "
+        "documentos, importaciones y estadísticas."
+    ),
+    "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
+    "REDOC_DIST": "SIDECAR",
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SORT_OPERATIONS": True,
+    "TAGS": [
+        {
+            "name": "Auth",
+            "description": "Autenticación, sesión, tokens y usuario actual.",
+        },
+        {
+            "name": "Core",
+            "description": "Health checks, auditoría, búsqueda global e inicio.",
+        },
+        {"name": "Accounts", "description": "Usuarios internos, roles y permisos."},
+        {"name": "Collaborators", "description": "Colaboradores internos de SERKAN."},
+        {
+            "name": "Commercial",
+            "description": "Holdings, mineras, áreas, subáreas y contactos.",
+        },
+        {"name": "Inventory", "description": "Productos, stock y movimientos Kardex."},
+        {
+            "name": "Sales",
+            "description": "Ventas, detalles, estados comerciales y alertas.",
+        },
+        {
+            "name": "Documents",
+            "description": "Documentos lógicos y versiones documentales.",
+        },
+        {
+            "name": "Imports",
+            "description": "Importaciones Excel, prevalidación y lotes.",
+        },
+    ],
 }

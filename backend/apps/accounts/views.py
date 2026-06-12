@@ -7,7 +7,13 @@ from django.contrib.auth.models import update_last_login
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
-from rest_framework import status, viewsets
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    OpenApiTypes,
+    extend_schema,
+    inline_serializer,
+)
+from rest_framework import serializers, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -176,6 +182,33 @@ def create_auth_audit_log(
         pass
 
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Iniciar sesión",
+    description=(
+        "Autentica un usuario interno activo de SERKAN V2. "
+        "Si las credenciales son válidas, rota el token anterior, crea un token nuevo, "
+        "registra auditoría de login y devuelve datos de usuario, permisos visuales, "
+        "menú disponible y expiración del token."
+    ),
+    request=inline_serializer(
+        name="LoginRequest",
+        fields={
+            "username": serializers.CharField(),
+            "password": serializers.CharField(write_only=True),
+        },
+    ),
+    responses={
+        200: OpenApiTypes.OBJECT,
+        400: OpenApiResponse(description="Credenciales faltantes o inválidas."),
+        403: OpenApiResponse(
+            description="Usuario desactivado o no activo internamente."
+        ),
+        429: OpenApiResponse(
+            description="Login bloqueado temporalmente por rate limit."
+        ),
+    },
+)
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def login_view(request):
@@ -307,6 +340,19 @@ def login_view(request):
     return Response(build_login_response_payload(token=token, user=user))
 
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Cerrar sesión",
+    description=(
+        "Cierra la sesión del usuario autenticado, registra auditoría de logout "
+        "y elimina el token actual para impedir su reutilización."
+    ),
+    request=None,
+    responses={
+        200: OpenApiTypes.OBJECT,
+        401: OpenApiResponse(description="Token ausente, inválido o expirado."),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
@@ -324,12 +370,37 @@ def logout_view(request):
     return Response({"detail": "Sesión cerrada correctamente."})
 
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Usuario actual",
+    description="Devuelve los datos del usuario autenticado y activo.",
+    responses={
+        200: UserSerializer,
+        401: OpenApiResponse(description="No autenticado."),
+        403: OpenApiResponse(description="Usuario no activo."),
+    },
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticatedAndActive])
 def me_view(request):
     return Response(UserSerializer(request.user).data)
 
 
+@extend_schema(
+    tags=["Auth"],
+    summary="Sesión actual para React",
+    description=(
+        "Devuelve la sesión actual preparada para frontend. "
+        "React debe usar este endpoint para restaurar sesión, construir menú, "
+        "leer permisos visuales por módulo y conocer expiración del token. "
+        "El backend sigue siendo la fuente real de permisos."
+    ),
+    responses={
+        200: OpenApiTypes.OBJECT,
+        401: OpenApiResponse(description="Token ausente, inválido o expirado."),
+        403: OpenApiResponse(description="Usuario no activo."),
+    },
+)
 @api_view(["GET"])
 @permission_classes([IsAuthenticatedAndActive])
 def session_view(request):
@@ -352,6 +423,22 @@ def session_view(request):
     )
 
 
+@extend_schema(
+    tags=["Accounts"],
+    summary="Crear usuario interno",
+    description=(
+        "Crea una cuenta interna de SERKAN V2. "
+        "No crea colaborador interno ni contacto externo. "
+        "Solo roles autorizados pueden gestionar usuarios."
+    ),
+    request=CreateUserSerializer,
+    responses={
+        201: OpenApiTypes.OBJECT,
+        400: OpenApiResponse(description="Error de validación."),
+        401: OpenApiResponse(description="No autenticado."),
+        403: OpenApiResponse(description="Sin permisos para gestionar usuarios."),
+    },
+)
 @api_view(["POST"])
 @permission_classes([IsAuthenticatedAndActive, CanManageUsers])
 def create_user_view(request):
@@ -448,21 +535,41 @@ class UserViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        return api_error_response(
-            request=request,
-            status_code=status.HTTP_400_BAD_REQUEST,
-            code="invalid_credentials",
-            message="Credenciales inválidas.",
-        )
+        if instance == request.user:
+            return api_error_response(
+                request=request,
+                status_code=status.HTTP_400_BAD_REQUEST,
+                code="cannot_deactivate_self",
+                message="No puedes desactivar tu propio usuario.",
+            )
 
         with transaction.atomic():
             instance.deactivate(user=request.user)
+            Token.objects.filter(user=instance).delete()
 
         return Response(
-            {"detail": "Usuario desactivado correctamente."},
+            {
+                "detail": "Usuario desactivado correctamente.",
+                "user": UserSerializer(instance).data,
+            },
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        tags=["Accounts"],
+        summary="Cambiar contraseña propia",
+        description=(
+            "Permite al usuario autenticado cambiar su propia contraseña. "
+            "Después del cambio se eliminan sus tokens activos y debe iniciar sesión nuevamente."
+        ),
+        request=ChangePasswordSerializer,
+        responses={
+            200: OpenApiTypes.OBJECT,
+            400: OpenApiResponse(description="Error de validación."),
+            401: OpenApiResponse(description="No autenticado."),
+            403: OpenApiResponse(description="Usuario no activo."),
+        },
+    )
     @action(detail=False, methods=["post"], url_path="change-password")
     def change_password(self, request):
         serializer = ChangePasswordSerializer(

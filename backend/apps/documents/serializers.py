@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
 from .models import DocumentFile, DocumentVersion
@@ -49,18 +50,21 @@ class DocumentVersionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_uploaded_by_name(self, obj):
         if not obj.uploaded_by:
             return ""
 
         return obj.uploaded_by.get_full_name().strip() or obj.uploaded_by.username
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_replaced_by_name(self, obj):
         if not obj.replaced_by:
             return ""
 
         return obj.replaced_by.get_full_name().strip() or obj.replaced_by.username
 
+    @extend_schema_field(OpenApiTypes.URI)
     def get_file_url(self, obj):
         if not obj.file:
             return ""
@@ -141,9 +145,11 @@ class DocumentFileSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_owner_content_type_label(self, obj):
         return f"{obj.owner_content_type.app_label}.{obj.owner_content_type.model}"
 
+    @extend_schema_field(DocumentVersionSerializer)
     def get_active_version(self, obj):
         active = obj.active_version
 

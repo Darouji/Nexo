@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
 from .models import (
@@ -21,7 +22,9 @@ def raise_drf_validation_error(error):
 
 
 class ImportRowSerializer(serializers.ModelSerializer):
-    row_status_display = serializers.CharField(source="get_row_status_display", read_only=True)
+    row_status_display = serializers.CharField(
+        source="get_row_status_display", read_only=True
+    )
     imported_object = serializers.SerializerMethodField()
 
     class Meta:
@@ -44,6 +47,7 @@ class ImportRowSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_imported_object(self, obj):
         if not obj.imported_object_id:
             return None
@@ -151,12 +155,14 @@ class ImportBatchSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_processed_by_name(self, obj):
         if not obj.processed_by:
             return ""
 
         return obj.processed_by.get_full_name().strip() or obj.processed_by.username
 
+    @extend_schema_field(ImportRowSerializer(many=True))
     def get_rows_preview(self, obj):
         rows = obj.rows.order_by("row_number")[:10]
 

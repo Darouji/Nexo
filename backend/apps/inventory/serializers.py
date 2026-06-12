@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
 from .models import Categoria, KardexMovementType, MovimientoKardex, Producto
@@ -61,9 +62,11 @@ class ProductoSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    @extend_schema_field(OpenApiTypes.INT)
     def get_stock(self, obj):
         return obj.stock_actual
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_stock_status(self, obj):
         if not obj.controla_stock:
             return "NO_CONTROLA_STOCK"
@@ -76,7 +79,9 @@ class ProductoSerializer(serializers.ModelSerializer):
 
 class MovimientoKardexSerializer(serializers.ModelSerializer):
     producto_modelo = serializers.CharField(source="producto.modelo", read_only=True)
-    producto_categoria = serializers.CharField(source="producto.categoria.name", read_only=True)
+    producto_categoria = serializers.CharField(
+        source="producto.categoria.name", read_only=True
+    )
     operador_nombre = serializers.SerializerMethodField()
     movement_type_display = serializers.CharField(
         source="get_movement_type_display",
@@ -112,12 +117,14 @@ class MovimientoKardexSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_operador_nombre(self, obj):
         if not obj.operador:
             return ""
 
         return obj.operador.get_full_name().strip() or obj.operador.username
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_reference(self, obj):
         if not obj.reference_object_id:
             return None
@@ -148,7 +155,9 @@ class InventoryAdjustmentSerializer(serializers.Serializer):
 
     def validate_cantidad(self, value):
         if value == 0:
-            raise serializers.ValidationError("La cantidad del ajuste no puede ser cero.")
+            raise serializers.ValidationError(
+                "La cantidad del ajuste no puede ser cero."
+            )
 
         return value
 

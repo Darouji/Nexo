@@ -25,3 +25,7 @@ dist/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Archivos generados
+schema.yml
+backend/schema.yml

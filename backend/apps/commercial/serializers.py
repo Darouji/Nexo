@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
 from .models import (
@@ -115,7 +116,9 @@ class SubareaSerializer(serializers.ModelSerializer):
     minera = serializers.IntegerField(source="area.minera.id", read_only=True)
     minera_name = serializers.CharField(source="area.minera.name", read_only=True)
     holding = serializers.IntegerField(source="area.minera.holding.id", read_only=True)
-    holding_name = serializers.CharField(source="area.minera.holding.name", read_only=True)
+    holding_name = serializers.CharField(
+        source="area.minera.holding.name", read_only=True
+    )
 
     class Meta:
         model = Subarea
@@ -150,18 +153,26 @@ class SubareaSerializer(serializers.ModelSerializer):
 class ContactoSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
 
-    holding = serializers.IntegerField(source="subarea.area.minera.holding.id", read_only=True)
-    holding_name = serializers.CharField(source="subarea.area.minera.holding.name", read_only=True)
+    holding = serializers.IntegerField(
+        source="subarea.area.minera.holding.id", read_only=True
+    )
+    holding_name = serializers.CharField(
+        source="subarea.area.minera.holding.name", read_only=True
+    )
 
     minera = serializers.IntegerField(source="subarea.area.minera.id", read_only=True)
-    minera_name = serializers.CharField(source="subarea.area.minera.name", read_only=True)
+    minera_name = serializers.CharField(
+        source="subarea.area.minera.name", read_only=True
+    )
 
     area = serializers.IntegerField(source="subarea.area.id", read_only=True)
     area_name = serializers.CharField(source="subarea.area.name", read_only=True)
 
     subarea_name = serializers.CharField(source="subarea.name", read_only=True)
     city_name = serializers.CharField(source="city.name", read_only=True)
-    shift_mode_display = serializers.CharField(source="get_shift_mode_display", read_only=True)
+    shift_mode_display = serializers.CharField(
+        source="get_shift_mode_display", read_only=True
+    )
 
     class Meta:
         model = Contacto
@@ -216,6 +227,7 @@ class ContactoSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    @extend_schema_field(OpenApiTypes.STR)
     def get_full_name(self, obj):
         return obj.full_name
 
@@ -224,7 +236,9 @@ class ContactSubareaHistorySerializer(serializers.ModelSerializer):
     contact_name = serializers.CharField(source="contact.full_name", read_only=True)
     old_subarea_name = serializers.CharField(source="old_subarea.name", read_only=True)
     new_subarea_name = serializers.CharField(source="new_subarea.name", read_only=True)
-    changed_by_name = serializers.CharField(source="changed_by.get_full_name", read_only=True)
+    changed_by_name = serializers.CharField(
+        source="changed_by.get_full_name", read_only=True
+    )
 
     class Meta:
         model = ContactSubareaHistory

@@ -1,18 +1,18 @@
 import { useState } from "react";
 import { AppLayout } from "../layouts/AppLayout";
 import { ProductsPage } from "./ProductsPage";
+import { HomePage } from "./HomePage";
 import { Typography } from "@mui/material";
 import { colors } from "../theme/colors";
-import type { AuthUser } from "../types/auth"; // Importación necesaria para el tipado
+import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
   onLogout: () => void;
 }
 
 export function DashboardPage({ onLogout }: DashboardPageProps) {
-  const [activeSection, setActiveSection] = useState("Productos");
+  const [activeSection, setActiveSection] = useState("Inicio");
 
-  // Usuario de prueba tipado para evitar bloqueos del compilador
   const mockUser = {
     id: 1,
     username: "Admin",
@@ -29,13 +29,16 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
       phone: "S/N",
       position: "Administrador",
     },
-  } as unknown as AuthUser; // <--- Soluciona el error TS2322
+  } as unknown as AuthUser;
 
-  // Motor de renderizado dinámico según el menú seleccionado
   const renderContent = () => {
     switch (activeSection) {
+      case "Inicio":
+        return <HomePage user={mockUser} onSectionChange={setActiveSection} />;
+
       case "Productos":
         return <ProductsPage />;
+
       default:
         return (
           <Typography variant="h6" sx={{ color: colors.text.muted }}>

@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Chip,
-  Container,
   Toolbar,
   Typography,
   Tabs,
@@ -16,7 +15,7 @@ import { colors } from "../theme/colors";
 
 const menuItems = [
   {
-    label: "Dashboard",
+    label: "Inicio",
     roles: [
       "ADMINISTRADOR",
       "FINANZAS_COMERCIAL",
@@ -35,7 +34,7 @@ const menuItems = [
     roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
   },
   {
-    label: "Clientes",
+    label: "Entidades comerciales",
     roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO"],
   },
   {
@@ -63,6 +62,21 @@ const menuItems = [
       "INFORMATICO",
       "OPERATIVO",
     ],
+  },
+  {
+    label: "Estadísticas",
+    roles: [
+      "ADMINISTRADOR",
+      "FINANZAS_COMERCIAL",
+      "RRHH",
+      "INFORMATICO",
+      "OPERATIVO",
+      "CONSULTA",
+    ],
+  },
+  {
+    label: "Auditoría",
+    roles: ["ADMINISTRADOR", "INFORMATICO"],
   },
 ];
 
@@ -108,11 +122,14 @@ export function AppLayout({
     >
       {/* Banner Superior Unificado */}
       <AppBar
-        position="static"
+        position="sticky"
         elevation={0}
         sx={{
+          top: 0,
+          zIndex: 1200,
           bgcolor: colors.background.header,
           borderBottom: `2px solid ${colors.border.light}`,
+          backdropFilter: "blur(18px)",
         }}
       >
         <Toolbar sx={{ justifyContent: "space-between", py: 1, px: 3 }}>
@@ -156,10 +173,9 @@ export function AppLayout({
                   label={user.profile?.role_display || "Sin rol"}
                   sx={{
                     color: colors.accent.main,
-                    borderColor: colors.accent.main,
-                    bgcolor: "rgba(0, 255, 136, 0.05)",
+                    borderColor: colors.accent.border,
+                    bgcolor: colors.accent.soft,
                     fontWeight: 700,
-                    borderRadius: 0,
                     mt: 0.5,
                   }}
                   variant="outlined"
@@ -175,10 +191,9 @@ export function AppLayout({
               sx={{
                 color: colors.status.error,
                 borderColor: colors.status.error,
-                borderRadius: 0,
                 fontWeight: 700,
                 "&:hover": {
-                  bgcolor: "rgba(255, 0, 85, 0.08)",
+                  bgcolor: colors.status.errorSoft,
                   borderColor: colors.status.error,
                 },
               }}
@@ -211,7 +226,7 @@ export function AppLayout({
                 minHeight: 50,
                 "&:hover": {
                   color: colors.text.primary,
-                  bgcolor: "rgba(255, 255, 255, 0.02)",
+                  bgcolor: colors.action.hover,
                 },
                 "&.Mui-selected": {
                   color: colors.primary.main,
@@ -227,9 +242,17 @@ export function AppLayout({
         </Box>
       </AppBar>
 
-      {/* Espacio del Contenido Principal Expandido */}
-      <Box component="main" sx={{ flexGrow: 1, py: 4 }}>
-        <Container maxWidth="xl">{children}</Container>
+      {/* Espacio del Contenido Principal a ancho completo */}
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: "100%",
+          px: { xs: 2, md: 3, xl: 4 },
+          py: 3,
+        }}
+      >
+        {children}
       </Box>
     </Box>
   );

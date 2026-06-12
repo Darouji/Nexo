@@ -3,7 +3,7 @@ import { colors } from "./colors";
 
 export const appTheme = createTheme({
   palette: {
-    mode: "dark", // Fuerza el modo oscuro base
+    mode: "dark",
     background: {
       default: colors.background.main,
       paper: colors.background.paper,
@@ -17,8 +17,7 @@ export const appTheme = createTheme({
       contrastText: colors.secondary.contrastText,
     },
     warning: {
-      main: colors.accent.main,
-      contrastText: colors.accent.contrastText,
+      main: colors.status.warning,
     },
     success: {
       main: colors.status.success,
@@ -36,32 +35,72 @@ export const appTheme = createTheme({
     },
     divider: colors.border.light,
   },
+
+  shape: {
+    borderRadius: 14,
+  },
+
   typography: {
-    // Fuente moderna y sobria
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
     button: {
-      textTransform: "none", // Evita que los botones estén en MAYÚSCULAS por defecto
-      fontWeight: 600,
+      textTransform: "none",
+      fontWeight: 700,
     },
   },
+
   components: {
-    // Aquí quitamos el "Glow" y sombras redondeadas para dar el aspecto Cyberpunk plano
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: {
+          background: colors.gradients.page,
+        },
+      },
+    },
+
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 0, // Bordes cuadrados y duros
-          boxShadow: "none",
+          borderRadius: colors.radius.md,
+          boxShadow: colors.shadow.none,
+          fontWeight: 800,
           "&:hover": {
-            boxShadow: "none",
+            boxShadow: colors.shadow.none,
           },
         },
       },
     },
+
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 0,
-          backgroundImage: "none", // Quita el overlay blanco por defecto de MUI en modo oscuro
+          backgroundImage: "none",
+        },
+      },
+    },
+
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: colors.radius.lg,
+          boxShadow: colors.shadow.card,
+        },
+      },
+    },
+
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          borderRadius: colors.radius.sm,
+          fontWeight: 700,
+        },
+      },
+    },
+
+    MuiTabs: {
+      styleOverrides: {
+        indicator: {
+          height: 3,
+          borderRadius: colors.radius.xs,
         },
       },
     },

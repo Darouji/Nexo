@@ -324,7 +324,8 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
                 gridTemplateColumns: {
                   xs: "1fr",
                   sm: "repeat(2, minmax(0, 1fr))",
-                  xl: "repeat(5, minmax(0, 1fr))",
+                  lg: "repeat(3, minmax(0, 1fr))",
+                  xl: "repeat(4, minmax(0, 1fr))",
                 },
                 gap: 2,
               }}
@@ -395,6 +396,8 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
                             color: colors.text.primary,
                             fontWeight: 900,
                             mb: 0.7,
+                            lineHeight: 1.2,
+                            overflowWrap: "anywhere",
                           }}
                         >
                           {module.label}
@@ -405,6 +408,7 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
                           sx={{
                             color: colors.text.secondary,
                             lineHeight: 1.55,
+                            overflowWrap: "anywhere",
                           }}
                         >
                           {module.description}

@@ -3,7 +3,7 @@ import { colors } from "./colors";
 
 export const appTheme = createTheme({
   palette: {
-    mode: "dark",
+    mode: colors.mode,
     background: {
       default: colors.background.main,
       paper: colors.background.paper,

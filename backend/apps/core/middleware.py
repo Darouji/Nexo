@@ -24,6 +24,12 @@ def get_module_from_path(path):
     return ""
 
 
+AUDIT_MIDDLEWARE_EXCLUDED_PATHS = {
+    "/api/auth/login/",
+    "/api/auth/logout/",
+}
+
+
 def get_action_from_method(method):
     method = method.upper()
 
@@ -53,6 +59,7 @@ class ActivityLogMiddleware(MiddlewareMixin):
             and hasattr(request, "user")
             and request.user.is_authenticated
             and request.path.startswith("/api/")
+            and request.path not in AUDIT_MIDDLEWARE_EXCLUDED_PATHS
         )
 
         if not should_audit:

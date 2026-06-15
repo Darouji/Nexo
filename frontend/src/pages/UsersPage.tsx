@@ -43,9 +43,9 @@ const roleOptions = [
     onlyAdmin: false,
   },
   {
-  value: "OPERATIVO",
-  label: "Operativo",
-  onlyAdmin: false,
+    value: "OPERATIVO",
+    label: "Operativo",
+    onlyAdmin: false,
   },
   {
     value: "CONSULTA",
@@ -72,7 +72,7 @@ export function UsersPage({ currentUser }: UsersPageProps) {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const currentRole = currentUser?.profile?.role;
+  const currentRole = currentUser?.role;
   const canCreateAdmin = currentRole === "ADMINISTRADOR";
 
   const availableRoles = roleOptions.filter((role) => {
@@ -281,11 +281,7 @@ export function UsersPage({ currentUser }: UsersPageProps) {
                 </Grid>
 
                 <Grid size={{ xs: 12 }}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={loading}
-                  >
+                  <Button type="submit" variant="contained" disabled={loading}>
                     {loading ? "Creando usuario..." : "Crear usuario"}
                   </Button>
                 </Grid>

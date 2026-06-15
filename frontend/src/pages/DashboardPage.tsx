@@ -19,18 +19,17 @@ const fallbackUser: AuthUser = {
   first_name: "Admin",
   last_name: "Sistema",
   full_name: "Admin Sistema",
+  role: "ADMINISTRADOR",
+  role_display: "Administrador",
+  status: "ACTIVO",
+  status_display: "Activo",
   is_active: true,
-  profile: {
-    id: 1,
-    role: "ADMINISTRADOR",
-    role_display: "Administrador Global",
-    is_active_profile: true,
-    phone: "S/N",
-    position: "Administrador",
-    area: "Administración",
-    created_at: "",
-    updated_at: "",
-  },
+  is_staff: true,
+  is_superuser: true,
+  phone: "S/N",
+  position: "Administrador",
+  department: "Administración",
+  observations: "",
 };
 
 export function DashboardPage({ onLogout }: DashboardPageProps) {

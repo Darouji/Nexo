@@ -95,7 +95,7 @@ export function AppLayout({
   onLogout,
   children,
 }: AppLayoutProps) {
-  const role = user?.profile?.role;
+  const role = user?.role;
 
   const visibleMenuItems = menuItems.filter((item) =>
     role ? item.roles.includes(role) : false,
@@ -170,7 +170,7 @@ export function AppLayout({
                 </Typography>
                 <Chip
                   size="small"
-                  label={user.profile?.role_display || "Sin rol"}
+                  label={user.role_display || user.role || "Sin rol"}
                   sx={{
                     color: colors.accent.main,
                     borderColor: colors.accent.border,

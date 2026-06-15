@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { AppLayout } from "../layouts/AppLayout";
-import { ProductsPage } from "./ProductsPage";
-import { HomePage } from "./HomePage";
 import { Typography } from "@mui/material";
+import { AppLayout } from "../layouts/AppLayout";
+import { HomePage } from "./HomePage";
+import { ProductsPage } from "./ProductsPage";
+import { PurchasesPage } from "./PurchasesPage";
+import { getStoredUser, logout } from "../services/authService";
 import { colors } from "../theme/colors";
 import type { AuthUser } from "../types/auth";
 
@@ -10,34 +12,46 @@ interface DashboardPageProps {
   onLogout: () => void;
 }
 
+const fallbackUser: AuthUser = {
+  id: 1,
+  username: "Admin",
+  email: "admin@serkan.cl",
+  first_name: "Admin",
+  last_name: "Sistema",
+  full_name: "Admin Sistema",
+  is_active: true,
+  profile: {
+    id: 1,
+    role: "ADMINISTRADOR",
+    role_display: "Administrador Global",
+    is_active_profile: true,
+    phone: "S/N",
+    position: "Administrador",
+    area: "Administración",
+    created_at: "",
+    updated_at: "",
+  },
+};
+
 export function DashboardPage({ onLogout }: DashboardPageProps) {
   const [activeSection, setActiveSection] = useState("Inicio");
+  const user = (getStoredUser() as AuthUser | null) ?? fallbackUser;
 
-  const mockUser = {
-    id: 1,
-    username: "Admin",
-    email: "admin@serkan.cl",
-    first_name: "Admin",
-    last_name: "Sistema",
-    full_name: "Admin Sistema",
-    is_active: true,
-    profile: {
-      id: 1,
-      role: "ADMINISTRADOR",
-      role_display: "Administrador Global",
-      is_active_profile: true,
-      phone: "S/N",
-      position: "Administrador",
-    },
-  } as unknown as AuthUser;
+  const handleLogout = () => {
+    logout();
+    onLogout();
+  };
 
   const renderContent = () => {
     switch (activeSection) {
       case "Inicio":
-        return <HomePage user={mockUser} onSectionChange={setActiveSection} />;
+        return <HomePage user={user} onSectionChange={setActiveSection} />;
 
       case "Productos":
         return <ProductsPage />;
+
+      case "Compras / Egresos":
+        return <PurchasesPage />;
 
       default:
         return (
@@ -50,10 +64,10 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
 
   return (
     <AppLayout
-      user={mockUser}
+      user={user}
       activeSection={activeSection}
       onSectionChange={setActiveSection}
-      onLogout={onLogout}
+      onLogout={handleLogout}
     >
       {renderContent()}
     </AppLayout>

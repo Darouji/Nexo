@@ -744,18 +744,30 @@ export function ProductsPage() {
                   categoryName,
                 );
 
+                const helperText = !categoryName
+                  ? "Escribe una categoría. Si ya existe, se reutilizará."
+                  : categoryExists
+                    ? "Se reutilizará una categoría existente."
+                    : `Se creará la nueva categoría "${categoryName}" al guardar.`;
+
+                const helperColor = !categoryName
+                  ? colors.text.muted
+                  : categoryExists
+                    ? colors.status.success
+                    : colors.status.warning;
+
                 return (
                   <TextField
                     {...params}
                     label="Categoría"
                     required
-                    helperText={
-                      !categoryName
-                        ? "Escribe una categoría. Si ya existe, se reutilizará."
-                        : categoryExists
-                          ? "Se reutilizará una categoría existente."
-                          : `Se creará la nueva categoría "${categoryName}" al guardar.`
-                    }
+                    helperText={helperText}
+                    sx={{
+                      "& .MuiFormHelperText-root": {
+                        color: helperColor,
+                        fontWeight: categoryName ? 800 : 500,
+                      },
+                    }}
                   />
                 );
               }}

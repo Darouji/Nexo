@@ -68,6 +68,13 @@ type PaginatedResponse<T> = {
 
 type ProductListResponse = Product[] | PaginatedResponse<Product>;
 type CategoryListResponse = Category[] | PaginatedResponse<Category>;
+type KardexListResponse = KardexMovement[] | PaginatedResponse<KardexMovement>;
+
+type KardexListParams = {
+  producto?: number;
+  search?: string;
+  ordering?: string;
+};
 
 type ProductListParams = {
   search?: string;
@@ -219,4 +226,16 @@ export async function registerInventoryAdjustment(
   );
 
   return response.data;
+}
+
+export async function fetchKardexMovements(params: KardexListParams = {}) {
+  const response = await api.get<KardexListResponse>("/inventory/kardex/", {
+    params: {
+      producto: params.producto,
+      search: params.search?.trim() || undefined,
+      ordering: params.ordering || "-created_at",
+    },
+  });
+
+  return extractResults(response.data);
 }

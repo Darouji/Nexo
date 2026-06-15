@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import HistoryIcon from "@mui/icons-material/History";
 import {
   Alert,
   Autocomplete,
@@ -29,6 +30,7 @@ import {
   createProduct,
   ensureCategoryByName,
   fetchCategories,
+  fetchKardexMovements,
   fetchProducts,
   registerInventoryAdjustment,
   registerManualStockEntry,
@@ -36,6 +38,7 @@ import {
 import type {
   Category,
   CreateProductPayload,
+  KardexMovement,
   Product,
   ProductStockStatus,
 } from "../services/inventoryService";
@@ -61,6 +64,13 @@ type MovementDialogState = {
   motivo: string;
 };
 
+type KardexDialogState = {
+  open: boolean;
+  product: Product | null;
+  movements: KardexMovement[];
+  loading: boolean;
+};
+
 const emptyProductForm: ProductFormState = {
   categoria_name: "",
   modelo: "",
@@ -79,6 +89,13 @@ const emptyMovementDialog: MovementDialogState = {
   product: null,
   cantidad: "",
   motivo: "",
+};
+
+const emptyKardexDialog: KardexDialogState = {
+  open: false,
+  product: null,
+  movements: [],
+  loading: false,
 };
 
 function getErrorMessage(error: unknown) {
@@ -143,6 +160,23 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat("es-CL").format(value);
 }
 
+function formatDateTime(value: string) {
+  if (!value) {
+    return "Sin fecha";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("es-CL", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
 function parseInteger(value: string, fallback = 0) {
   const parsed = Number.parseInt(value, 10);
 
@@ -175,10 +209,13 @@ export function ProductsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+
   const [productForm, setProductForm] =
     useState<ProductFormState>(emptyProductForm);
   const [movementDialog, setMovementDialog] =
     useState<MovementDialogState>(emptyMovementDialog);
+  const [kardexDialog, setKardexDialog] =
+    useState<KardexDialogState>(emptyKardexDialog);
 
   const loadProducts = async (search = searchTerm) => {
     try {
@@ -321,6 +358,43 @@ export function ProductsPage() {
 
   const closeMovementDialog = () => {
     setMovementDialog(emptyMovementDialog);
+  };
+
+  const openKardexDialog = async (product: Product) => {
+    setKardexDialog({
+      open: true,
+      product,
+      movements: [],
+      loading: true,
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const movements = await fetchKardexMovements({
+        producto: product.id,
+        ordering: "-created_at",
+      });
+
+      setKardexDialog({
+        open: true,
+        product,
+        movements,
+        loading: false,
+      });
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+      setKardexDialog({
+        open: true,
+        product,
+        movements: [],
+        loading: false,
+      });
+    }
+  };
+
+  const closeKardexDialog = () => {
+    setKardexDialog(emptyKardexDialog);
   };
 
   const handleSaveMovement = async () => {
@@ -472,7 +546,7 @@ export function ProductsPage() {
     {
       field: "actions",
       headerName: "Acciones",
-      width: 250,
+      width: 365,
       sortable: false,
       filterable: false,
       renderCell: (params) => {
@@ -500,9 +574,102 @@ export function ProductsPage() {
             >
               Ajuste
             </Button>
+
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<HistoryIcon />}
+              onClick={() => void openKardexDialog(product)}
+            >
+              Kardex
+            </Button>
           </Stack>
         );
       },
+    },
+  ];
+
+  const kardexColumns: GridColDef[] = [
+    {
+      field: "created_at",
+      headerName: "Fecha",
+      width: 160,
+      renderCell: (params) => formatDateTime(String(params.value || "")),
+    },
+    {
+      field: "movement_type_display",
+      headerName: "Movimiento",
+      minWidth: 190,
+      flex: 0.9,
+      renderCell: (params) => (
+        <Chip
+          label={String(params.value || "Movimiento")}
+          size="small"
+          sx={{
+            color: colors.primary.main,
+            bgcolor: colors.primary.soft,
+            borderColor: colors.primary.border,
+            border: "1px solid",
+            fontWeight: 800,
+          }}
+        />
+      ),
+    },
+    {
+      field: "origin_display",
+      headerName: "Origen",
+      width: 135,
+    },
+    {
+      field: "cantidad",
+      headerName: "Cantidad",
+      width: 120,
+      type: "number",
+      renderCell: (params) => {
+        const value = Number(params.value || 0);
+
+        return (
+          <Typography
+            sx={{
+              color: value >= 0 ? colors.status.success : colors.status.error,
+              fontWeight: 900,
+            }}
+          >
+            {value > 0 ? `+${formatNumber(value)}` : formatNumber(value)}
+          </Typography>
+        );
+      },
+    },
+    {
+      field: "stock_antes",
+      headerName: "Stock antes",
+      width: 130,
+      type: "number",
+      renderCell: (params) => formatNumber(Number(params.value || 0)),
+    },
+    {
+      field: "stock_despues",
+      headerName: "Stock después",
+      width: 145,
+      type: "number",
+      renderCell: (params) => (
+        <Typography sx={{ fontWeight: 900 }}>
+          {formatNumber(Number(params.value || 0))}
+        </Typography>
+      ),
+    },
+    {
+      field: "operador_nombre",
+      headerName: "Operador",
+      minWidth: 160,
+      flex: 0.8,
+      renderCell: (params) => params.value || "Sin operador",
+    },
+    {
+      field: "motivo",
+      headerName: "Motivo",
+      minWidth: 260,
+      flex: 1.2,
     },
   ];
 
@@ -986,6 +1153,38 @@ export function ProductsPage() {
           >
             {savingMovement ? "Guardando..." : "Registrar Kardex"}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={kardexDialog.open}
+        onClose={closeKardexDialog}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>
+          Kardex del producto
+          {kardexDialog.product ? `: ${kardexDialog.product.modelo}` : ""}
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              Historial real de movimientos de stock. Cada registro muestra
+              cantidad, stock anterior, stock posterior, motivo, operador y
+              fecha.
+            </Alert>
+
+            <SmartDataGrid
+              rows={kardexDialog.movements}
+              columns={kardexColumns}
+              loading={kardexDialog.loading}
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closeKardexDialog}>Cerrar</Button>
         </DialogActions>
       </Dialog>
     </Box>

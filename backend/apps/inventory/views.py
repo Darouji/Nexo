@@ -158,3 +158,28 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
         "stock_despues",
     ]
     ordering = ["-created_at"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        producto_id = self.request.query_params.get("producto")
+        movement_type = self.request.query_params.get("movement_type")
+        origin = self.request.query_params.get("origin")
+        status_param = self.request.query_params.get("status")
+
+        if producto_id:
+            if producto_id.isdigit():
+                queryset = queryset.filter(producto_id=producto_id)
+            else:
+                return queryset.none()
+
+        if movement_type:
+            queryset = queryset.filter(movement_type=movement_type)
+
+        if origin:
+            queryset = queryset.filter(origin=origin)
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        return queryset

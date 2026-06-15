@@ -4,35 +4,44 @@ import { colors } from "./colors";
 export const appTheme = createTheme({
   palette: {
     mode: colors.mode,
+
     background: {
       default: colors.background.main,
       paper: colors.background.paper,
     },
+
     primary: {
       main: colors.primary.main,
       contrastText: colors.primary.contrastText,
     },
+
     secondary: {
       main: colors.secondary.main,
       contrastText: colors.secondary.contrastText,
     },
+
     warning: {
       main: colors.status.warning,
     },
+
     success: {
       main: colors.status.success,
     },
+
     error: {
       main: colors.status.error,
     },
+
     info: {
       main: colors.status.info,
     },
+
     text: {
       primary: colors.text.primary,
       secondary: colors.text.secondary,
       disabled: colors.text.muted,
     },
+
     divider: colors.border.light,
   },
 
@@ -42,6 +51,7 @@ export const appTheme = createTheme({
 
   typography: {
     fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+
     button: {
       textTransform: "none",
       fontWeight: 700,
@@ -63,6 +73,7 @@ export const appTheme = createTheme({
           borderRadius: colors.radius.md,
           boxShadow: colors.shadow.none,
           fontWeight: 800,
+
           "&:hover": {
             boxShadow: colors.shadow.none,
           },
@@ -101,6 +112,14 @@ export const appTheme = createTheme({
         indicator: {
           height: 3,
           borderRadius: colors.radius.xs,
+        },
+      },
+    },
+
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          borderRadius: colors.radius.md,
         },
       },
     },

@@ -110,6 +110,75 @@ export async function fetchCategories() {
   return extractResults(response.data);
 }
 
+function normalizeComparableText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findCategoryByName(categories: Category[], name: string) {
+  const normalizedName = normalizeComparableText(name);
+
+  return categories.find((category) => {
+    const backendNormalizedName =
+      typeof category.name_normalized === "string"
+        ? category.name_normalized
+        : "";
+
+    return (
+      normalizeComparableText(category.name) === normalizedName ||
+      backendNormalizedName === normalizedName
+    );
+  });
+}
+
+export async function createCategory(name: string) {
+  const response = await api.post<Category>("/inventory/categorias/", {
+    name: name.trim(),
+    description: "",
+  });
+
+  return response.data;
+}
+
+export async function ensureCategoryByName(
+  name: string,
+  currentCategories: Category[] = [],
+) {
+  const trimmedName = name.trim();
+
+  if (!trimmedName) {
+    throw new Error("La categoría es obligatoria.");
+  }
+
+  const existingCategory = findCategoryByName(currentCategories, trimmedName);
+
+  if (existingCategory) {
+    return existingCategory;
+  }
+
+  try {
+    return await createCategory(trimmedName);
+  } catch (error: unknown) {
+    const updatedCategories = await fetchCategories();
+    const categoryCreatedByAnotherRequest = findCategoryByName(
+      updatedCategories,
+      trimmedName,
+    );
+
+    if (categoryCreatedByAnotherRequest) {
+      return categoryCreatedByAnotherRequest;
+    }
+
+    throw error;
+  }
+}
+
 export async function fetchProducts(params: ProductListParams = {}) {
   const normalizedParams = {
     search: params.search?.trim() || undefined,

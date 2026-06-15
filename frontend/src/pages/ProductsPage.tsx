@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -11,12 +12,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   FormControlLabel,
   InputAdornment,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   TextField,
   Typography,
@@ -30,6 +27,7 @@ import type { GridColDef } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import {
   createProduct,
+  ensureCategoryByName,
   fetchCategories,
   fetchProducts,
   registerInventoryAdjustment,
@@ -44,7 +42,7 @@ import type {
 import { colors } from "../theme/colors";
 
 type ProductFormState = {
-  categoria: string;
+  categoria_name: string;
   modelo: string;
   detalle: string;
   codigo_sap: string;
@@ -64,7 +62,7 @@ type MovementDialogState = {
 };
 
 const emptyProductForm: ProductFormState = {
-  categoria: "",
+  categoria_name: "",
   modelo: "",
   detalle: "",
   codigo_sap: "",
@@ -153,6 +151,18 @@ function parseInteger(value: string, fallback = 0) {
   }
 
   return parsed;
+}
+
+function categoryExistsVisually(categories: Category[], name: string) {
+  const normalizedName = name.trim().toLowerCase();
+
+  if (!normalizedName) {
+    return false;
+  }
+
+  return categories.some(
+    (category) => category.name.trim().toLowerCase() === normalizedName,
+  );
 }
 
 export function ProductsPage() {
@@ -247,8 +257,13 @@ export function ProductsPage() {
       setErrorMessage("");
       setSuccessMessage("");
 
+      const category = await ensureCategoryByName(
+        productForm.categoria_name,
+        categorias,
+      );
+
       const payload: CreateProductPayload = {
-        categoria: Number(productForm.categoria),
+        categoria: category.id,
         modelo: productForm.modelo.trim(),
         detalle: productForm.detalle.trim(),
         codigo_sap: productForm.codigo_sap.trim(),
@@ -269,9 +284,14 @@ export function ProductsPage() {
         });
       }
 
+      const updatedCategories = await fetchCategories();
+      setCategorias(updatedCategories);
+
       setProductDialogOpen(false);
       setProductForm(emptyProductForm);
-      setSuccessMessage("Producto creado correctamente.");
+      setSuccessMessage(
+        `Producto creado correctamente en la categoría "${category.name}".`,
+      );
       await loadProducts("");
       setSearchTerm("");
     } catch (error: unknown) {
@@ -695,26 +715,51 @@ export function ProductsPage() {
 
         <DialogContent>
           <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <FormControl fullWidth required>
-              <InputLabel id="product-category-label">Categoría</InputLabel>
-              <Select
-                labelId="product-category-label"
-                label="Categoría"
-                value={productForm.categoria}
-                onChange={(event) =>
-                  setProductForm((current) => ({
-                    ...current,
-                    categoria: event.target.value,
-                  }))
-                }
-              >
-                {categorias.map((categoria) => (
-                  <MenuItem key={categoria.id} value={String(categoria.id)}>
-                    {categoria.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete<Category, false, false, true>
+              freeSolo
+              options={categorias}
+              inputValue={productForm.categoria_name}
+              onInputChange={(_event, newInputValue) =>
+                setProductForm((current) => ({
+                  ...current,
+                  categoria_name: newInputValue,
+                }))
+              }
+              onChange={(_event, newValue) =>
+                setProductForm((current) => ({
+                  ...current,
+                  categoria_name:
+                    typeof newValue === "string"
+                      ? newValue
+                      : newValue?.name || current.categoria_name,
+                }))
+              }
+              getOptionLabel={(option) =>
+                typeof option === "string" ? option : option.name
+              }
+              renderInput={(params) => {
+                const categoryName = productForm.categoria_name.trim();
+                const categoryExists = categoryExistsVisually(
+                  categorias,
+                  categoryName,
+                );
+
+                return (
+                  <TextField
+                    {...params}
+                    label="Categoría"
+                    required
+                    helperText={
+                      !categoryName
+                        ? "Escribe una categoría. Si ya existe, se reutilizará."
+                        : categoryExists
+                          ? "Se reutilizará una categoría existente."
+                          : `Se creará la nueva categoría "${categoryName}" al guardar.`
+                    }
+                  />
+                );
+              }}
+            />
 
             <TextField
               label="Modelo"
@@ -841,7 +886,7 @@ export function ProductsPage() {
             onClick={() => void handleCreateProduct()}
             disabled={
               savingProduct ||
-              !productForm.categoria ||
+              !productForm.categoria_name.trim() ||
               !productForm.modelo.trim()
             }
           >

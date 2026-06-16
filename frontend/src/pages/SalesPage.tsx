@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -10,24 +11,47 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   InputAdornment,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
 import InfoIcon from "@mui/icons-material/Info";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import type { GridColDef } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../components/SmartDataGrid";
-import { annulSale, concretarSale, fetchSales } from "../services/salesService";
+import {
+  fetchAreas,
+  fetchContactos,
+  fetchMineras,
+  fetchSubareas,
+  type Area,
+  type Contacto,
+  type Minera,
+  type Subarea,
+} from "../services/commercialService";
+import { fetchProducts, type Product } from "../services/inventoryService";
+import {
+  annulSale,
+  concretarSale,
+  createSale,
+  fetchSales,
+  fetchSalesSummary,
+} from "../services/salesService";
 import type {
+  CreateSaleLinePayload,
+  CreateSalePayload,
   Sale,
   SaleAlert,
   SaleDetail,
   SaleStatus,
+  SalesSummary,
   SaleValidationSummary,
 } from "../services/salesService";
 import { colors } from "../theme/colors";
@@ -43,6 +67,28 @@ type AnnulDialogState = {
   motivo: string;
 };
 
+type SaleFormState = {
+  fecha_venta: string;
+  fecha_factura: string;
+  factura_numero: string;
+  orden_compra: string;
+  minera: Minera | null;
+  area: Area | null;
+  subarea: Subarea | null;
+  contacto: Contacto | null;
+  tipo_documento: "GUIA_DESPACHO" | "HES" | "OTRO";
+  numero_guia_hes: string;
+  observations: string;
+};
+
+type SaleLineFormState = {
+  localId: string;
+  producto: Product | null;
+  cantidad: string;
+  valor_unitario: string;
+  codigo_sap: string;
+};
+
 const emptyDetailDialog: DetailDialogState = {
   open: false,
   sale: null,
@@ -53,6 +99,39 @@ const emptyAnnulDialog: AnnulDialogState = {
   sale: null,
   motivo: "",
 };
+
+function getTodayInputValue() {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+
+  return localDate.toISOString().slice(0, 10);
+}
+
+function createEmptySaleForm(): SaleFormState {
+  return {
+    fecha_venta: getTodayInputValue(),
+    fecha_factura: "",
+    factura_numero: "",
+    orden_compra: "",
+    minera: null,
+    area: null,
+    subarea: null,
+    contacto: null,
+    tipo_documento: "GUIA_DESPACHO",
+    numero_guia_hes: "",
+    observations: "",
+  };
+}
+
+function createEmptyLine(): SaleLineFormState {
+  return {
+    localId: crypto.randomUUID(),
+    producto: null,
+    cantidad: "1",
+    valor_unitario: "0",
+    codigo_sap: "",
+  };
+}
 
 function getErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -71,10 +150,18 @@ function getErrorMessage(error: unknown) {
             return `${field}: ${value.join(", ")}`;
           }
 
+          if (value && typeof value === "object") {
+            return `${field}: ${JSON.stringify(value)}`;
+          }
+
           return `${field}: ${String(value)}`;
         })
         .join(" | ");
     }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
   }
 
   return "No se pudo completar la operación.";
@@ -102,6 +189,27 @@ function formatCLP(value: string | number) {
     currency: "CLP",
     maximumFractionDigits: 0,
   }).format(numericValue);
+}
+
+function parsePositiveInteger(value: string) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (Number.isNaN(parsed)) {
+    return 0;
+  }
+
+  return parsed;
+}
+
+function parseMoney(value: string) {
+  const normalized = value.replace(/\./g, "").replace(",", ".");
+  const parsed = Number.parseFloat(normalized);
+
+  if (Number.isNaN(parsed)) {
+    return 0;
+  }
+
+  return parsed;
 }
 
 function getSaleStatusColor(status: SaleStatus) {
@@ -146,11 +254,26 @@ function getValidationLabel(summary: SaleValidationSummary) {
 
 export function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
+  const [summary, setSummary] = useState<SalesSummary | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [mineras, setMineras] = useState<Minera[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [subareas, setSubareas] = useState<Subarea[]>([]);
+  const [contactos, setContactos] = useState<Contacto[]>([]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [savingSale, setSavingSale] = useState(false);
   const [updatingSaleId, setUpdatingSaleId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  const [saleDialogOpen, setSaleDialogOpen] = useState(false);
+  const [saleForm, setSaleForm] = useState<SaleFormState>(createEmptySaleForm);
+  const [saleLines, setSaleLines] = useState<SaleLineFormState[]>([
+    createEmptyLine(),
+  ]);
+
   const [detailDialog, setDetailDialog] =
     useState<DetailDialogState>(emptyDetailDialog);
   const [annulDialog, setAnnulDialog] =
@@ -161,10 +284,19 @@ export function SalesPage() {
       setLoading(true);
       setErrorMessage("");
 
-      const data = await fetchSales({
-        search,
-        ordering: "-fecha_venta,-created_at",
-      });
+      const [data, summaryData] = await Promise.all([
+        fetchSales({
+          search,
+          ordering: "-fecha_venta,-created_at",
+        }),
+        fetchSalesSummary({
+          search,
+          ordering: "-fecha_venta,-created_at",
+        }),
+      ]);
+
+      setSales(data);
+      setSummary(summaryData);
 
       setSales(data);
     } catch (error: unknown) {
@@ -177,16 +309,46 @@ export function SalesPage() {
   useEffect(() => {
     let isMounted = true;
 
-    fetchSales({
-      search: "",
-      ordering: "-fecha_venta,-created_at",
-    })
-      .then((data) => {
-        if (!isMounted) return;
+    Promise.all([
+      fetchSales({
+        search: "",
+        ordering: "-fecha_venta,-created_at",
+      }),
+      fetchSalesSummary({
+        search: "",
+        ordering: "-fecha_venta,-created_at",
+      }),
+      fetchProducts({
+        search: "",
+        ordering: "categoria__name,modelo",
+      }),
+      fetchMineras({ ordering: "name" }),
+      fetchAreas({ ordering: "minera__name,name" }),
+      fetchSubareas({ ordering: "area__minera__name,area__name,name" }),
+      fetchContactos({ ordering: "first_name,last_name" }),
+    ])
+      .then(
+        ([
+          salesData,
+          summaryData,
+          productsData,
+          minerasData,
+          areasData,
+          subareasData,
+          contactosData,
+        ]) => {
+          if (!isMounted) return;
 
-        setSales(data);
-        setErrorMessage("");
-      })
+          setSales(salesData);
+          setSummary(summaryData);
+          setProducts(productsData);
+          setMineras(minerasData);
+          setAreas(areasData);
+          setSubareas(subareasData);
+          setContactos(contactosData);
+          setErrorMessage("");
+        },
+      )
       .catch((error: unknown) => {
         if (!isMounted) return;
 
@@ -202,6 +364,180 @@ export function SalesPage() {
       isMounted = false;
     };
   }, []);
+
+  const filteredAreas = useMemo(() => {
+    if (!saleForm.minera) {
+      return [];
+    }
+
+    return areas.filter((area) => area.minera === saleForm.minera?.id);
+  }, [areas, saleForm.minera]);
+
+  const filteredSubareas = useMemo(() => {
+    if (saleForm.area) {
+      return subareas.filter((subarea) => subarea.area === saleForm.area?.id);
+    }
+
+    if (saleForm.minera) {
+      return subareas.filter(
+        (subarea) => subarea.minera === saleForm.minera?.id,
+      );
+    }
+
+    return [];
+  }, [saleForm.area, saleForm.minera, subareas]);
+
+  const filteredContactos = useMemo(() => {
+    if (saleForm.subarea) {
+      return contactos.filter(
+        (contacto) => contacto.subarea === saleForm.subarea?.id,
+      );
+    }
+
+    if (saleForm.area) {
+      return contactos.filter(
+        (contacto) => contacto.area === saleForm.area?.id,
+      );
+    }
+
+    if (saleForm.minera) {
+      return contactos.filter(
+        (contacto) => contacto.minera === saleForm.minera?.id,
+      );
+    }
+
+    return [];
+  }, [contactos, saleForm.area, saleForm.minera, saleForm.subarea]);
+
+  const salePreview = useMemo(() => {
+    const neto = saleLines.reduce((sum, line) => {
+      const cantidad = parsePositiveInteger(line.cantidad);
+      const unitario = parseMoney(line.valor_unitario);
+
+      return sum + cantidad * unitario;
+    }, 0);
+
+    const iva = neto * 0.19;
+    const total = neto + iva;
+
+    return {
+      neto,
+      iva,
+      total,
+    };
+  }, [saleLines]);
+
+  const handleOpenCreateSale = () => {
+    setSaleForm(createEmptySaleForm());
+    setSaleLines([createEmptyLine()]);
+    setSaleDialogOpen(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const handleCloseCreateSale = () => {
+    if (savingSale) {
+      return;
+    }
+
+    setSaleDialogOpen(false);
+  };
+
+  const updateLine = (
+    localId: string,
+    updater: (line: SaleLineFormState) => SaleLineFormState,
+  ) => {
+    setSaleLines((currentLines) =>
+      currentLines.map((line) => {
+        if (line.localId !== localId) {
+          return line;
+        }
+
+        return updater(line);
+      }),
+    );
+  };
+
+  const removeLine = (localId: string) => {
+    setSaleLines((currentLines) => {
+      if (currentLines.length === 1) {
+        return currentLines;
+      }
+
+      return currentLines.filter((line) => line.localId !== localId);
+    });
+  };
+
+  const buildSalePayload = (): CreateSalePayload => {
+    if (!saleForm.minera) {
+      throw new Error("Debe seleccionar una minera.");
+    }
+
+    const lineas: CreateSaleLinePayload[] = saleLines.map((line, index) => {
+      if (!line.producto) {
+        throw new Error(`La línea ${index + 1} debe tener producto.`);
+      }
+
+      const cantidad = parsePositiveInteger(line.cantidad);
+      const valorUnitario = parseMoney(line.valor_unitario);
+
+      if (cantidad <= 0) {
+        throw new Error(
+          `La línea ${index + 1} debe tener cantidad mayor a cero.`,
+        );
+      }
+
+      if (valorUnitario < 0) {
+        throw new Error(
+          `La línea ${index + 1} no puede tener valor unitario negativo.`,
+        );
+      }
+
+      return {
+        producto: line.producto.id,
+        cantidad,
+        valor_unitario: String(valorUnitario),
+        codigo_sap: line.codigo_sap.trim() || line.producto.codigo_sap || "",
+      };
+    });
+
+    return {
+      fecha_venta: saleForm.fecha_venta || getTodayInputValue(),
+      fecha_factura: saleForm.fecha_factura || null,
+      factura_numero: saleForm.factura_numero.trim(),
+      orden_compra: saleForm.orden_compra.trim(),
+      minera: saleForm.minera.id,
+      area: saleForm.area?.id ?? null,
+      subarea: saleForm.subarea?.id ?? null,
+      contacto: saleForm.contacto?.id ?? null,
+      tipo_documento: saleForm.tipo_documento,
+      numero_guia_hes: saleForm.numero_guia_hes.trim(),
+      observations: saleForm.observations.trim(),
+      lineas,
+    };
+  };
+
+  const handleCreateSale = async () => {
+    try {
+      setSavingSale(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const payload = buildSalePayload();
+      const createdSale = await createSale(payload);
+
+      setSuccessMessage(
+        `Venta #${createdSale.id} ingresada correctamente. Stock y alertas fueron procesados por el backend.`,
+      );
+      setSaleDialogOpen(false);
+      await loadSales("");
+      setSearchTerm("");
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingSale(false);
+    }
+  };
 
   const handleConcretarSale = async (sale: Sale) => {
     try {
@@ -505,6 +841,21 @@ export function SalesPage() {
   const selectedDetails: SaleDetail[] = selectedSale?.detalles ?? [];
   const selectedAlerts: SaleAlert[] =
     selectedSale?.alerts.filter((alert) => alert.is_active) ?? [];
+  const totalSalesCount = summary?.ventas.total ?? sales.length;
+  const activeSalesCount =
+    summary?.ventas.vigentes ??
+    sales.filter((sale) => sale.sale_status !== "ANULADA").length;
+  const totalSalesAmount = summary?.montos.total ?? "0";
+  const missingDocumentsCount =
+    (summary?.documentos.sin_factura ?? 0) +
+    (summary?.documentos.sin_guia ?? 0);
+  const activeAlertsCount =
+    summary?.alertas.activas ??
+    sales.reduce(
+      (total, sale) =>
+        total + sale.alerts.filter((alert) => alert.is_active).length,
+      0,
+    );
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -526,19 +877,90 @@ export function SalesPage() {
 
           <Typography variant="body2" sx={{ color: colors.text.secondary }}>
             Módulo conectado al backend: ventas reales, totales calculados,
-            alertas comerciales, detalle de líneas y acciones controladas.
+            alertas comerciales, detalle de líneas, descuento Kardex y acciones
+            controladas.
           </Typography>
         </Box>
 
-        <Button
-          variant="outlined"
-          startIcon={<RefreshIcon />}
-          onClick={() => void loadSales()}
-          disabled={loading}
-        >
-          Actualizar
-        </Button>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleOpenCreateSale}
+            disabled={loading}
+          >
+            Nueva venta
+          </Button>
+
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => void loadSales()}
+            disabled={loading}
+          >
+            Actualizar
+          </Button>
+        </Stack>
       </Stack>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "repeat(2, 1fr)",
+            lg: "repeat(4, 1fr)",
+          },
+          gap: 2,
+        }}
+      >
+        {[
+          {
+            title: "Ventas registradas",
+            value: String(totalSalesCount),
+            helper: `${activeSalesCount} vigentes`,
+          },
+          {
+            title: "Monto vigente",
+            value: formatCLP(totalSalesAmount),
+            helper: "Excluye ventas anuladas",
+          },
+          {
+            title: "Documentos pendientes",
+            value: String(missingDocumentsCount),
+            helper: "Facturas, guías o HES faltantes",
+          },
+          {
+            title: "Alertas activas",
+            value: String(activeAlertsCount),
+            helper: `${summary?.alertas.bloqueantes ?? 0} bloqueantes`,
+          },
+        ].map((card) => (
+          <Card
+            key={card.title}
+            sx={{
+              p: 2,
+              bgcolor: colors.background.paper,
+              border: `1px solid ${colors.border.light}`,
+            }}
+          >
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              {card.title}
+            </Typography>
+
+            <Typography
+              variant="h5"
+              sx={{ color: colors.text.primary, fontWeight: 900 }}
+            >
+              {card.value}
+            </Typography>
+
+            <Typography variant="caption" sx={{ color: colors.text.muted }}>
+              {card.helper}
+            </Typography>
+          </Card>
+        ))}
+      </Box>
 
       <Card
         sx={{
@@ -606,6 +1028,396 @@ export function SalesPage() {
       ) : null}
 
       <SmartDataGrid rows={sales} columns={columns} loading={loading} />
+
+      <Dialog
+        open={saleDialogOpen}
+        onClose={handleCloseCreateSale}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>Nueva venta / ingreso</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.4} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              Al guardar, el backend crea la venta como{" "}
+              <strong>INGRESADA</strong>, calcula neto/IVA/total, descuenta
+              stock si corresponde y genera alertas comerciales.
+            </Alert>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" },
+                gap: 2,
+              }}
+            >
+              <TextField
+                label="Fecha venta"
+                type="date"
+                value={saleForm.fecha_venta}
+                onChange={(event) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    fecha_venta: event.target.value,
+                  }))
+                }
+                required
+                fullWidth
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+
+              <TextField
+                label="Fecha factura"
+                type="date"
+                value={saleForm.fecha_factura}
+                onChange={(event) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    fecha_factura: event.target.value,
+                  }))
+                }
+                fullWidth
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+
+              <TextField
+                label="Número factura"
+                value={saleForm.factura_numero}
+                onChange={(event) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    factura_numero: event.target.value,
+                  }))
+                }
+                fullWidth
+                placeholder="Opcional"
+              />
+
+              <TextField
+                label="Orden de compra"
+                value={saleForm.orden_compra}
+                onChange={(event) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    orden_compra: event.target.value,
+                  }))
+                }
+                fullWidth
+                placeholder="Opcional"
+              />
+
+              <Autocomplete
+                options={mineras}
+                value={saleForm.minera}
+                onChange={(_, value) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    minera: value,
+                    area: null,
+                    subarea: null,
+                    contacto: null,
+                  }))
+                }
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Minera" required />
+                )}
+              />
+
+              <Autocomplete
+                options={filteredAreas}
+                value={saleForm.area}
+                onChange={(_, value) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    area: value,
+                    subarea: null,
+                    contacto: null,
+                  }))
+                }
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={(params) => (
+                  <TextField {...params} label="Área" placeholder="Opcional" />
+                )}
+              />
+
+              <Autocomplete
+                options={filteredSubareas}
+                value={saleForm.subarea}
+                onChange={(_, value) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    subarea: value,
+                    contacto: null,
+                  }))
+                }
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Subárea"
+                    placeholder="Opcional"
+                  />
+                )}
+              />
+
+              <Autocomplete
+                options={filteredContactos}
+                value={saleForm.contacto}
+                onChange={(_, value) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    contacto: value,
+                  }))
+                }
+                getOptionLabel={(option) => option.full_name || "Sin nombre"}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Contacto"
+                    placeholder="Opcional"
+                  />
+                )}
+              />
+
+              <Autocomplete
+                options={[
+                  { value: "GUIA_DESPACHO", label: "Guía de despacho" },
+                  { value: "HES", label: "HES" },
+                  { value: "OTRO", label: "Otro" },
+                ]}
+                value={{
+                  value: saleForm.tipo_documento,
+                  label:
+                    saleForm.tipo_documento === "HES"
+                      ? "HES"
+                      : saleForm.tipo_documento === "OTRO"
+                        ? "Otro"
+                        : "Guía de despacho",
+                }}
+                onChange={(_, option) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    tipo_documento:
+                      (option?.value as SaleFormState["tipo_documento"]) ||
+                      "GUIA_DESPACHO",
+                  }))
+                }
+                getOptionLabel={(option) => option.label}
+                isOptionEqualToValue={(option, value) =>
+                  option.value === value.value
+                }
+                renderInput={(params) => (
+                  <TextField {...params} label="Tipo documento logístico" />
+                )}
+              />
+
+              <TextField
+                label="Número guía / HES"
+                value={saleForm.numero_guia_hes}
+                onChange={(event) =>
+                  setSaleForm((current) => ({
+                    ...current,
+                    numero_guia_hes: event.target.value,
+                  }))
+                }
+                fullWidth
+                placeholder="Opcional"
+              />
+            </Box>
+
+            <TextField
+              label="Observaciones"
+              value={saleForm.observations}
+              onChange={(event) =>
+                setSaleForm((current) => ({
+                  ...current,
+                  observations: event.target.value,
+                }))
+              }
+              fullWidth
+              multiline
+              minRows={2}
+            />
+
+            <Divider />
+
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.5}
+              sx={{ alignItems: { xs: "stretch", md: "center" } }}
+            >
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  Líneas de venta
+                </Typography>
+
+                <Typography
+                  variant="body2"
+                  sx={{ color: colors.text.secondary }}
+                >
+                  Cada producto inventariable descontará stock mediante Kardex.
+                </Typography>
+              </Box>
+
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={() =>
+                  setSaleLines((currentLines) => [
+                    ...currentLines,
+                    createEmptyLine(),
+                  ])
+                }
+              >
+                Agregar línea
+              </Button>
+            </Stack>
+
+            <Stack spacing={1.5}>
+              {saleLines.map((line, index) => (
+                <Card
+                  key={line.localId}
+                  sx={{
+                    p: 2,
+                    bgcolor: colors.surface.soft,
+                    border: `1px solid ${colors.border.light}`,
+                  }}
+                >
+                  <Stack spacing={1.5}>
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1.5}
+                      sx={{ alignItems: { xs: "stretch", md: "center" } }}
+                    >
+                      <Typography sx={{ fontWeight: 900, minWidth: 90 }}>
+                        Línea {index + 1}
+                      </Typography>
+
+                      <Autocomplete
+                        options={products}
+                        value={line.producto}
+                        onChange={(_, value) =>
+                          updateLine(line.localId, (current) => ({
+                            ...current,
+                            producto: value,
+                            codigo_sap: value?.codigo_sap || "",
+                          }))
+                        }
+                        getOptionLabel={(option) =>
+                          `${option.modelo}${
+                            option.codigo_sap
+                              ? ` · SAP ${option.codigo_sap}`
+                              : ""
+                          } · Stock ${option.stock_actual}`
+                        }
+                        isOptionEqualToValue={(option, value) =>
+                          option.id === value.id
+                        }
+                        sx={{ flex: 1.5 }}
+                        renderInput={(params) => (
+                          <TextField {...params} label="Producto" required />
+                        )}
+                      />
+
+                      <TextField
+                        label="Cantidad"
+                        type="number"
+                        value={line.cantidad}
+                        onChange={(event) =>
+                          updateLine(line.localId, (current) => ({
+                            ...current,
+                            cantidad: event.target.value,
+                          }))
+                        }
+                        sx={{ width: { xs: "100%", md: 130 } }}
+                        required
+                      />
+
+                      <TextField
+                        label="Valor unitario"
+                        type="number"
+                        value={line.valor_unitario}
+                        onChange={(event) =>
+                          updateLine(line.localId, (current) => ({
+                            ...current,
+                            valor_unitario: event.target.value,
+                          }))
+                        }
+                        sx={{ width: { xs: "100%", md: 170 } }}
+                        required
+                      />
+
+                      <TextField
+                        label="Código SAP"
+                        value={line.codigo_sap}
+                        onChange={(event) =>
+                          updateLine(line.localId, (current) => ({
+                            ...current,
+                            codigo_sap: event.target.value,
+                          }))
+                        }
+                        sx={{ width: { xs: "100%", md: 160 } }}
+                      />
+
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        startIcon={<DeleteIcon />}
+                        disabled={saleLines.length === 1}
+                        onClick={() => removeLine(line.localId)}
+                      >
+                        Quitar
+                      </Button>
+                    </Stack>
+
+                    <Typography
+                      variant="body2"
+                      sx={{ color: colors.text.muted }}
+                    >
+                      Total línea:{" "}
+                      <strong>
+                        {formatCLP(
+                          parsePositiveInteger(line.cantidad) *
+                            parseMoney(line.valor_unitario),
+                        )}
+                      </strong>
+                      {line.producto?.controla_stock
+                        ? ` · Stock disponible: ${line.producto.stock_actual}`
+                        : " · No controla stock"}
+                    </Typography>
+                  </Stack>
+                </Card>
+              ))}
+            </Stack>
+
+            <Alert severity="success" variant="outlined">
+              Neto: <strong>{formatCLP(salePreview.neto)}</strong> — IVA 19%:{" "}
+              <strong>{formatCLP(salePreview.iva)}</strong> — Total:{" "}
+              <strong>{formatCLP(salePreview.total)}</strong>
+            </Alert>
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={handleCloseCreateSale} disabled={savingSale}>
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={() => void handleCreateSale()}
+            disabled={savingSale}
+          >
+            {savingSale ? "Guardando..." : "Ingresar venta"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={detailDialog.open}

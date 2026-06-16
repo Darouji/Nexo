@@ -1,224 +1,159 @@
 import { api } from "./api";
 
-export interface GrupoEmpresarial {
+type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
+type ListResponse<T> = T[] | PaginatedResponse<T>;
+
+export type ListParams = {
+  search?: string;
+  ordering?: string;
+};
+
+export interface BaseCommercialRecord {
+  [key: string]: unknown;
   id: number;
-  name: string;
-  description: string;
   status: string;
   created_at: string;
   updated_at: string;
 }
 
-export interface Ciudad {
-  id: number;
+export interface Ciudad extends BaseCommercialRecord {
   name: string;
+  name_normalized: string;
   region: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface Minera {
-  id: number;
+export interface Holding extends BaseCommercialRecord {
   name: string;
-  business_group: number | null;
-  business_group_name: string | null;
-  rut: string | null;
-  status: string;
-  observations: string;
-  created_at: string;
-  updated_at: string;
+  name_normalized: string;
+  aliases: string[];
+  description: string;
 }
 
-export interface EmpresaCliente {
-  id: number;
+export interface Minera extends BaseCommercialRecord {
   name: string;
+  name_normalized: string;
   rut: string | null;
-  mining_company: number | null;
-  mining_company_name: string | null;
-  business_group_name: string | null;
+  rut_normalized: string;
+  holding: number | null;
+  holding_name: string | null;
   city: number | null;
   city_name: string | null;
+  aliases: string[];
   email: string;
   phone: string;
   address: string;
-  status: string;
   observations: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface AreaCliente {
-  id: number;
-  company: number;
-  company_name: string;
+export interface Area extends BaseCommercialRecord {
+  minera: number;
+  minera_name: string;
+  holding: number | null;
+  holding_name: string | null;
   name: string;
+  name_normalized: string;
   location: string;
   description: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface SubAreaCliente {
-  id: number;
+export interface Subarea extends BaseCommercialRecord {
   area: number;
   area_name: string;
-  company: number;
-  company_name: string;
+  minera: number;
+  minera_name: string;
+  holding: number | null;
+  holding_name: string | null;
   name: string;
+  name_normalized: string;
   description: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export interface ContactoCliente {
-  id: number;
+export interface Contacto extends BaseCommercialRecord {
   first_name: string;
   last_name: string;
   full_name: string;
+  full_name_normalized: string;
   position: string;
-  company: number;
-  company_name: string;
+  holding: number | null;
+  holding_name: string | null;
+  minera: number;
+  minera_name: string;
+  area: number;
+  area_name: string;
+  subarea: number;
+  subarea_name: string;
   city: number | null;
   city_name: string | null;
-  area: number | null;
-  area_name: string | null;
-  subarea: number | null;
-  subarea_name: string | null;
   email: string;
+  email_normalized: string;
   phone: string;
+  phone_normalized: string;
   shift: string;
   active_days: number | null;
   rest_days: number | null;
   active_cycle_start_date: string | null;
-  shift_mode: string;
+  shift_mode: "DIA" | "NOCHE" | "SIN_DEFINIR" | string;
   shift_mode_display: string;
-  status: string;
   observations: string;
-  created_at: string;
-  updated_at: string;
 }
 
-export async function getGruposEmpresariales() {
-  const response = await api.get<GrupoEmpresarial[]>(
-    "/commercial/business-groups/",
-  );
-  return response.data;
-}
+export type CreateHoldingPayload = {
+  name: string;
+  aliases?: string[];
+  description?: string;
+  status?: string;
+};
 
-export type CreateGrupoEmpresarialPayload = {
+export type CreateMineraPayload = {
+  name: string;
+  rut?: string | null;
+  holding?: number | null;
+  city?: number | null;
+  aliases?: string[];
+  email?: string;
+  phone?: string;
+  address?: string;
+  observations?: string;
+  status?: string;
+};
+
+export type CreateAreaPayload = {
+  minera: number;
+  name: string;
+  location?: string;
+  description?: string;
+  status?: string;
+};
+
+export type CreateSubareaPayload = {
+  area: number;
   name: string;
   description?: string;
   status?: string;
 };
 
-export async function createGrupoEmpresarial(
-  payload: CreateGrupoEmpresarialPayload,
-) {
-  const response = await api.post<GrupoEmpresarial>(
-    "/commercial/business-groups/",
-    payload,
-  );
-
-  return response.data;
-}
-
-export type CreateMineraPayload = {
-  name: string;
-  business_group?: number | null;
-  rut?: string | null;
-  status?: string;
-  observations?: string;
-};
-
-export async function createMinera(payload: CreateMineraPayload) {
-  const response = await api.post<Minera>(
-    "/commercial/mining-companies/",
-    payload,
-  );
-
-  return response.data;
-}
-
-export async function getCiudades() {
-  const response = await api.get<Ciudad[]>("/commercial/cities/");
-  return response.data;
-}
-
-export async function getMineras() {
-  const response = await api.get<Minera[]>("/commercial/mining-companies/");
-  return response.data;
-}
-
-export async function getEmpresasCliente() {
-  const response = await api.get<EmpresaCliente[]>(
-    "/commercial/client-companies/",
-  );
-  return response.data;
-}
-
-export async function getAreasCliente() {
-  const response = await api.get<AreaCliente[]>("/commercial/client-areas/");
-  return response.data;
-}
-
-export async function getSubAreasCliente() {
-  const response = await api.get<SubAreaCliente[]>(
-    "/commercial/client-subareas/",
-  );
-  return response.data;
-}
-
-export async function getContactosCliente() {
-  const response = await api.get<ContactoCliente[]>(
-    "/commercial/client-contacts/",
-  );
-  return response.data;
-}
-
-export type CreateEmpresaClientePayload = {
-  name: string;
-  rut?: string | null;
-  mining_company?: number | null;
-  city?: number | null;
-  email?: string;
-  phone?: string;
-  address?: string;
-  status?: string;
-  observations?: string;
-};
-
-export type CreateContactoClientePayload = {
+export type CreateContactoPayload = {
   first_name: string;
   last_name?: string;
   position?: string;
-  company: number;
+  subarea: number;
   city?: number | null;
-  area?: number | null;
-  subarea?: number | null;
   email?: string;
   phone?: string;
   shift?: string;
   active_days?: number | null;
   rest_days?: number | null;
   active_cycle_start_date?: string | null;
-  shift_mode?: string;
-  status?: string;
+  shift_mode?: "DIA" | "NOCHE" | "SIN_DEFINIR" | string;
   observations?: string;
+  status?: string;
 };
-
-export async function createEmpresaCliente(
-  payload: CreateEmpresaClientePayload,
-) {
-  const response = await api.post<EmpresaCliente>(
-    "/commercial/client-companies/",
-    payload,
-  );
-
-  return response.data;
-}
 
 export type CreateCiudadPayload = {
   name: string;
@@ -226,53 +161,118 @@ export type CreateCiudadPayload = {
   status?: string;
 };
 
+function extractResults<T>(data: ListResponse<T>) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return data.results ?? [];
+}
+
+function normalizeParams(params: ListParams = {}) {
+  return {
+    search: params.search?.trim() || undefined,
+    ordering: params.ordering || undefined,
+  };
+}
+
+async function getList<T>(url: string, params: ListParams = {}) {
+  const response = await api.get<ListResponse<T>>(url, {
+    params: normalizeParams(params),
+  });
+
+  return extractResults(response.data);
+}
+
+export async function fetchCiudades(params: ListParams = {}) {
+  return getList<Ciudad>("/commercial/cities/", {
+    ordering: "name",
+    ...params,
+  });
+}
+
+export async function fetchHoldings(params: ListParams = {}) {
+  return getList<Holding>("/commercial/holdings/", {
+    ordering: "name",
+    ...params,
+  });
+}
+
+export async function fetchMineras(params: ListParams = {}) {
+  return getList<Minera>("/commercial/mineras/", {
+    ordering: "name",
+    ...params,
+  });
+}
+
+export async function fetchAreas(params: ListParams = {}) {
+  return getList<Area>("/commercial/areas/", {
+    ordering: "minera__name,name",
+    ...params,
+  });
+}
+
+export async function fetchSubareas(params: ListParams = {}) {
+  return getList<Subarea>("/commercial/subareas/", {
+    ordering: "area__minera__name,area__name,name",
+    ...params,
+  });
+}
+
+export async function fetchContactos(params: ListParams = {}) {
+  return getList<Contacto>("/commercial/contactos/", {
+    ordering: "last_name,first_name",
+    ...params,
+  });
+}
+
 export async function createCiudad(payload: CreateCiudadPayload) {
   const response = await api.post<Ciudad>("/commercial/cities/", payload);
   return response.data;
 }
 
-export async function createContactoCliente(
-  payload: CreateContactoClientePayload,
-) {
-  const response = await api.post<ContactoCliente>(
-    "/commercial/client-contacts/",
-    payload,
-  );
-
+export async function createHolding(payload: CreateHoldingPayload) {
+  const response = await api.post<Holding>("/commercial/holdings/", payload);
   return response.data;
 }
 
-export type CreateAreaClientePayload = {
-  company: number;
-  name: string;
-  location?: string;
-  description?: string;
-  status?: string;
-};
-
-export async function createAreaCliente(payload: CreateAreaClientePayload) {
-  const response = await api.post<AreaCliente>(
-    "/commercial/client-areas/",
-    payload,
-  );
-
+export async function createMinera(payload: CreateMineraPayload) {
+  const response = await api.post<Minera>("/commercial/mineras/", payload);
   return response.data;
 }
 
-export type CreateSubAreaClientePayload = {
-  area: number;
-  name: string;
-  description?: string;
-  status?: string;
-};
-
-export async function createSubAreaCliente(
-  payload: CreateSubAreaClientePayload,
-) {
-  const response = await api.post<SubAreaCliente>(
-    "/commercial/client-subareas/",
-    payload,
-  );
-
+export async function createArea(payload: CreateAreaPayload) {
+  const response = await api.post<Area>("/commercial/areas/", payload);
   return response.data;
 }
+
+export async function createSubarea(payload: CreateSubareaPayload) {
+  const response = await api.post<Subarea>("/commercial/subareas/", payload);
+  return response.data;
+}
+
+export async function createContacto(payload: CreateContactoPayload) {
+  const response = await api.post<Contacto>("/commercial/contactos/", payload);
+  return response.data;
+}
+
+/**
+ * Alias temporales para evitar romper imports antiguos si quedó algún archivo usando nombres previos.
+ * La UI nueva debe preferir los nombres Holding, Minera, Area, Subarea y Contacto.
+ */
+export type GrupoEmpresarial = Holding;
+export type AreaCliente = Area;
+export type SubAreaCliente = Subarea;
+export type ContactoCliente = Contacto;
+
+export const getCiudades = fetchCiudades;
+export const getGruposEmpresariales = fetchHoldings;
+export const getMineras = fetchMineras;
+export const getAreasCliente = fetchAreas;
+export const getSubAreasCliente = fetchSubareas;
+export const getContactosCliente = fetchContactos;
+
+export const createGrupoEmpresarial = createHolding;
+export const createAreaCliente = createArea;
+export const createSubAreaCliente = createSubarea;
+export const createContactoCliente = createContacto;

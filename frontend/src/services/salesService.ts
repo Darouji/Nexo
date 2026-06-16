@@ -94,6 +94,30 @@ type SaleListParams = {
   ordering?: string;
 };
 
+export type SalesSummary = {
+  ventas: {
+    total: number;
+    vigentes: number;
+    por_estado: Record<string, number>;
+  };
+  montos: {
+    valor_neto: string;
+    iva: string;
+    total: string;
+    total_concretado: string;
+  };
+  documentos: {
+    sin_factura: number;
+    sin_guia: number;
+  };
+  alertas: {
+    activas: number;
+    bloqueantes: number;
+    ventas_con_alertas: number;
+    ventas_bloqueantes: number;
+  };
+};
+
 function extractResults<T>(data: T[] | PaginatedResponse<T>) {
   if (Array.isArray(data)) {
     return data;
@@ -133,6 +157,17 @@ export async function fetchSales(params: SaleListParams = {}) {
   });
 
   return extractResults(response.data);
+}
+
+export async function fetchSalesSummary(params: SaleListParams = {}) {
+  const response = await api.get<SalesSummary>("/sales/ventas/resumen/", {
+    params: {
+      search: params.search?.trim() || undefined,
+      ordering: params.ordering || "-fecha_venta,-created_at",
+    },
+  });
+
+  return response.data;
 }
 
 export async function createSale(payload: CreateSalePayload) {

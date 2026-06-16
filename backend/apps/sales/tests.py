@@ -681,3 +681,78 @@ class SalesServiceTests(TestCase):
             ).count(),
             0,
         )
+
+    def test_api_sale_traceability_returns_changes_and_kardex_movements(self):
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-TRACE-001",
+                orden_compra="OC-TRACE-001",
+                numero_guia_hes="G-TRACE-001",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 2,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        replace_sale_details_with_differential_kardex(
+            venta=venta,
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 5,
+                    "valor_unitario": Decimal("1200.00"),
+                }
+            ],
+            reason="Corrección para trazabilidad API.",
+            user=self.user,
+        )
+
+        client = self.authenticated_client()
+
+        response = client.get(reverse("venta-trazabilidad", args=[venta.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("venta", response.data)
+        self.assertIn("cambios", response.data)
+        self.assertIn("movimientos_kardex", response.data)
+
+        self.assertGreaterEqual(len(response.data["cambios"]), 1)
+        self.assertEqual(len(response.data["movimientos_kardex"]), 2)
+
+        change_fields = {change["field_name"] for change in response.data["cambios"]}
+        self.assertIn("detalles", change_fields)
+
+    def test_api_consulta_user_cannot_view_sale_traceability(self):
+        consulta_user = User.objects.create_user(
+            username="consulta_trazabilidad",
+            email="consulta.trazabilidad@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.CONSULTA,
+        )
+
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-TRACE-002",
+                orden_compra="OC-TRACE-002",
+                numero_guia_hes="G-TRACE-002",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        client = self.authenticated_client(consulta_user)
+
+        response = client.get(reverse("venta-trazabilidad", args=[venta.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

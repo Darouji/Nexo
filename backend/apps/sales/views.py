@@ -1,3 +1,4 @@
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -7,7 +8,15 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.accounts.models import UserRole
-from apps.accounts.permissions import IsConsultaOrOperativoGlobal, user_has_role
+from apps.accounts.permissions import (
+    CanViewAuditLogs,
+    IsConsultaOrOperativoGlobal,
+    user_has_role,
+)
+from apps.core.models import RecordChangeLog
+from apps.core.serializers import RecordChangeLogSerializer
+from apps.inventory.models import MovimientoKardex
+from apps.inventory.serializers import MovimientoKardexSerializer
 
 from .models import DetalleVenta, Venta
 from .serializers import (
@@ -66,6 +75,8 @@ class SalesPermissionMixin:
             permission_classes = [IsAuthenticated, IsConsultaOrOperativoGlobal]
         elif self.action == "anular":
             permission_classes = [IsAuthenticated, CanAnnulSales]
+        elif self.action == "trazabilidad":
+            permission_classes = [IsAuthenticated, CanViewAuditLogs]
         else:
             permission_classes = [IsAuthenticated, CanManageSales]
 
@@ -176,6 +187,57 @@ class VentaViewSet(SalesPermissionMixin, viewsets.ModelViewSet):
 
         serializer = self.get_serializer(venta)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"], url_path="trazabilidad")
+    def trazabilidad(self, request, pk=None):
+        venta = self.get_object()
+        venta_content_type = ContentType.objects.get_for_model(
+            venta,
+            for_concrete_model=False,
+        )
+
+        record_changes = (
+            RecordChangeLog.objects.select_related(
+                "changed_by",
+                "content_type",
+            )
+            .filter(
+                content_type=venta_content_type,
+                object_id=str(venta.pk),
+            )
+            .order_by("-created_at")
+        )
+
+        kardex_movements = (
+            MovimientoKardex.objects.select_related(
+                "producto",
+                "producto__categoria",
+                "operador",
+                "reference_content_type",
+            )
+            .filter(
+                reference_content_type=venta_content_type,
+                reference_object_id=str(venta.pk),
+            )
+            .order_by("-created_at")
+        )
+
+        return Response(
+            {
+                "venta": self.get_serializer(venta).data,
+                "cambios": RecordChangeLogSerializer(
+                    record_changes,
+                    many=True,
+                    context={"request": request},
+                ).data,
+                "movimientos_kardex": MovimientoKardexSerializer(
+                    kardex_movements,
+                    many=True,
+                    context={"request": request},
+                ).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class DetalleVentaViewSet(SalesPermissionMixin, viewsets.ReadOnlyModelViewSet):

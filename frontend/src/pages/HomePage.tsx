@@ -22,8 +22,11 @@ import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { AuthUser } from "../types/auth";
+import { fetchDashboardStatistics } from "../services/coreService";
+import type { DashboardStatistics } from "../services/coreService";
 import { colors } from "../theme/colors";
 
 type HomePageProps = {
@@ -138,57 +141,6 @@ const modules: ModuleCard[] = [
   },
 ];
 
-const quickStats: QuickStat[] = [
-  {
-    label: "Ventas del mes",
-    value: "$18.450.000",
-    helper: "+12% vs mes anterior",
-    severity: "success",
-  },
-  {
-    label: "Documentos pendientes",
-    value: "7",
-    helper: "Facturas, guías o HES por revisar",
-    severity: "warning",
-  },
-  {
-    label: "Stock crítico",
-    value: "5",
-    helper: "Productos bajo umbral mínimo",
-    severity: "danger",
-  },
-  {
-    label: "Importaciones con revisión",
-    value: "2",
-    helper: "Filas con advertencias o duplicados",
-    severity: "normal",
-  },
-];
-
-const alerts: HomeAlert[] = [
-  {
-    title: "Falta factura",
-    description: "Venta ingresada sin documento tributario asociado.",
-    module: "Documentos",
-    severity: "warning",
-    actionSection: "Documentos",
-  },
-  {
-    title: "Stock crítico",
-    description: "Producto industrial bajo el umbral mínimo definido.",
-    module: "Inventario",
-    severity: "error",
-    actionSection: "Productos",
-  },
-  {
-    title: "Importación requiere revisión",
-    description: "Archivo Excel contiene posibles duplicados.",
-    module: "Importaciones Excel",
-    severity: "info",
-    actionSection: "Importaciones Excel",
-  },
-];
-
 function getFirstName(user: AuthUser | null) {
   return user?.first_name || user?.username || "usuario";
 }
@@ -198,6 +150,99 @@ function getStatColor(severity: QuickStat["severity"]) {
   if (severity === "warning") return colors.status.warning;
   if (severity === "danger") return colors.status.error;
   return colors.primary.main;
+}
+
+function formatCLP(value: string | number) {
+  const numericValue = Number(value || 0);
+
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    maximumFractionDigits: 0,
+  }).format(numericValue);
+}
+
+function buildQuickStats(stats: DashboardStatistics | null): QuickStat[] {
+  return [
+    {
+      label: "Ventas del mes",
+      value: formatCLP(stats?.sales.current_month.total || 0),
+      helper: `${stats?.sales.current_month.count || 0} ventas registradas este mes`,
+      severity: "success",
+    },
+    {
+      label: "Productos activos",
+      value: String(stats?.inventory.products_active || 0),
+      helper: `${stats?.inventory.products_control_stock || 0} controlan stock`,
+      severity: "normal",
+    },
+    {
+      label: "Stock crítico",
+      value: String(stats?.inventory.critical_products_count || 0),
+      helper: "Productos bajo umbral mínimo",
+      severity:
+        (stats?.inventory.critical_products_count || 0) > 0
+          ? "danger"
+          : "success",
+    },
+    {
+      label: "Importaciones con revisión",
+      value: String(
+        (stats?.imports.rows_requires_review || 0) +
+          (stats?.imports.rows_with_error || 0),
+      ),
+      helper: "Filas con advertencias o errores",
+      severity:
+        (stats?.imports.rows_requires_review || 0) +
+          (stats?.imports.rows_with_error || 0) >
+        0
+          ? "warning"
+          : "success",
+    },
+  ];
+}
+
+function buildHomeAlerts(stats: DashboardStatistics | null): HomeAlert[] {
+  if (!stats) {
+    return [];
+  }
+
+  const output: HomeAlert[] = [];
+
+  if (stats.inventory.critical_products_count > 0) {
+    output.push({
+      title: "Stock crítico",
+      description: `${stats.inventory.critical_products_count} productos están bajo el umbral mínimo definido.`,
+      module: "Inventario",
+      severity: "error",
+      actionSection: "Productos",
+    });
+  }
+
+  if (stats.sales.active_alerts_count > 0) {
+    output.push({
+      title: "Alertas comerciales activas",
+      description: `${stats.sales.active_alerts_count} alertas de ventas requieren revisión.`,
+      module: "Ventas",
+      severity: "warning",
+      actionSection: "Ventas / Ingresos",
+    });
+  }
+
+  const importsToReview =
+    stats.imports.rows_requires_review + stats.imports.rows_with_error;
+
+  if (importsToReview > 0) {
+    output.push({
+      title: "Importaciones requieren revisión",
+      description: `${importsToReview} filas importadas tienen advertencias o errores.`,
+      module: "Importaciones Excel",
+      severity: "info",
+      actionSection: "Importaciones Excel",
+    });
+  }
+
+  return output;
 }
 
 export function HomePage({ user, onSectionChange }: HomePageProps) {

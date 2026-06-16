@@ -11,12 +11,20 @@ import {
 import LogoutIcon from "@mui/icons-material/Logout";
 import type { ReactNode } from "react";
 import type { AuthUser } from "../types/auth";
+import { getStoredAccess } from "../services/authService";
 import { colors } from "../theme/colors";
 
-const menuItems = [
+type MenuItem = {
+  label: string;
+  moduleKey: string;
+  fallbackRoles: string[];
+};
+
+const menuItems: MenuItem[] = [
   {
     label: "Inicio",
-    roles: [
+    moduleKey: "inicio",
+    fallbackRoles: [
       "ADMINISTRADOR",
       "FINANZAS_COMERCIAL",
       "RRHH",
@@ -27,45 +35,79 @@ const menuItems = [
   },
   {
     label: "Usuarios",
-    roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
+    moduleKey: "usuarios",
+    fallbackRoles: [
+      "ADMINISTRADOR",
+      "RRHH",
+      "FINANZAS_COMERCIAL",
+      "INFORMATICO",
+    ],
   },
   {
     label: "Colaboradores",
-    roles: ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"],
+    moduleKey: "colaboradores",
+    fallbackRoles: [
+      "ADMINISTRADOR",
+      "RRHH",
+      "FINANZAS_COMERCIAL",
+      "INFORMATICO",
+    ],
   },
   {
     label: "Entidades comerciales",
-    roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO"],
-  },
-  {
-    label: "Productos",
-    roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO"],
-  },
-  {
-    label: "Ventas / Ingresos",
-    roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
-  },
-  {
-    label: "Compras / Egresos",
-    roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
-  },
-  {
-    label: "Importaciones Excel",
-    roles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
-  },
-  {
-    label: "Documentos",
-    roles: [
+    moduleKey: "comercial",
+    fallbackRoles: [
       "ADMINISTRADOR",
       "FINANZAS_COMERCIAL",
       "RRHH",
       "INFORMATICO",
       "OPERATIVO",
+      "CONSULTA",
+    ],
+  },
+  {
+    label: "Productos",
+    moduleKey: "inventario",
+    fallbackRoles: [
+      "ADMINISTRADOR",
+      "FINANZAS_COMERCIAL",
+      "RRHH",
+      "INFORMATICO",
+      "OPERATIVO",
+      "CONSULTA",
+    ],
+  },
+  {
+    label: "Ventas / Ingresos",
+    moduleKey: "ventas",
+    fallbackRoles: [
+      "ADMINISTRADOR",
+      "FINANZAS_COMERCIAL",
+      "OPERATIVO",
+      "CONSULTA",
+    ],
+  },
+  {
+    label: "Importaciones Excel",
+    moduleKey: "importaciones",
+    fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "INFORMATICO"],
+  },
+  {
+    label: "Documentos",
+    moduleKey: "documentos",
+    fallbackRoles: [
+      "ADMINISTRADOR",
+      "FINANZAS_COMERCIAL",
+      "RRHH",
+      "INFORMATICO",
+      "OPERATIVO",
+      "CONSULTA",
     ],
   },
   {
     label: "Estadísticas",
-    roles: [
+    moduleKey: "estadisticas",
+    fallbackRoles: [
       "ADMINISTRADOR",
       "FINANZAS_COMERCIAL",
       "RRHH",
@@ -76,7 +118,8 @@ const menuItems = [
   },
   {
     label: "Auditoría",
-    roles: ["ADMINISTRADOR", "INFORMATICO"],
+    moduleKey: "auditoria",
+    fallbackRoles: ["ADMINISTRADOR", "INFORMATICO"],
   },
 ];
 
@@ -96,10 +139,17 @@ export function AppLayout({
   children,
 }: AppLayoutProps) {
   const role = user?.role;
+  const access = getStoredAccess();
 
-  const visibleMenuItems = menuItems.filter((item) =>
-    role ? item.roles.includes(role) : false,
-  );
+  const visibleMenuItems = menuItems.filter((item) => {
+    const permission = access?.permissions?.[item.moduleKey];
+
+    if (permission) {
+      return permission.can_view;
+    }
+
+    return role ? item.fallbackRoles.includes(role) : false;
+  });
 
   const currentTabIndex = visibleMenuItems.findIndex(
     (item) => item.label === activeSection,

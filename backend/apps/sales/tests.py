@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -901,3 +902,129 @@ class SalesServiceTests(TestCase):
         result_ids = {result["id"] for result in self.response_results(response)}
 
         self.assertEqual(result_ids, {sale_without_invoice.pk})
+
+    def test_api_sales_summary_returns_kpis(self):
+        create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-SUMMARY-001",
+                orden_compra="OC-SUMMARY-001",
+                numero_guia_hes="G-SUMMARY-001",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 2,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="",
+                orden_compra="OC-SUMMARY-002",
+                numero_guia_hes="",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        annulled_sale = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-SUMMARY-003",
+                orden_compra="OC-SUMMARY-003",
+                numero_guia_hes="G-SUMMARY-003",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+        annul_sale(
+            venta=annulled_sale,
+            reason="Anulación para validar resumen.",
+            user=self.user,
+        )
+
+        client = self.authenticated_client()
+
+        response = client.get(reverse("venta-resumen"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["ventas"]["total"], 3)
+        self.assertEqual(response.data["ventas"]["vigentes"], 2)
+        self.assertEqual(
+            response.data["ventas"]["por_estado"][VentaStatus.INGRESADA],
+            2,
+        )
+        self.assertEqual(
+            response.data["ventas"]["por_estado"][VentaStatus.ANULADA],
+            1,
+        )
+        self.assertEqual(response.data["montos"]["valor_neto"], "3000.00")
+        self.assertEqual(response.data["montos"]["iva"], "570.00")
+        self.assertEqual(response.data["montos"]["total"], "3570.00")
+        self.assertEqual(response.data["documentos"]["sin_factura"], 1)
+        self.assertEqual(response.data["documentos"]["sin_guia"], 1)
+        self.assertEqual(response.data["alertas"]["ventas_con_alertas"], 1)
+
+    def test_api_sales_summary_respects_filters(self):
+        create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-SUMMARY-FILTER-001",
+                orden_compra="OC-SUMMARY-FILTER-001",
+                numero_guia_hes="G-SUMMARY-FILTER-001",
+                fecha_venta=date(2026, 5, 30),
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-SUMMARY-FILTER-002",
+                orden_compra="OC-SUMMARY-FILTER-002",
+                numero_guia_hes="G-SUMMARY-FILTER-002",
+                fecha_venta=date(2026, 6, 15),
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 2,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        client = self.authenticated_client()
+
+        response = client.get(
+            reverse("venta-resumen"),
+            {
+                "fecha_desde": "2026-06-01",
+                "fecha_hasta": "2026-06-30",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["ventas"]["total"], 1)
+        self.assertEqual(response.data["montos"]["valor_neto"], "2000.00")
+        self.assertEqual(response.data["montos"]["total"], "2380.00")

@@ -1,6 +1,8 @@
+from decimal import Decimal
+
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q, Sum
 from django.utils.dateparse import parse_date
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
@@ -113,6 +115,13 @@ def parse_id_values(value, param_name):
     return ids
 
 
+def format_money(value):
+    if value is None:
+        value = Decimal("0.00")
+
+    return str(Decimal(value).quantize(Decimal("0.01")))
+
+
 class CanManageSales(BasePermission):
     message = "No tiene permisos para gestionar ventas."
 
@@ -142,7 +151,7 @@ class CanAnnulSales(BasePermission):
 
 class SalesPermissionMixin:
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
+        if self.action in ["list", "retrieve", "resumen"]:
             permission_classes = [IsAuthenticated, IsConsultaOrOperativoGlobal]
         elif self.action == "anular":
             permission_classes = [IsAuthenticated, CanAnnulSales]
@@ -354,6 +363,88 @@ class VentaViewSet(SalesPermissionMixin, viewsets.ModelViewSet):
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)
         return queryset.distinct()
+
+    @action(detail=False, methods=["get"], url_path="resumen")
+    def resumen(self, request):
+        queryset = self.filter_queryset(self.get_queryset())
+
+        non_annulled_queryset = queryset.exclude(
+            sale_status=VentaStatus.ANULADA,
+        )
+        concreted_queryset = queryset.filter(
+            sale_status=VentaStatus.CONCRETADA,
+        )
+
+        amounts = non_annulled_queryset.aggregate(
+            valor_neto=Sum("valor_neto"),
+            iva=Sum("iva"),
+            total=Sum("total"),
+        )
+        concreted_amounts = concreted_queryset.aggregate(
+            total=Sum("total"),
+        )
+
+        status_rows = (
+            queryset.values("sale_status")
+            .annotate(total=Count("id", distinct=True))
+            .order_by("sale_status")
+        )
+        status_summary = {choice[0]: 0 for choice in VentaStatus.choices}
+
+        for row in status_rows:
+            status_summary[row["sale_status"]] = row["total"]
+
+        factura_filter = Q(factura_numero__gt="") | (
+            Q(factura_pdf__isnull=False) & ~Q(factura_pdf="")
+        )
+        guia_filter = Q(numero_guia_hes__gt="") | (
+            Q(guia_pdf__isnull=False) & ~Q(guia_pdf="")
+        )
+
+        sale_ids = queryset.values("pk")
+        active_alerts = VentaAlert.objects.filter(
+            venta_id__in=sale_ids,
+            is_active=True,
+        )
+
+        return Response(
+            {
+                "ventas": {
+                    "total": queryset.count(),
+                    "vigentes": non_annulled_queryset.count(),
+                    "por_estado": status_summary,
+                },
+                "montos": {
+                    "valor_neto": format_money(amounts["valor_neto"]),
+                    "iva": format_money(amounts["iva"]),
+                    "total": format_money(amounts["total"]),
+                    "total_concretado": format_money(
+                        concreted_amounts["total"],
+                    ),
+                },
+                "documentos": {
+                    "sin_factura": non_annulled_queryset.exclude(
+                        factura_filter,
+                    ).count(),
+                    "sin_guia": non_annulled_queryset.exclude(
+                        guia_filter,
+                    ).count(),
+                },
+                "alertas": {
+                    "activas": active_alerts.count(),
+                    "bloqueantes": active_alerts.filter(
+                        severity=AlertSeverity.BLOQUEANTE,
+                    ).count(),
+                    "ventas_con_alertas": queryset.filter(
+                        has_active_alerts=True,
+                    ).count(),
+                    "ventas_bloqueantes": queryset.filter(
+                        has_blocking_alerts=True,
+                    ).count(),
+                },
+            },
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["post"], url_path="concretar")
     def concretar(self, request, pk=None):

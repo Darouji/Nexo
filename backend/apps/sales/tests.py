@@ -2,6 +2,9 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
 from apps.commercial.models import Area, Contacto, Minera, Subarea
@@ -13,6 +16,7 @@ from apps.inventory.models import (
     Producto,
 )
 from apps.sales.models import Venta, VentaAlertCode, VentaStatus
+from apps.sales.serializers import VentaSerializer
 from apps.sales.services import (
     annul_sale,
     concretar_sale,
@@ -94,6 +98,11 @@ class SalesServiceTests(TestCase):
         }
         data.update(overrides)
         return data
+
+    def authenticated_client(self, user=None):
+        client = APIClient()
+        client.force_authenticate(user=user or self.user)
+        return client
 
     def test_create_sale_discounts_stock_and_creates_kardex_exit(self):
         venta = create_sale_with_details(
@@ -491,3 +500,184 @@ class SalesServiceTests(TestCase):
         self.assertEqual(error["code"][0], VentaAlertCode.STOCK_INSUFICIENTE)
         self.assertEqual(int(error["cantidad_solicitada"][0]), 3)
         self.assertEqual(int(error["stock_disponible"][0]), 2)
+
+    def test_venta_serializer_returns_only_active_details_after_replacement(self):
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 2,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        updated_sale = replace_sale_details_with_differential_kardex(
+            venta=venta,
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 5,
+                    "valor_unitario": Decimal("1200.00"),
+                }
+            ],
+            reason="Corrección de líneas para validar respuesta API.",
+            user=self.user,
+        )
+
+        updated_sale.refresh_from_db()
+
+        serialized_data = VentaSerializer(updated_sale).data
+
+        self.assertEqual(len(serialized_data["detalles"]), 1)
+        self.assertEqual(serialized_data["detalles"][0]["cantidad"], 5)
+        self.assertEqual(
+            serialized_data["detalles"][0]["status"],
+            BaseStatus.ACTIVO,
+        )
+        self.assertEqual(
+            updated_sale.detalles.filter(status=BaseStatus.ARCHIVADO).count(),
+            1,
+        )
+
+    def test_api_create_sale_discounts_stock_and_returns_active_details(self):
+        client = self.authenticated_client()
+
+        response = client.post(
+            reverse("venta-list"),
+            data={
+                "minera": self.minera.pk,
+                "area": self.area.pk,
+                "subarea": self.subarea.pk,
+                "contacto": self.contacto.pk,
+                "factura_numero": "F-API-001",
+                "orden_compra": "OC-API-001",
+                "numero_guia_hes": "G-API-001",
+                "lineas": [
+                    {
+                        "producto": self.producto.pk,
+                        "cantidad": 3,
+                        "valor_unitario": "1000.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        self.producto.refresh_from_db()
+
+        self.assertEqual(self.producto.stock_actual, 7)
+        self.assertEqual(response.data["valor_neto"], "3000.00")
+        self.assertEqual(response.data["iva"], "570.00")
+        self.assertEqual(response.data["total"], "3570.00")
+        self.assertEqual(len(response.data["detalles"]), 1)
+        self.assertEqual(response.data["detalles"][0]["cantidad"], 3)
+
+    def test_api_update_sale_lines_uses_differential_kardex(self):
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-API-002",
+                orden_compra="OC-API-002",
+                numero_guia_hes="G-API-002",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 2,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        client = self.authenticated_client()
+
+        response = client.post(
+            reverse("venta-actualizar-lineas", args=[venta.pk]),
+            data={
+                "motivo": "Corrección API de líneas.",
+                "lineas": [
+                    {
+                        "producto": self.producto.pk,
+                        "cantidad": 5,
+                        "valor_unitario": "1200.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.producto.refresh_from_db()
+        venta.refresh_from_db()
+
+        self.assertEqual(self.producto.stock_actual, 5)
+        self.assertEqual(response.data["valor_neto"], "6000.00")
+        self.assertEqual(response.data["iva"], "1140.00")
+        self.assertEqual(response.data["total"], "7140.00")
+        self.assertEqual(len(response.data["detalles"]), 1)
+        self.assertEqual(response.data["detalles"][0]["cantidad"], 5)
+
+        self.assertEqual(
+            MovimientoKardex.objects.filter(
+                movement_type=KardexMovementType.AJUSTE_INVENTARIO,
+            ).count(),
+            1,
+        )
+
+    def test_api_consulta_user_cannot_update_sale_lines(self):
+        consulta_user = User.objects.create_user(
+            username="consulta",
+            email="consulta@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.CONSULTA,
+        )
+
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-API-003",
+                orden_compra="OC-API-003",
+                numero_guia_hes="G-API-003",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        client = self.authenticated_client(consulta_user)
+
+        response = client.post(
+            reverse("venta-actualizar-lineas", args=[venta.pk]),
+            data={
+                "motivo": "Intento no autorizado.",
+                "lineas": [
+                    {
+                        "producto": self.producto.pk,
+                        "cantidad": 2,
+                        "valor_unitario": "1000.00",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.producto.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.producto.stock_actual, 9)
+        self.assertEqual(
+            MovimientoKardex.objects.filter(
+                movement_type=KardexMovementType.AJUSTE_INVENTARIO,
+            ).count(),
+            0,
+        )

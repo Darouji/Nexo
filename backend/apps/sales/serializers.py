@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
+from apps.core.models import BaseStatus
 from apps.inventory.models import Producto
 
 from .models import DetalleVenta, Venta, VentaAlert
@@ -88,7 +89,7 @@ class VentaAlertSerializer(serializers.ModelSerializer):
 
 
 class VentaSerializer(serializers.ModelSerializer):
-    detalles = DetalleVentaSerializer(many=True, read_only=True)
+    detalles = serializers.SerializerMethodField()
     lineas = DetalleVentaInputSerializer(many=True, write_only=True, required=False)
 
     alerts = VentaAlertSerializer(many=True, read_only=True)
@@ -173,6 +174,19 @@ class VentaSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    @extend_schema_field(DetalleVentaSerializer(many=True))
+    def get_detalles(self, obj):
+        detalles = obj.detalles.all()
+        detalles_activos = [
+            detalle for detalle in detalles if detalle.status == BaseStatus.ACTIVO
+        ]
+
+        return DetalleVentaSerializer(
+            detalles_activos,
+            many=True,
+            context=self.context,
+        ).data
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_operador_nombre(self, obj):

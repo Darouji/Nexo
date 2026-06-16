@@ -11,7 +11,23 @@ export type ThemeMode = "dark" | "light";
 export const ACTIVE_THEME_PRESET: ThemePreset = "clarityBalanced";
 
 // Cambia solo esta línea para alternar entre modo oscuro y claro.
-export const ACTIVE_THEME_MODE: ThemeMode = "light";
+const THEME_MODE_STORAGE_KEY = "serkan_theme_mode";
+
+function resolveActiveThemeMode(): ThemeMode {
+  if (typeof window === "undefined") {
+    return "light";
+  }
+
+  const storedMode = window.localStorage.getItem(THEME_MODE_STORAGE_KEY);
+
+  if (storedMode === "dark" || storedMode === "light") {
+    return storedMode;
+  }
+
+  return "light";
+}
+
+export const ACTIVE_THEME_MODE: ThemeMode = resolveActiveThemeMode();
 
 const sharedRadius = {
   xs: "6px",

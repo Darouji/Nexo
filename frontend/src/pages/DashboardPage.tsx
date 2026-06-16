@@ -14,6 +14,8 @@ import { ImportsPage } from "./ImportsPage";
 import { CollaboratorsPage } from "./CollaboratorsPage";
 import { UsersPage } from "./UsersPage";
 import { AuditPage } from "./AuditPage";
+import { PermissionGate } from "../components/PermissionGate";
+import { PermissionDeniedState } from "../components/StateFeedback";
 import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
@@ -21,8 +23,86 @@ interface DashboardPageProps {
   onLogout: () => void;
 }
 
+type SectionAccessRule = {
+  moduleKey: string;
+  fallbackRoles: string[];
+};
+
+const READ_ROLES = [
+  "ADMINISTRADOR",
+  "FINANZAS_COMERCIAL",
+  "RRHH",
+  "INFORMATICO",
+  "OPERATIVO",
+  "CONSULTA",
+];
+
+const MANAGEMENT_ROLES = [
+  "ADMINISTRADOR",
+  "RRHH",
+  "FINANZAS_COMERCIAL",
+  "INFORMATICO",
+];
+
+const sectionAccessRules: Record<string, SectionAccessRule> = {
+  Inicio: {
+    moduleKey: "inicio",
+    fallbackRoles: READ_ROLES,
+  },
+  Usuarios: {
+    moduleKey: "usuarios",
+    fallbackRoles: MANAGEMENT_ROLES,
+  },
+  Colaboradores: {
+    moduleKey: "colaboradores",
+    fallbackRoles: MANAGEMENT_ROLES,
+  },
+  "Entidades comerciales": {
+    moduleKey: "comercial",
+    fallbackRoles: READ_ROLES,
+  },
+  Productos: {
+    moduleKey: "inventario",
+    fallbackRoles: READ_ROLES,
+  },
+  "Ventas / Ingresos": {
+    moduleKey: "ventas",
+    fallbackRoles: READ_ROLES,
+  },
+  "Compras / Egresos": {
+    moduleKey: "compras_demo",
+    fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
+  },
+  "Importaciones Excel": {
+    moduleKey: "importaciones",
+    fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "INFORMATICO"],
+  },
+  Documentos: {
+    moduleKey: "documentos",
+    fallbackRoles: READ_ROLES,
+  },
+  Estadísticas: {
+    moduleKey: "estadisticas",
+    fallbackRoles: READ_ROLES,
+  },
+  Auditoría: {
+    moduleKey: "auditoria",
+    fallbackRoles: ["ADMINISTRADOR", "INFORMATICO"],
+  },
+};
+
+function getSectionAccessRule(section: string) {
+  return (
+    sectionAccessRules[section] ?? {
+      moduleKey: "inicio",
+      fallbackRoles: READ_ROLES,
+    }
+  );
+}
+
 export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   const [activeSection, setActiveSection] = useState("Inicio");
+  const accessRule = getSectionAccessRule(activeSection);
 
   const handleLogout = async () => {
     await logout();
@@ -80,7 +160,19 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
       onSectionChange={setActiveSection}
       onLogout={handleLogout}
     >
-      {renderContent()}
+      <PermissionGate
+        user={user}
+        moduleKey={accessRule.moduleKey}
+        fallbackRoles={accessRule.fallbackRoles}
+        fallback={
+          <PermissionDeniedState
+            moduleLabel={activeSection}
+            onBack={() => setActiveSection("Inicio")}
+          />
+        }
+      >
+        {renderContent()}
+      </PermissionGate>
     </AppLayout>
   );
 }

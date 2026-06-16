@@ -11,6 +11,7 @@ import { CommercialPage } from "./CommercialPage";
 import { StatisticsPage } from "./StatisticsPage";
 import { DocumentsPage } from "./DocumentsPage";
 import { ImportsPage } from "./ImportsPage";
+import { CollaboratorsPage } from "./CollaboratorsPage";
 import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
@@ -71,6 +72,9 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
 
       case "Importaciones Excel":
         return <ImportsPage />;
+
+      case "Colaboradores":
+        return <CollaboratorsPage />;
 
       default:
         return (

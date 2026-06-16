@@ -1,3 +1,4 @@
+from collections import defaultdict
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -8,7 +9,8 @@ from apps.core.audit import (
     capture_field_values,
     create_record_change_logs_from_snapshot,
 )
-from apps.core.models import AlertSeverity, AuditOrigin, BaseStatus
+from apps.core.models import AlertSeverity, AuditAction, AuditOrigin, BaseStatus
+from apps.inventory.models import Producto
 from apps.inventory.services import register_sale_annulment_reverse, register_sale_exit
 
 from .models import (
@@ -31,6 +33,66 @@ def get_operator(user):
         return None
 
     return user
+
+
+def validate_sale_stock_availability(details_data):
+    """
+    Valida stock de forma preventiva antes de crear la venta.
+
+    Regla:
+    - Agrupa cantidades por producto.
+    - Bloquea productos con stock insuficiente antes de crear Venta/DetalleVenta.
+    - Usa select_for_update dentro de la transacción para evitar carreras.
+    - Devuelve un error estructurado para frontend, auditoría y API.
+    """
+
+    required_by_product = defaultdict(int)
+    product_labels = {}
+
+    for detail_data in details_data:
+        producto = detail_data["producto"]
+        cantidad = int(detail_data["cantidad"])
+
+        if not producto.controla_stock:
+            continue
+
+        required_by_product[producto.pk] += cantidad
+        product_labels[producto.pk] = str(producto)
+
+    if not required_by_product:
+        return
+
+    locked_products = Producto.objects.select_for_update().filter(
+        pk__in=required_by_product.keys()
+    )
+    products_by_id = {product.pk: product for product in locked_products}
+
+    for product_id, requested_quantity in required_by_product.items():
+        product = products_by_id.get(product_id)
+
+        if product is None:
+            raise ValidationError(
+                {
+                    "producto": (
+                        "No se encontró el producto seleccionado para validar stock."
+                    )
+                }
+            )
+
+        if not product.controla_stock:
+            continue
+
+        if product.stock_actual < requested_quantity:
+            raise ValidationError(
+                {
+                    "code": VentaAlertCode.STOCK_INSUFICIENTE,
+                    "message": "Stock insuficiente",
+                    "producto_id": product.pk,
+                    "producto": product_labels.get(product_id, str(product)),
+                    "cantidad_solicitada": requested_quantity,
+                    "stock_disponible": product.stock_actual,
+                }
+            )
 
 
 def refresh_sale_alerts(venta, user=None):
@@ -148,6 +210,7 @@ def create_sale_with_details(*, sale_data, details_data, user=None):
     operator = get_operator(user)
 
     with transaction.atomic():
+        validate_sale_stock_availability(details_data)
         venta = Venta.objects.create(
             operador=operator,
             sale_status=VentaStatus.INGRESADA,
@@ -262,6 +325,13 @@ def concretar_sale(*, venta, user=None):
         if locked_sale.sale_status == VentaStatus.CONCRETADA:
             return locked_sale
 
+        audited_fields = [
+            "sale_status",
+            "concretada_at",
+            "concretada_by",
+        ]
+        old_values = capture_field_values(locked_sale, audited_fields)
+
         locked_sale.sale_status = VentaStatus.CONCRETADA
         locked_sale.concretada_at = timezone.now()
         locked_sale.concretada_by = operator
@@ -276,6 +346,16 @@ def concretar_sale(*, venta, user=None):
             ]
         )
 
+        create_record_change_logs_from_snapshot(
+            instance=locked_sale,
+            old_values=old_values,
+            fields=audited_fields,
+            user=operator,
+            origin=AuditOrigin.API,
+            reason="Concreción de venta.",
+            action=AuditAction.CAMBIAR_ESTADO,
+        )
+
         refresh_sale_alerts(locked_sale, user=operator)
 
         return locked_sale
@@ -287,6 +367,8 @@ def annul_sale(*, venta, reason, user=None):
     if not reason or not str(reason).strip():
         raise ValidationError({"motivo": "El motivo de anulación es obligatorio."})
 
+    clean_reason = str(reason).strip()
+
     with transaction.atomic():
         locked_sale = (
             Venta.objects.select_for_update()
@@ -297,6 +379,16 @@ def annul_sale(*, venta, reason, user=None):
         if locked_sale.sale_status == VentaStatus.ANULADA:
             raise ValidationError({"sale_status": "La venta ya está anulada."})
 
+        audited_fields = [
+            "sale_status",
+            "status",
+            "stock_descontado",
+            "anulada_at",
+            "anulada_by",
+            "anulacion_motivo",
+        ]
+        old_values = capture_field_values(locked_sale, audited_fields)
+
         if locked_sale.stock_descontado:
             for detail in locked_sale.detalles.all():
                 if not detail.controla_stock_snapshot:
@@ -305,7 +397,7 @@ def annul_sale(*, venta, reason, user=None):
                 register_sale_annulment_reverse(
                     producto=detail.producto,
                     cantidad=detail.cantidad,
-                    motivo=f"Reversa por anulación de venta #{locked_sale.pk}: {reason}",
+                    motivo=f"Reversa por anulación de venta #{locked_sale.pk}: {clean_reason}",
                     user=operator,
                     reference=locked_sale,
                 )
@@ -315,7 +407,7 @@ def annul_sale(*, venta, reason, user=None):
         locked_sale.stock_descontado = False
         locked_sale.anulada_at = timezone.now()
         locked_sale.anulada_by = operator
-        locked_sale.anulacion_motivo = str(reason).strip()
+        locked_sale.anulacion_motivo = clean_reason
         locked_sale.updated_by = operator
         locked_sale.save(
             update_fields=[
@@ -328,6 +420,16 @@ def annul_sale(*, venta, reason, user=None):
                 "updated_by",
                 "updated_at",
             ]
+        )
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_sale,
+            old_values=old_values,
+            fields=audited_fields,
+            user=operator,
+            origin=AuditOrigin.API,
+            reason=f"Anulación de venta: {clean_reason}",
+            action=AuditAction.ANULAR,
         )
 
         refresh_sale_alerts(locked_sale, user=operator)

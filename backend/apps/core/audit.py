@@ -47,6 +47,7 @@ def create_record_change_logs_from_snapshot(
     user=None,
     origin=AuditOrigin.API,
     reason="",
+    action=action,
 ):
     """
     Crea registros RecordChangeLog comparando valores antiguos vs actuales.

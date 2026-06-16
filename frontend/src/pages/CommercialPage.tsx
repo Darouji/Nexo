@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import axios from "axios";
 import {
   Alert,
@@ -248,7 +249,7 @@ function SummaryCard({
   title: string;
   value: number;
   helper: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }) {
   return (
     <Card

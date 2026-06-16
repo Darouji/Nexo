@@ -503,7 +503,8 @@ export function SalesPage() {
 
   const selectedSale = detailDialog.sale;
   const selectedDetails: SaleDetail[] = selectedSale?.detalles ?? [];
-  const selectedAlerts: SaleAlert[] = selectedSale?.alerts ?? [];
+  const selectedAlerts: SaleAlert[] =
+    selectedSale?.alerts.filter((alert) => alert.is_active) ?? [];
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -638,12 +639,12 @@ export function SalesPage() {
             />
 
             <Typography variant="h6" sx={{ fontWeight: 900 }}>
-              Alertas de la venta
+              Alertas activas de la venta
             </Typography>
 
             {selectedAlerts.length === 0 ? (
               <Alert severity="success" variant="outlined">
-                Esta venta no tiene alertas registradas.
+                Esta venta no tiene alertas activas.
               </Alert>
             ) : (
               <SmartDataGrid

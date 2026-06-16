@@ -102,6 +102,28 @@ function extractResults<T>(data: T[] | PaginatedResponse<T>) {
   return data.results ?? [];
 }
 
+export type CreateSaleLinePayload = {
+  producto: number;
+  cantidad: number;
+  valor_unitario: string;
+  codigo_sap?: string;
+};
+
+export type CreateSalePayload = {
+  fecha_venta: string;
+  fecha_factura?: string | null;
+  factura_numero?: string;
+  orden_compra?: string;
+  minera: number;
+  area?: number | null;
+  subarea?: number | null;
+  contacto?: number | null;
+  tipo_documento?: string;
+  numero_guia_hes?: string;
+  observations?: string;
+  lineas: CreateSaleLinePayload[];
+};
+
 export async function fetchSales(params: SaleListParams = {}) {
   const response = await api.get<SaleListResponse>("/sales/ventas/", {
     params: {
@@ -111,6 +133,11 @@ export async function fetchSales(params: SaleListParams = {}) {
   });
 
   return extractResults(response.data);
+}
+
+export async function createSale(payload: CreateSalePayload) {
+  const response = await api.post<Sale>("/sales/ventas/", payload);
+  return response.data;
 }
 
 export async function concretarSale(saleId: number) {

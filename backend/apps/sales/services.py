@@ -4,7 +4,10 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
-from apps.core.audit import capture_field_values, create_record_change_logs_from_snapshot
+from apps.core.audit import (
+    capture_field_values,
+    create_record_change_logs_from_snapshot,
+)
 from apps.core.models import AlertSeverity, AuditOrigin, BaseStatus
 from apps.inventory.services import register_sale_annulment_reverse, register_sale_exit
 
@@ -16,7 +19,6 @@ from .models import (
     VentaStatus,
     quantize_money,
 )
-
 
 IVA_RATE = Decimal("0.19")
 
@@ -50,6 +52,9 @@ def refresh_sale_alerts(venta, user=None):
         resolved_by=get_operator(user),
         updated_by=get_operator(user),
     )
+
+    if venta.sale_status == VentaStatus.ANULADA:
+        return
 
     alerts_to_create = []
 
@@ -193,7 +198,7 @@ def create_sale_with_details(*, sale_data, details_data, user=None):
         refresh_sale_alerts(venta, user=operator)
 
         return venta
-    
+
 
 def update_sale_metadata(*, venta, sale_data, user=None):
     """
@@ -215,7 +220,9 @@ def update_sale_metadata(*, venta, sale_data, user=None):
 
         if locked_sale.sale_status == VentaStatus.ANULADA:
             raise ValidationError(
-                {"sale_status": "No se puede editar una venta anulada desde este flujo."}
+                {
+                    "sale_status": "No se puede editar una venta anulada desde este flujo."
+                }
             )
 
         changed_fields = list(sale_data.keys())

@@ -9,6 +9,8 @@ import { colors } from "../theme/colors";
 import { SalesPage } from "./SalesPage";
 import { CommercialPage } from "./CommercialPage";
 import { StatisticsPage } from "./StatisticsPage";
+import { DocumentsPage } from "./DocumentsPage";
+import { ImportsPage } from "./ImportsPage";
 import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
@@ -63,6 +65,12 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
 
       case "Estadísticas":
         return <StatisticsPage />;
+
+      case "Documentos":
+        return <DocumentsPage />;
+
+      case "Importaciones Excel":
+        return <ImportsPage />;
 
       default:
         return (

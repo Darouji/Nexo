@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import axios from "axios";
 import {
@@ -321,7 +321,7 @@ export function CommercialPage() {
   const [contactoForm, setContactoForm] =
     useState<ContactoForm>(emptyContactoForm);
 
-  const loadCommercialData = async () => {
+  const loadCommercialData = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMessage("");
@@ -353,11 +353,15 @@ export function CommercialPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void loadCommercialData();
-  }, []);
+    const timeoutId = window.setTimeout(() => {
+      void loadCommercialData();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadCommercialData]);
 
   const activeRows = useMemo(() => {
     if (activeTab === "holdings") return filterRows(holdings, searchTerm);

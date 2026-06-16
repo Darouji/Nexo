@@ -31,6 +31,43 @@ export type AuthUser = {
   updated_at?: string;
 };
 
+export type ModulePermission = {
+  can_view: boolean;
+  can_create: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+};
+
+export type AccessMenuItem = {
+  key: string;
+  label: string;
+  path: string;
+  module: string;
+};
+
+export type AccessPayload = {
+  role: UserRole;
+  is_management_role: boolean;
+  is_read_role: boolean;
+  is_audit_role: boolean;
+  permissions: Record<string, ModulePermission>;
+  menu: AccessMenuItem[];
+};
+
+export type AuthSessionStatus = {
+  authenticated: boolean;
+  token_created_at: string | null;
+  token_expires_at: string | null;
+  token_expires_in_seconds: number | null;
+  token_expire_hours: number | null;
+};
+
+export type AuthSessionResponse = {
+  user: AuthUser;
+  access: AccessPayload;
+  session: AuthSessionStatus;
+};
+
 export type LoginResponse = {
   token: string;
   token_type?: string;
@@ -39,7 +76,7 @@ export type LoginResponse = {
   token_expires_in_seconds?: number | null;
   token_expire_hours?: number | null;
   user: AuthUser;
-  access?: unknown;
+  access?: AccessPayload;
 };
 
 export type LoginCredentials = {

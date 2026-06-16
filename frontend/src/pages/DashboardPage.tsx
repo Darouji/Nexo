@@ -4,7 +4,7 @@ import { AppLayout } from "../layouts/AppLayout";
 import { HomePage } from "./HomePage";
 import { ProductsPage } from "./ProductsPage";
 import { PurchasesPage } from "./PurchasesPage";
-import { getStoredUser, logout } from "../services/authService";
+import { logout } from "../services/authService";
 import { colors } from "../theme/colors";
 import { SalesPage } from "./SalesPage";
 import { CommercialPage } from "./CommercialPage";
@@ -17,35 +17,15 @@ import { AuditPage } from "./AuditPage";
 import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
+  user: AuthUser;
   onLogout: () => void;
 }
 
-const fallbackUser: AuthUser = {
-  id: 1,
-  username: "Admin",
-  email: "admin@serkan.cl",
-  first_name: "Admin",
-  last_name: "Sistema",
-  full_name: "Admin Sistema",
-  role: "ADMINISTRADOR",
-  role_display: "Administrador",
-  status: "ACTIVO",
-  status_display: "Activo",
-  is_active: true,
-  is_staff: true,
-  is_superuser: true,
-  phone: "S/N",
-  position: "Administrador",
-  department: "Administración",
-  observations: "",
-};
-
-export function DashboardPage({ onLogout }: DashboardPageProps) {
+export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   const [activeSection, setActiveSection] = useState("Inicio");
-  const user = (getStoredUser() as AuthUser | null) ?? fallbackUser;
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     onLogout();
   };
 

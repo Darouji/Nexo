@@ -1,42 +1,73 @@
 import { api } from "./api";
-import type { LoginCredentials, LoginResponse } from "../types/auth";
+import {
+  clearStoredAuth,
+  getStoredAccess,
+  getStoredSession,
+  getStoredToken,
+  getStoredUser,
+  persistAuthData,
+} from "./authStorage";
+import type {
+  AuthSessionResponse,
+  AuthSessionStatus,
+  LoginCredentials,
+  LoginResponse,
+} from "../types/auth";
 
-const TOKEN_KEY = "serkan_auth_token";
-const USER_KEY = "serkan_auth_user";
+function buildSessionFromLoginResponse(data: LoginResponse): AuthSessionStatus {
+  return {
+    authenticated: true,
+    token_created_at: data.token_created_at ?? null,
+    token_expires_at: data.token_expires_at ?? null,
+    token_expires_in_seconds: data.token_expires_in_seconds ?? null,
+    token_expire_hours: data.token_expire_hours ?? null,
+  };
+}
 
 export async function login(credentials: LoginCredentials) {
   const response = await api.post<LoginResponse>("/auth/login/", credentials);
+  const session = buildSessionFromLoginResponse(response.data);
 
-  localStorage.setItem(TOKEN_KEY, response.data.token);
-  localStorage.setItem(USER_KEY, JSON.stringify(response.data.user));
+  persistAuthData({
+    token: response.data.token,
+    user: response.data.user,
+    access: response.data.access ?? null,
+    session,
+  });
 
   return response.data;
 }
 
-export function logout() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+export async function fetchAuthSession() {
+  const response = await api.get<AuthSessionResponse>("/auth/session/");
+
+  persistAuthData({
+    user: response.data.user,
+    access: response.data.access,
+    session: response.data.session,
+  });
+
+  return response.data;
 }
 
-export function getStoredToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function getStoredUser() {
-  const rawUser = localStorage.getItem(USER_KEY);
-
-  if (!rawUser) {
-    return null;
-  }
-
+export async function logout() {
   try {
-    return JSON.parse(rawUser);
-  } catch {
-    localStorage.removeItem(USER_KEY);
-    return null;
+    if (getStoredToken()) {
+      await api.post("/auth/logout/");
+    }
+  } finally {
+    clearStoredAuth();
   }
 }
 
 export function isAuthenticated() {
   return Boolean(getStoredToken());
 }
+
+export {
+  clearStoredAuth,
+  getStoredAccess,
+  getStoredSession,
+  getStoredToken,
+  getStoredUser,
+};

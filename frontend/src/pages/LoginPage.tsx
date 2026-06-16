@@ -1,6 +1,5 @@
 import { useState } from "react";
 import type { ReactNode, SyntheticEvent } from "react";
-import axios from "axios";
 import {
   Alert,
   Box,
@@ -22,6 +21,8 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import { login } from "../services/authService";
 import { colors } from "../theme/colors";
+import { getApiErrorMessage } from "../services/api";
+import type { AuthUser } from "../types/auth";
 
 type LoginPageProps = {
   onLoginSuccess: () => void;
@@ -100,21 +101,19 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
       setLoading(true);
       setErrorMessage("");
 
-      await login({
+      const response = await login({
         username,
         password,
       });
 
-      onLoginSuccess();
+      onLoginSuccess(response.user);
     } catch (error: unknown) {
-      let detail = "No se pudo iniciar sesión. Revisa tus credenciales.";
-
-      if (axios.isAxiosError(error)) {
-        const data = error.response?.data as { detail?: string } | undefined;
-        detail = data?.detail || detail;
-      }
-
-      setErrorMessage(detail);
+      setErrorMessage(
+        getApiErrorMessage(
+          error,
+          "No se pudo iniciar sesión. Revisa tus credenciales.",
+        ),
+      );
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,21 @@
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Alert,
   Box,
   Button,
   Card,
+  CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
+  InputAdornment,
+  MenuItem,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
@@ -13,7 +23,8 @@ import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import type { ReactNode } from "react";
+import SearchIcon from "@mui/icons-material/Search";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import type { GridColDef, GridValidRowModel } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import { colors } from "../theme/colors";
@@ -48,6 +59,7 @@ type PurchaseRow = GridValidRowModel & {
   shipping_company: string;
   tracking_number: string;
   inventory_impact: string;
+  notes: string;
 };
 
 const purchases: PurchaseRow[] = [
@@ -69,6 +81,7 @@ const purchases: PurchaseRow[] = [
     shipping_company: "Proveedor directo",
     tracking_number: "SERKAN-CL-001",
     inventory_impact: "Genera entrada Kardex al recibir",
+    notes: "Compra nacional recibida completamente.",
   },
   {
     id: 2,
@@ -88,6 +101,7 @@ const purchases: PurchaseRow[] = [
     shipping_company: "DHL",
     tracking_number: "DHL-908172CL",
     inventory_impact: "Pendiente hasta recepción",
+    notes: "Compra internacional en revisión aduanera.",
   },
   {
     id: 3,
@@ -107,6 +121,7 @@ const purchases: PurchaseRow[] = [
     shipping_company: "No aplica",
     tracking_number: "Sin seguimiento",
     inventory_impact: "No genera stock",
+    notes: "Servicio técnico asociado a operación interna.",
   },
   {
     id: 4,
@@ -126,6 +141,7 @@ const purchases: PurchaseRow[] = [
     shipping_company: "FedEx",
     tracking_number: "FDX-55420-SRK",
     inventory_impact: "Entrada parcial pendiente",
+    notes: "Recepción parcial; queda mercadería pendiente.",
   },
 ];
 
@@ -151,9 +167,36 @@ function formatOriginalMoney(value: number, currency: PurchaseCurrency) {
     : clpFormatter.format(value);
 }
 
-function getStatusColor(status: PurchaseStatus) {
+function normalizeSearch(value: unknown) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function formatDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("es-CL", {
+    dateStyle: "medium",
+  }).format(date);
+}
+
+function getStatusLabel(status: PurchaseStatus) {
+  return status.replaceAll("_", " ");
+}
+
+function getStatusAccent(status: PurchaseStatus) {
   if (status === "CERRADA" || status === "RECIBIDA_COMPLETA") {
-    return colors.status.success;
+    return {
+      main: colors.status.success,
+      soft: colors.status.successSoft,
+      border: colors.status.success,
+    };
   }
 
   if (
@@ -161,21 +204,53 @@ function getStatusColor(status: PurchaseStatus) {
     status === "EN_ADUANA" ||
     status === "RECIBIDA_PARCIAL"
   ) {
-    return colors.status.warning;
+    return {
+      main: colors.status.warning,
+      soft: colors.status.warningSoft,
+      border: colors.secondary.border,
+    };
   }
 
   if (status === "ANULADA") {
-    return colors.status.error;
+    return {
+      main: colors.status.error,
+      soft: colors.status.errorSoft,
+      border: colors.status.error,
+    };
   }
 
-  return colors.status.info;
+  return {
+    main: colors.status.info,
+    soft: colors.status.infoSoft,
+    border: colors.status.info,
+  };
 }
 
-function getStatusLabel(status: PurchaseStatus) {
-  return status.replaceAll("_", " ");
+function StatusChip({ status }: { status: PurchaseStatus }) {
+  const accent = getStatusAccent(status);
+
+  return (
+    <Chip
+      label={getStatusLabel(status)}
+      size="small"
+      variant="outlined"
+      sx={{
+        color: accent.main,
+        bgcolor: accent.soft,
+        borderColor: accent.border,
+        fontWeight: 850,
+      }}
+    />
+  );
 }
 
-type SummaryCardProps = {
+function SummaryCard({
+  title,
+  value,
+  helper,
+  icon,
+  tone,
+}: {
   title: string;
   value: string;
   helper: string;
@@ -185,190 +260,326 @@ type SummaryCardProps = {
     soft: string;
     border: string;
   };
-};
-
-function SummaryCard({ title, value, helper, icon, tone }: SummaryCardProps) {
+}) {
   return (
     <Card
       sx={{
-        p: 2.2,
+        height: "100%",
         bgcolor: colors.background.paper,
         border: `1px solid ${colors.border.light}`,
-        height: "100%",
+        boxShadow: colors.shadow.card,
       }}
     >
-      <Stack direction="row" spacing={1.6} sx={{ alignItems: "center" }}>
-        <Box
-          sx={{
-            width: 44,
-            height: 44,
-            display: "grid",
-            placeItems: "center",
-            borderRadius: colors.radius.md,
-            color: tone.main,
-            bgcolor: tone.soft,
-            border: `1px solid ${tone.border}`,
-            "& svg": { fontSize: 26 },
-          }}
-        >
-          {icon}
-        </Box>
-
-        <Box>
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            {title}
-          </Typography>
-
-          <Typography
-            variant="h5"
-            sx={{ color: colors.text.primary, fontWeight: 900 }}
+      <CardContent>
+        <Stack direction="row" spacing={1.6} sx={{ alignItems: "center" }}>
+          <Box
+            sx={{
+              width: 46,
+              height: 46,
+              display: "grid",
+              placeItems: "center",
+              borderRadius: colors.radius.md,
+              color: tone.main,
+              bgcolor: tone.soft,
+              border: `1px solid ${tone.border}`,
+              "& svg": { fontSize: 27 },
+            }}
           >
-            {value}
-          </Typography>
+            {icon}
+          </Box>
 
-          <Typography variant="caption" sx={{ color: colors.text.muted }}>
-            {helper}
-          </Typography>
-        </Box>
-      </Stack>
+          <Box>
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              {title}
+            </Typography>
+
+            <Typography
+              variant="h5"
+              sx={{ color: colors.text.primary, fontWeight: 950 }}
+            >
+              {value}
+            </Typography>
+
+            <Typography variant="caption" sx={{ color: colors.text.muted }}>
+              {helper}
+            </Typography>
+          </Box>
+        </Stack>
+      </CardContent>
     </Card>
   );
 }
 
 export function PurchasesPage() {
-  const totalRealClp = purchases.reduce(
-    (sum, purchase) => sum + purchase.real_total_clp,
-    0,
+  const [selectedPurchase, setSelectedPurchase] = useState<PurchaseRow | null>(
+    null,
   );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
 
-  const internationalCount = purchases.filter(
-    (purchase) => purchase.currency === "USD",
-  ).length;
+  const filteredPurchases = useMemo(() => {
+    const term = normalizeSearch(searchTerm.trim());
 
-  const pendingReceptionCount = purchases.filter((purchase) =>
-    ["EN_TRANSITO", "EN_ADUANA", "RECIBIDA_PARCIAL"].includes(
-      purchase.purchase_status,
-    ),
-  ).length;
+    return purchases.filter((purchase) => {
+      const matchesSearch = term
+        ? [
+            purchase.provider,
+            purchase.origin_country,
+            purchase.purchase_type,
+            purchase.purchase_status,
+            purchase.shipping_company,
+            purchase.tracking_number,
+            purchase.inventory_impact,
+            purchase.notes,
+          ].some((value) => normalizeSearch(value).includes(term))
+        : true;
 
-  const columns: GridColDef[] = [
-    { field: "provider", headerName: "Proveedor", minWidth: 210, flex: 1 },
-    { field: "origin_country", headerName: "País origen", width: 140 },
-    { field: "purchase_type", headerName: "Tipo compra", width: 190 },
-    { field: "purchase_date", headerName: "Fecha", width: 120 },
-    {
-      field: "supplier_amount",
-      headerName: "Monto proveedor",
-      width: 170,
-      renderCell: (params) =>
-        formatOriginalMoney(Number(params.value), params.row.currency),
-    },
-    {
-      field: "exchange_rate",
-      headerName: "Tipo cambio",
-      width: 130,
-      renderCell: (params) =>
-        params.value
-          ? `$${Number(params.value).toLocaleString("es-CL")}`
-          : "No aplica",
-    },
-    {
-      field: "shipping_cost",
-      headerName: "Envío CLP",
-      width: 135,
-      renderCell: (params) => formatClp(Number(params.value)),
-    },
-    {
-      field: "customs_cost",
-      headerName: "Aduana CLP",
-      width: 140,
-      renderCell: (params) => formatClp(Number(params.value)),
-    },
-    {
-      field: "tax_cost",
-      headerName: "Impuestos CLP",
-      width: 150,
-      renderCell: (params) => formatClp(Number(params.value)),
-    },
-    {
-      field: "other_costs",
-      headerName: "Otros CLP",
-      width: 130,
-      renderCell: (params) => formatClp(Number(params.value)),
-    },
-    {
-      field: "real_total_clp",
-      headerName: "Costo real CLP",
-      width: 170,
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 900 }}>
-          {formatClp(Number(params.value))}
-        </Typography>
+      const matchesStatus = statusFilter
+        ? purchase.purchase_status === statusFilter
+        : true;
+
+      const matchesCurrency = currencyFilter
+        ? purchase.currency === currencyFilter
+        : true;
+
+      return matchesSearch && matchesStatus && matchesCurrency;
+    });
+  }, [currencyFilter, searchTerm, statusFilter]);
+
+  const summary = useMemo(() => {
+    const totalRealClp = filteredPurchases.reduce(
+      (sum, purchase) => sum + purchase.real_total_clp,
+      0,
+    );
+
+    const internationalCount = filteredPurchases.filter(
+      (purchase) => purchase.currency === "USD",
+    ).length;
+
+    const pendingReceptionCount = filteredPurchases.filter((purchase) =>
+      ["EN_TRANSITO", "EN_ADUANA", "RECIBIDA_PARCIAL"].includes(
+        purchase.purchase_status,
       ),
-    },
-    {
-      field: "purchase_status",
-      headerName: "Estado compra",
-      width: 180,
-      renderCell: (params) => {
-        const status = params.value as PurchaseStatus;
-        const color = getStatusColor(status);
+    ).length;
 
-        return (
-          <Chip
-            label={getStatusLabel(status)}
-            size="small"
-            sx={{
-              color,
-              bgcolor: colors.surface.soft,
-              borderColor: color,
-              border: "1px solid",
-              fontWeight: 800,
-            }}
-          />
-        );
+    const inventoryImpactCount = filteredPurchases.filter(
+      (purchase) =>
+        purchase.inventory_impact.toLowerCase().includes("kardex") ||
+        purchase.inventory_impact.toLowerCase().includes("entrada"),
+    ).length;
+
+    return {
+      totalRealClp,
+      internationalCount,
+      pendingReceptionCount,
+      inventoryImpactCount,
+    };
+  }, [filteredPurchases]);
+
+  const columns = useMemo<GridColDef[]>(() => {
+    return [
+      {
+        field: "provider",
+        headerName: "Proveedor",
+        minWidth: 220,
+        flex: 1,
       },
-    },
-    { field: "shipping_company", headerName: "Empresa envío", width: 160 },
-    { field: "tracking_number", headerName: "Seguimiento", width: 170 },
-    { field: "inventory_impact", headerName: "Impacto inventario", width: 230 },
-  ];
+      {
+        field: "origin_country",
+        headerName: "País",
+        width: 135,
+      },
+      {
+        field: "purchase_type",
+        headerName: "Tipo compra",
+        minWidth: 190,
+        flex: 0.7,
+      },
+      {
+        field: "purchase_date",
+        headerName: "Fecha",
+        width: 145,
+        renderCell: (params) => formatDate(String(params.value || "")),
+      },
+      {
+        field: "currency",
+        headerName: "Moneda",
+        width: 105,
+      },
+      {
+        field: "supplier_amount",
+        headerName: "Monto proveedor",
+        width: 170,
+        renderCell: (params) => {
+          const purchase = params.row as PurchaseRow;
+
+          return formatOriginalMoney(
+            Number(params.value || 0),
+            purchase.currency,
+          );
+        },
+      },
+      {
+        field: "exchange_rate",
+        headerName: "Tipo cambio",
+        width: 135,
+        renderCell: (params) =>
+          params.value
+            ? `$${Number(params.value).toLocaleString("es-CL")}`
+            : "No aplica",
+      },
+      {
+        field: "real_total_clp",
+        headerName: "Costo real CLP",
+        width: 170,
+        renderCell: (params) => (
+          <Typography sx={{ color: colors.text.primary, fontWeight: 900 }}>
+            {formatClp(Number(params.value || 0))}
+          </Typography>
+        ),
+      },
+      {
+        field: "purchase_status",
+        headerName: "Estado",
+        width: 185,
+        renderCell: (params) => (
+          <StatusChip status={params.value as PurchaseStatus} />
+        ),
+      },
+      {
+        field: "shipping_company",
+        headerName: "Envío",
+        width: 160,
+      },
+      {
+        field: "tracking_number",
+        headerName: "Seguimiento",
+        width: 170,
+      },
+      {
+        field: "inventory_impact",
+        headerName: "Impacto inventario",
+        minWidth: 230,
+        flex: 1,
+      },
+      {
+        field: "actions",
+        headerName: "Acciones",
+        width: 120,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<VisibilityIcon />}
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedPurchase(params.row as PurchaseRow);
+            }}
+          >
+            Ver
+          </Button>
+        ),
+      },
+    ];
+  }, []);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Box>
+    <Stack spacing={3}>
+      <Box
+        sx={{
+          position: "relative",
+          overflow: "hidden",
+          border: `1px solid ${colors.border.light}`,
+          borderRadius: colors.radius.xl,
+          p: { xs: 3, md: 4 },
+          background: `${colors.gradients.heroAccent}, ${colors.gradients.hero}`,
+          boxShadow: colors.shadow.elevated,
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage: colors.gradients.subtlePattern,
+            backgroundSize: "44px 44px",
+            pointerEvents: "none",
+          }}
+        />
+
         <Stack
           direction={{ xs: "column", md: "row" }}
-          spacing={2}
+          spacing={3}
           sx={{
+            position: "relative",
+            zIndex: 1,
             alignItems: { xs: "flex-start", md: "center" },
             justifyContent: "space-between",
           }}
         >
           <Box>
+            <Chip
+              label="Abastecimiento y egresos"
+              icon={<ReceiptLongIcon />}
+              variant="outlined"
+              size="small"
+              sx={{
+                mb: 2,
+                color: colors.modules.purchases.main,
+                bgcolor: colors.modules.purchases.soft,
+                borderColor: colors.modules.purchases.border,
+                fontWeight: 850,
+              }}
+            />
+
             <Typography
-              variant="h4"
-              sx={{ color: colors.text.primary, fontWeight: 900 }}
+              variant="h3"
+              sx={{
+                color: colors.text.primary,
+                fontWeight: 950,
+                letterSpacing: "-0.05em",
+                mb: 1,
+              }}
             >
               Compras / Egresos
             </Typography>
 
-            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-              Abastecimiento nacional e internacional, costos reales, recepción,
-              documentos y relación futura con inventario.
+            <Typography
+              variant="h6"
+              sx={{
+                color: colors.text.secondary,
+                maxWidth: 840,
+                lineHeight: 1.5,
+                fontWeight: 500,
+              }}
+            >
+              Vista preliminar para compras nacionales e internacionales, costos
+              reales, seguimiento logístico y recepción inventariable.
             </Typography>
           </Box>
 
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
             <Button
               variant="contained"
               startIcon={<AddShoppingCartIcon />}
               disabled
+              title="Se activará cuando exista endpoint backend validado."
             >
               Registrar compra
             </Button>
 
-            <Button variant="outlined" startIcon={<ReceiptLongIcon />} disabled>
+            <Button
+              variant="outlined"
+              startIcon={<ReceiptLongIcon />}
+              disabled
+              sx={{
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+              title="Se activará junto al módulo documental asociado a compras."
+            >
               Adjuntar documento
             </Button>
           </Stack>
@@ -376,9 +587,9 @@ export function PurchasesPage() {
       </Box>
 
       <Alert severity="info" variant="outlined">
-        Este apartado es frontend temprano: muestra estructura visual y datos de
-        prueba. No guarda compras, no modifica inventario y no crea Kardex hasta
-        que exista endpoint backend validado.
+        Este módulo sigue siendo frontend demostrativo: no guarda compras, no
+        modifica inventario y no crea Kardex hasta que exista endpoint backend
+        validado.
       </Alert>
 
       <Box
@@ -393,33 +604,33 @@ export function PurchasesPage() {
         }}
       >
         <SummaryCard
-          title="Compras registradas"
-          value={String(purchases.length)}
-          helper="Muestra operativa de prueba"
+          title="Compras visibles"
+          value={String(filteredPurchases.length)}
+          helper="Registros demostrativos filtrados"
           icon={<ReceiptLongIcon />}
           tone={colors.modules.purchases}
         />
 
         <SummaryCard
           title="Costo real total"
-          value={formatClp(totalRealClp)}
+          value={formatClp(summary.totalRealClp)}
           helper="Proveedor + envío + aduana + impuestos"
           icon={<AttachMoneyIcon />}
           tone={colors.modules.analytics}
         />
 
         <SummaryCard
-          title="Compras internacionales"
-          value={String(internationalCount)}
-          helper="Con tipo de cambio manual congelado"
+          title="Internacionales"
+          value={String(summary.internationalCount)}
+          helper="Compras con moneda USD"
           icon={<LocalShippingIcon />}
           tone={colors.modules.documents}
         />
 
         <SummaryCard
-          title="Pendientes de recepción"
-          value={String(pendingReceptionCount)}
-          helper="Tránsito, aduana o recepción parcial"
+          title="Pendientes recepción"
+          value={String(summary.pendingReceptionCount)}
+          helper={`${summary.inventoryImpactCount} con impacto inventariable`}
           icon={<Inventory2Icon />}
           tone={colors.modules.inventory}
         />
@@ -427,45 +638,354 @@ export function PurchasesPage() {
 
       <Card
         sx={{
-          p: 2.2,
           bgcolor: colors.background.paper,
           border: `1px solid ${colors.border.light}`,
+          boxShadow: colors.shadow.card,
         }}
       >
-        <Typography
-          variant="h6"
-          sx={{ color: colors.text.primary, fontWeight: 900, mb: 1 }}
-        >
-          Reglas visibles del módulo
-        </Typography>
+        <CardContent>
+          <Stack spacing={2.5}>
+            <Stack
+              direction={{ xs: "column", lg: "row" }}
+              spacing={2}
+              sx={{
+                alignItems: { xs: "stretch", lg: "center" },
+                justifyContent: "space-between",
+              }}
+            >
+              <Box>
+                <Typography
+                  variant="h5"
+                  sx={{ color: colors.text.primary, fontWeight: 900 }}
+                >
+                  Control preliminar de compras
+                </Typography>
 
-        <Divider sx={{ borderColor: colors.border.light, mb: 2 }} />
+                <Typography variant="body2" sx={{ color: colors.text.muted }}>
+                  Busca por proveedor, país, tipo, estado, seguimiento o impacto
+                  en inventario.
+                </Typography>
+              </Box>
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" },
-            gap: 2,
-          }}
-        >
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Las compras pueden ser nacionales o internacionales, inventariables
-            o no inventariables.
-          </Typography>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+                <TextField
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Buscar compras..."
+                  size="small"
+                  sx={{ minWidth: { xs: "100%", md: 280 } }}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
 
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Las compras en USD deben conservar el tipo de cambio usado al
-            momento del registro.
-          </Typography>
+                <TextField
+                  select
+                  label="Estado"
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  size="small"
+                  sx={{ minWidth: { xs: "100%", md: 200 } }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  <MenuItem value="COTIZADA">Cotizada</MenuItem>
+                  <MenuItem value="COMPRADA">Comprada</MenuItem>
+                  <MenuItem value="EN_TRANSITO">En tránsito</MenuItem>
+                  <MenuItem value="EN_ADUANA">En aduana</MenuItem>
+                  <MenuItem value="RECIBIDA_PARCIAL">Recibida parcial</MenuItem>
+                  <MenuItem value="RECIBIDA_COMPLETA">
+                    Recibida completa
+                  </MenuItem>
+                  <MenuItem value="CERRADA">Cerrada</MenuItem>
+                  <MenuItem value="ANULADA">Anulada</MenuItem>
+                </TextField>
 
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            El costo real considera proveedor, envío, aduana, impuestos y otros
-            costos operativos.
-          </Typography>
-        </Box>
+                <TextField
+                  select
+                  label="Moneda"
+                  value={currencyFilter}
+                  onChange={(event) => setCurrencyFilter(event.target.value)}
+                  size="small"
+                  sx={{ minWidth: { xs: "100%", md: 135 } }}
+                >
+                  <MenuItem value="">Todas</MenuItem>
+                  <MenuItem value="CLP">CLP</MenuItem>
+                  <MenuItem value="USD">USD</MenuItem>
+                </TextField>
+              </Stack>
+            </Stack>
+
+            <SmartDataGrid rows={filteredPurchases} columns={columns} />
+          </Stack>
+        </CardContent>
       </Card>
 
-      <SmartDataGrid rows={purchases} columns={columns} />
-    </Box>
+      <Card
+        sx={{
+          bgcolor: colors.background.paper,
+          border: `1px solid ${colors.border.light}`,
+          boxShadow: colors.shadow.card,
+        }}
+      >
+        <CardContent>
+          <Typography
+            variant="h6"
+            sx={{ color: colors.text.primary, fontWeight: 900, mb: 1 }}
+          >
+            Reglas visibles del módulo
+          </Typography>
+
+          <Divider sx={{ borderColor: colors.border.light, mb: 2 }} />
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                md: "repeat(3, minmax(0, 1fr))",
+              },
+              gap: 2,
+            }}
+          >
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              Las compras pueden ser nacionales o internacionales,
+              inventariables o no inventariables.
+            </Typography>
+
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              Las compras en USD deben conservar el tipo de cambio usado al
+              momento del registro.
+            </Typography>
+
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              El costo real considera proveedor, envío, aduana, impuestos y
+              otros costos operativos.
+            </Typography>
+          </Box>
+        </CardContent>
+      </Card>
+
+      <Dialog
+        open={Boolean(selectedPurchase)}
+        onClose={() => setSelectedPurchase(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          {selectedPurchase?.provider || "Detalle de compra"}
+        </DialogTitle>
+
+        <DialogContent>
+          {selectedPurchase ? (
+            <Stack spacing={2.5} sx={{ mt: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+                <StatusChip status={selectedPurchase.purchase_status} />
+
+                <Chip
+                  label={selectedPurchase.currency}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: colors.modules.purchases.main,
+                    bgcolor: colors.modules.purchases.soft,
+                    borderColor: colors.modules.purchases.border,
+                    fontWeight: 850,
+                  }}
+                />
+
+                <Chip
+                  label={selectedPurchase.purchase_type}
+                  size="small"
+                  variant="outlined"
+                  sx={{
+                    color: colors.text.secondary,
+                    bgcolor: colors.action.muted,
+                    borderColor: colors.border.medium,
+                    fontWeight: 850,
+                  }}
+                />
+              </Stack>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    md: "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 2,
+                }}
+              >
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800 }}
+                  >
+                    Proveedor
+                  </Typography>
+
+                  <Typography sx={{ color: colors.text.primary }}>
+                    {selectedPurchase.provider}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800 }}
+                  >
+                    País origen
+                  </Typography>
+
+                  <Typography sx={{ color: colors.text.primary }}>
+                    {selectedPurchase.origin_country}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800 }}
+                  >
+                    Fecha compra
+                  </Typography>
+
+                  <Typography sx={{ color: colors.text.primary }}>
+                    {formatDate(selectedPurchase.purchase_date)}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800 }}
+                  >
+                    Monto proveedor
+                  </Typography>
+
+                  <Typography sx={{ color: colors.text.primary }}>
+                    {formatOriginalMoney(
+                      selectedPurchase.supplier_amount,
+                      selectedPurchase.currency,
+                    )}
+                  </Typography>
+
+                  <Typography
+                    variant="caption"
+                    sx={{ color: colors.text.muted }}
+                  >
+                    Tipo cambio:{" "}
+                    {selectedPurchase.exchange_rate
+                      ? `$${selectedPurchase.exchange_rate.toLocaleString(
+                          "es-CL",
+                        )}`
+                      : "No aplica"}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800 }}
+                  >
+                    Envío / tracking
+                  </Typography>
+
+                  <Typography sx={{ color: colors.text.primary }}>
+                    {selectedPurchase.shipping_company}
+                  </Typography>
+
+                  <Typography
+                    variant="caption"
+                    sx={{ color: colors.text.muted }}
+                  >
+                    {selectedPurchase.tracking_number}
+                  </Typography>
+                </Box>
+
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800 }}
+                  >
+                    Impacto inventario
+                  </Typography>
+
+                  <Typography sx={{ color: colors.text.primary }}>
+                    {selectedPurchase.inventory_impact}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Divider />
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "repeat(2, minmax(0, 1fr))",
+                    md: "repeat(5, minmax(0, 1fr))",
+                  },
+                  gap: 1.5,
+                }}
+              >
+                {[
+                  ["Envío", selectedPurchase.shipping_cost],
+                  ["Aduana", selectedPurchase.customs_cost],
+                  ["Impuestos", selectedPurchase.tax_cost],
+                  ["Otros", selectedPurchase.other_costs],
+                  ["Total real", selectedPurchase.real_total_clp],
+                ].map(([label, value]) => (
+                  <Card
+                    key={String(label)}
+                    variant="outlined"
+                    sx={{ borderColor: colors.border.light }}
+                  >
+                    <CardContent>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: colors.text.muted }}
+                      >
+                        {label}
+                      </Typography>
+
+                      <Typography
+                        sx={{ color: colors.text.primary, fontWeight: 900 }}
+                      >
+                        {formatClp(Number(value || 0))}
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+
+              <Box>
+                <Typography
+                  variant="body2"
+                  sx={{ color: colors.text.secondary, fontWeight: 800 }}
+                >
+                  Notas
+                </Typography>
+
+                <Typography sx={{ color: colors.text.primary }}>
+                  {selectedPurchase.notes}
+                </Typography>
+              </Box>
+            </Stack>
+          ) : null}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setSelectedPurchase(null)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+    </Stack>
   );
 }

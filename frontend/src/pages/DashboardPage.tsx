@@ -12,6 +12,8 @@ import { StatisticsPage } from "./StatisticsPage";
 import { DocumentsPage } from "./DocumentsPage";
 import { ImportsPage } from "./ImportsPage";
 import { CollaboratorsPage } from "./CollaboratorsPage";
+import { UsersPage } from "./UsersPage";
+import { AuditPage } from "./AuditPage";
 import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
@@ -52,6 +54,9 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
       case "Inicio":
         return <HomePage user={user} onSectionChange={setActiveSection} />;
 
+      case "Usuarios":
+        return <UsersPage currentUser={user} />;
+
       case "Productos":
         return <ProductsPage />;
 
@@ -75,6 +80,9 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
 
       case "Colaboradores":
         return <CollaboratorsPage />;
+
+      case "Auditoría":
+        return <AuditPage />;
 
       default:
         return (

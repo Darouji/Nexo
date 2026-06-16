@@ -46,6 +46,6 @@ export type DashboardStatistics = {
 };
 
 export async function fetchDashboardStatistics() {
-  const response = await api.get<DashboardStatistics>("/core/stats/");
+  const response = await api.get<DashboardStatistics>("/stats/");
   return response.data;
 }

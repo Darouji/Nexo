@@ -6,6 +6,7 @@ import { ProductsPage } from "./ProductsPage";
 import { PurchasesPage } from "./PurchasesPage";
 import { getStoredUser, logout } from "../services/authService";
 import { colors } from "../theme/colors";
+import { SalesPage } from "./SalesPage";
 import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
@@ -48,6 +49,9 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
 
       case "Productos":
         return <ProductsPage />;
+
+      case "Ventas / Ingresos":
+        return <SalesPage />;
 
       case "Compras / Egresos":
         return <PurchasesPage />;

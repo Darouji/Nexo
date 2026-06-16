@@ -6,7 +6,6 @@ import {
   CardActionArea,
   Chip,
   Divider,
-  LinearProgress,
   Stack,
   Typography,
 } from "@mui/material";
@@ -569,21 +568,6 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
                     >
                       {stat.helper}
                     </Typography>
-
-                    <LinearProgress
-                      variant="determinate"
-                      value={72}
-                      sx={{
-                        mt: 2,
-                        height: 6,
-                        borderRadius: colors.radius.xs,
-                        bgcolor: colors.surface.muted,
-                        "& .MuiLinearProgress-bar": {
-                          bgcolor: statColor,
-                          borderRadius: colors.radius.xs,
-                        },
-                      }}
-                    />
                   </Card>
                 );
               })}

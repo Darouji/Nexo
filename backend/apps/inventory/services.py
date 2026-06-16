@@ -61,13 +61,19 @@ def register_kardex_movement(
         raise ValidationError({"motivo": "El motivo del movimiento es obligatorio."})
 
     if cantidad == 0:
-        raise ValidationError({"cantidad": "La cantidad del movimiento no puede ser cero."})
+        raise ValidationError(
+            {"cantidad": "La cantidad del movimiento no puede ser cero."}
+        )
 
-    if movement_type in [
-        KardexMovementType.ENTRADA_IMPORTACION,
-        KardexMovementType.ENTRADA_MANUAL,
-        KardexMovementType.REVERSA_ANULACION,
-    ] and cantidad <= 0:
+    if (
+        movement_type
+        in [
+            KardexMovementType.ENTRADA_IMPORTACION,
+            KardexMovementType.ENTRADA_MANUAL,
+            KardexMovementType.REVERSA_ANULACION,
+        ]
+        and cantidad <= 0
+    ):
         raise ValidationError(
             {"cantidad": "Este tipo de movimiento debe tener cantidad positiva."}
         )
@@ -165,11 +171,32 @@ def register_sale_exit(*, producto, cantidad, motivo, user=None, reference=None)
     )
 
 
-def register_sale_annulment_reverse(*, producto, cantidad, motivo, user=None, reference=None):
+def register_sale_annulment_reverse(
+    *, producto, cantidad, motivo, user=None, reference=None
+):
     return register_kardex_movement(
         producto=producto,
         movement_type=KardexMovementType.REVERSA_ANULACION,
         cantidad=abs(cantidad),
+        motivo=motivo,
+        user=user,
+        origin=AuditOrigin.AUTOMATICO,
+        reference=reference,
+    )
+
+
+def register_sale_difference_adjustment(
+    *,
+    producto,
+    cantidad,
+    motivo,
+    user=None,
+    reference=None,
+):
+    return register_kardex_movement(
+        producto=producto,
+        movement_type=KardexMovementType.AJUSTE_INVENTARIO,
+        cantidad=cantidad,
         motivo=motivo,
         user=user,
         origin=AuditOrigin.AUTOMATICO,

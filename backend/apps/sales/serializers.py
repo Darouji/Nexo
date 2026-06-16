@@ -237,3 +237,26 @@ class AnularVentaSerializer(serializers.Serializer):
             raise serializers.ValidationError("El motivo de anulación es obligatorio.")
 
         return value
+
+
+class ActualizarLineasVentaSerializer(serializers.Serializer):
+    motivo = serializers.CharField(max_length=500)
+    lineas = DetalleVentaInputSerializer(many=True)
+
+    def validate_motivo(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "El motivo de edición de líneas es obligatorio."
+            )
+
+        return value
+
+    def validate_lineas(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "La venta debe tener al menos una línea de detalle."
+            )
+
+        return value

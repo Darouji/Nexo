@@ -1,6 +1,8 @@
+import json
 from collections import defaultdict
 from decimal import Decimal
 
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
@@ -9,9 +11,19 @@ from apps.core.audit import (
     capture_field_values,
     create_record_change_logs_from_snapshot,
 )
-from apps.core.models import AlertSeverity, AuditAction, AuditOrigin, BaseStatus
+from apps.core.models import (
+    AlertSeverity,
+    AuditAction,
+    AuditOrigin,
+    BaseStatus,
+    RecordChangeLog,
+)
 from apps.inventory.models import Producto
-from apps.inventory.services import register_sale_annulment_reverse, register_sale_exit
+from apps.inventory.services import (
+    register_sale_annulment_reverse,
+    register_sale_difference_adjustment,
+    register_sale_exit,
+)
 
 from .models import (
     DetalleVenta,
@@ -192,7 +204,13 @@ def refresh_sale_alerts(venta, user=None):
 
 
 def calculate_sale_totals(venta):
-    net = sum((detail.valor_total for detail in venta.detalles.all()), Decimal("0"))
+    net = sum(
+        (
+            detail.valor_total
+            for detail in venta.detalles.filter(status=BaseStatus.ACTIVO)
+        ),
+        Decimal("0"),
+    )
     net = quantize_money(net)
     iva = quantize_money(net * IVA_RATE)
     total = quantize_money(net + iva)
@@ -201,6 +219,157 @@ def calculate_sale_totals(venta):
     venta.iva = iva
     venta.total = total
     venta.save(update_fields=["valor_neto", "iva", "total", "updated_at"])
+
+
+def summarize_existing_sale_details(details):
+    data = []
+
+    for detail in details:
+        data.append(
+            {
+                "id": detail.pk,
+                "producto_id": detail.producto_id,
+                "producto": str(detail.producto),
+                "cantidad": detail.cantidad,
+                "valor_unitario": str(detail.valor_unitario),
+                "valor_total": str(detail.valor_total),
+                "codigo_sap": detail.codigo_sap,
+                "controla_stock": detail.controla_stock_snapshot,
+            }
+        )
+
+    return json.dumps(data, ensure_ascii=False, sort_keys=True)
+
+
+def summarize_sale_details_payload(details_data):
+    data = []
+
+    for detail_data in details_data:
+        producto = detail_data["producto"]
+        cantidad = int(detail_data["cantidad"])
+        valor_unitario = Decimal(detail_data["valor_unitario"])
+        valor_total = quantize_money(Decimal(cantidad) * valor_unitario)
+
+        data.append(
+            {
+                "producto_id": producto.pk,
+                "producto": str(producto),
+                "cantidad": cantidad,
+                "valor_unitario": str(valor_unitario),
+                "valor_total": str(valor_total),
+                "codigo_sap": detail_data.get("codigo_sap", "") or producto.codigo_sap,
+                "controla_stock": producto.controla_stock,
+            }
+        )
+
+    return json.dumps(data, ensure_ascii=False, sort_keys=True)
+
+
+def aggregate_stock_quantities_from_existing_details(details):
+    quantities = defaultdict(int)
+    labels = {}
+
+    for detail in details:
+        if not detail.controla_stock_snapshot:
+            continue
+
+        quantities[detail.producto_id] += detail.cantidad
+        labels[detail.producto_id] = str(detail.producto)
+
+    return quantities, labels
+
+
+def aggregate_stock_quantities_from_payload(details_data):
+    quantities = defaultdict(int)
+    labels = {}
+
+    for detail_data in details_data:
+        producto = detail_data["producto"]
+
+        if not producto.controla_stock:
+            continue
+
+        quantities[producto.pk] += int(detail_data["cantidad"])
+        labels[producto.pk] = str(producto)
+
+    return quantities, labels
+
+
+def validate_sale_stock_difference(*, old_quantities, new_quantities, product_labels):
+    affected_product_ids = sorted(
+        set(old_quantities.keys()) | set(new_quantities.keys())
+    )
+
+    if not affected_product_ids:
+        return {}, {}
+
+    locked_products = (
+        Producto.objects.select_for_update()
+        .filter(
+            pk__in=affected_product_ids,
+        )
+        .order_by("pk")
+    )
+    products_by_id = {product.pk: product for product in locked_products}
+
+    stock_differences = {}
+
+    for product_id in affected_product_ids:
+        old_quantity = old_quantities.get(product_id, 0)
+        new_quantity = new_quantities.get(product_id, 0)
+        difference = new_quantity - old_quantity
+
+        if difference == 0:
+            continue
+
+        product = products_by_id.get(product_id)
+
+        if product is None:
+            raise ValidationError(
+                {
+                    "producto": (
+                        "No se encontró el producto seleccionado para validar "
+                        "la edición de stock."
+                    )
+                }
+            )
+
+        if difference > 0 and product.stock_actual < difference:
+            raise ValidationError(
+                {
+                    "code": VentaAlertCode.STOCK_INSUFICIENTE,
+                    "message": "Stock insuficiente para editar la venta",
+                    "producto_id": product.pk,
+                    "producto": product_labels.get(product_id, str(product)),
+                    "cantidad_solicitada": difference,
+                    "stock_disponible": product.stock_actual,
+                }
+            )
+
+        stock_differences[product_id] = difference
+
+    return products_by_id, stock_differences
+
+
+def create_sale_details_change_log(
+    *, venta, old_summary, new_summary, user=None, reason=""
+):
+    content_type = ContentType.objects.get_for_model(
+        venta,
+        for_concrete_model=False,
+    )
+
+    return RecordChangeLog.objects.create(
+        content_type=content_type,
+        object_id=str(venta.pk),
+        action=AuditAction.EDITAR,
+        field_name="detalles",
+        old_value=old_summary,
+        new_value=new_summary,
+        changed_by=user if getattr(user, "is_authenticated", False) else None,
+        origin=AuditOrigin.API,
+        reason=reason,
+    )
 
 
 def create_sale_with_details(*, sale_data, details_data, user=None):
@@ -304,6 +473,159 @@ def update_sale_metadata(*, venta, sale_data, user=None):
             user=operator,
             origin=AuditOrigin.API,
             reason="Actualización de datos generales de venta.",
+        )
+
+        refresh_sale_alerts(locked_sale, user=operator)
+
+        return locked_sale
+
+
+def replace_sale_details_with_differential_kardex(
+    *,
+    venta,
+    details_data,
+    reason,
+    user=None,
+):
+    """
+    Edita líneas de venta mediante flujo controlado.
+
+    Regla:
+    - No se editan líneas directamente por PATCH/PUT normal.
+    - Se archivan líneas activas anteriores.
+    - Se crean nuevas líneas activas.
+    - Se calcula diferencia de stock por producto.
+    - Se generan movimientos Kardex de diferencia.
+    - No se sobrescribe Kardex anterior.
+    - La operación completa es atómica.
+    """
+
+    if not details_data:
+        raise ValidationError({"lineas": "La venta debe tener al menos una línea."})
+
+    if not reason or not str(reason).strip():
+        raise ValidationError(
+            {"motivo": "El motivo de edición de líneas es obligatorio."}
+        )
+
+    clean_reason = str(reason).strip()
+    operator = get_operator(user)
+
+    with transaction.atomic():
+        locked_sale = Venta.objects.select_for_update().get(pk=venta.pk)
+
+        if locked_sale.sale_status == VentaStatus.ANULADA:
+            raise ValidationError(
+                {"sale_status": ("No se pueden editar líneas de una venta anulada.")}
+            )
+
+        active_details = list(
+            DetalleVenta.objects.select_related(
+                "producto",
+                "producto__categoria",
+            )
+            .filter(
+                venta=locked_sale,
+                status=BaseStatus.ACTIVO,
+            )
+            .order_by("pk")
+        )
+
+        old_summary = summarize_existing_sale_details(active_details)
+        new_summary = summarize_sale_details_payload(details_data)
+
+        old_quantities, old_labels = aggregate_stock_quantities_from_existing_details(
+            active_details
+        )
+        new_quantities, new_labels = aggregate_stock_quantities_from_payload(
+            details_data
+        )
+
+        product_labels = {
+            **old_labels,
+            **new_labels,
+        }
+
+        products_by_id, stock_differences = validate_sale_stock_difference(
+            old_quantities=old_quantities,
+            new_quantities=new_quantities,
+            product_labels=product_labels,
+        )
+
+        if active_details:
+            DetalleVenta.objects.filter(
+                pk__in=[detail.pk for detail in active_details]
+            ).update(
+                status=BaseStatus.ARCHIVADO,
+                updated_by=operator,
+                updated_at=timezone.now(),
+            )
+
+        new_details = []
+
+        for detail_data in details_data:
+            producto = detail_data["producto"]
+
+            detail = DetalleVenta.objects.create(
+                venta=locked_sale,
+                producto=producto,
+                cantidad=detail_data["cantidad"],
+                valor_unitario=detail_data["valor_unitario"],
+                codigo_sap=detail_data.get("codigo_sap", ""),
+                created_by=operator,
+                updated_by=operator,
+            )
+            new_details.append(detail)
+
+        for product_id, difference in stock_differences.items():
+            if difference == 0:
+                continue
+
+            product = products_by_id[product_id]
+
+            if difference > 0:
+                register_sale_difference_adjustment(
+                    producto=product,
+                    cantidad=-difference,
+                    motivo=(
+                        f"Ajuste diferencial por edición de venta #{locked_sale.pk}: "
+                        f"aumento de cantidad. {clean_reason}"
+                    ),
+                    user=operator,
+                    reference=locked_sale,
+                )
+            else:
+                register_sale_difference_adjustment(
+                    producto=product,
+                    cantidad=abs(difference),
+                    motivo=(
+                        f"Ajuste diferencial por edición de venta #{locked_sale.pk}: "
+                        f"disminución de cantidad. {clean_reason}"
+                    ),
+                    user=operator,
+                    reference=locked_sale,
+                )
+
+        calculate_sale_totals(locked_sale)
+
+        locked_sale.stock_descontado = any(
+            detail.controla_stock_snapshot for detail in new_details
+        )
+        locked_sale.updated_by = operator
+        locked_sale.save(
+            update_fields=[
+                "stock_descontado",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        create_sale_details_change_log(
+            venta=locked_sale,
+            old_summary=old_summary,
+            new_summary=new_summary,
+            user=operator,
+            reason=f"Edición controlada de líneas de venta: {clean_reason}",
         )
 
         refresh_sale_alerts(locked_sale, user=operator)

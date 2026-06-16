@@ -1,7 +1,8 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
@@ -9,8 +10,17 @@ from apps.accounts.models import UserRole
 from apps.accounts.permissions import IsConsultaOrOperativoGlobal, user_has_role
 
 from .models import DetalleVenta, Venta
-from .serializers import AnularVentaSerializer, DetalleVentaSerializer, VentaSerializer
-from .services import annul_sale, concretar_sale
+from .serializers import (
+    ActualizarLineasVentaSerializer,
+    AnularVentaSerializer,
+    DetalleVentaSerializer,
+    VentaSerializer,
+)
+from .services import (
+    annul_sale,
+    concretar_sale,
+    replace_sale_details_with_differential_kardex,
+)
 
 
 def raise_drf_validation_error(error):
@@ -139,6 +149,25 @@ class VentaViewSet(SalesPermissionMixin, viewsets.ModelViewSet):
         try:
             venta = annul_sale(
                 venta=venta,
+                reason=input_serializer.validated_data["motivo"],
+                user=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        serializer = self.get_serializer(venta)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="actualizar-lineas")
+    def actualizar_lineas(self, request, pk=None):
+        venta = self.get_object()
+        input_serializer = ActualizarLineasVentaSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+
+        try:
+            venta = replace_sale_details_with_differential_kardex(
+                venta=venta,
+                details_data=input_serializer.validated_data["lineas"],
                 reason=input_serializer.validated_data["motivo"],
                 user=request.user,
             )

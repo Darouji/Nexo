@@ -13,7 +13,12 @@ from apps.inventory.models import (
     Producto,
 )
 from apps.sales.models import Venta, VentaAlertCode, VentaStatus
-from apps.sales.services import annul_sale, concretar_sale, create_sale_with_details
+from apps.sales.services import (
+    annul_sale,
+    concretar_sale,
+    create_sale_with_details,
+    replace_sale_details_with_differential_kardex,
+)
 
 
 class SalesServiceTests(TestCase):
@@ -144,8 +149,8 @@ class SalesServiceTests(TestCase):
 
         error = context.exception.message_dict
         self.assertEqual(error["code"][0], VentaAlertCode.STOCK_INSUFICIENTE)
-        self.assertEqual(error["cantidad_solicitada"][0], 11)
-        self.assertEqual(error["stock_disponible"][0], 10)
+        self.assertEqual(int(error["cantidad_solicitada"][0]), 11)
+        self.assertEqual(int(error["stock_disponible"][0]), 10)
 
     def test_create_sale_groups_stock_by_product_before_validating(self):
         with self.assertRaises(ValidationError) as context:
@@ -174,7 +179,7 @@ class SalesServiceTests(TestCase):
 
         error = context.exception.message_dict
         self.assertEqual(error["code"][0], VentaAlertCode.STOCK_INSUFICIENTE)
-        self.assertEqual(error["cantidad_solicitada"][0], 11)
+        self.assertEqual(int(error["cantidad_solicitada"][0]), 11)
 
     def test_non_stock_product_does_not_create_kardex(self):
         venta = create_sale_with_details(
@@ -336,3 +341,153 @@ class SalesServiceTests(TestCase):
             duplicated_invoice_alert.message,
             "Factura posiblemente duplicada",
         )
+
+    def test_replace_sale_details_with_higher_quantity_creates_negative_difference(
+        self,
+    ):
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 2,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        updated_sale = replace_sale_details_with_differential_kardex(
+            venta=venta,
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 5,
+                    "valor_unitario": Decimal("1200.00"),
+                }
+            ],
+            reason="Corrección de cantidad solicitada por cliente.",
+            user=self.user,
+        )
+
+        self.producto.refresh_from_db()
+        updated_sale.refresh_from_db()
+
+        self.assertEqual(self.producto.stock_actual, 5)
+        self.assertEqual(updated_sale.valor_neto, Decimal("6000.00"))
+        self.assertEqual(updated_sale.iva, Decimal("1140.00"))
+        self.assertEqual(updated_sale.total, Decimal("7140.00"))
+
+        self.assertEqual(
+            updated_sale.detalles.filter(status=BaseStatus.ACTIVO).count(),
+            1,
+        )
+        self.assertEqual(
+            updated_sale.detalles.filter(status=BaseStatus.ARCHIVADO).count(),
+            1,
+        )
+
+        difference_movement = MovimientoKardex.objects.get(
+            movement_type=KardexMovementType.AJUSTE_INVENTARIO
+        )
+        self.assertEqual(difference_movement.cantidad, -3)
+        self.assertEqual(difference_movement.stock_antes, 8)
+        self.assertEqual(difference_movement.stock_despues, 5)
+
+        self.assertTrue(
+            RecordChangeLog.objects.filter(
+                object_id=str(updated_sale.pk),
+                action=AuditAction.EDITAR,
+                field_name="detalles",
+            ).exists()
+        )
+
+    def test_replace_sale_details_with_lower_quantity_returns_stock_difference(self):
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 5,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        updated_sale = replace_sale_details_with_differential_kardex(
+            venta=venta,
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 2,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            reason="Corrección de cantidad por ajuste comercial.",
+            user=self.user,
+        )
+
+        self.producto.refresh_from_db()
+        updated_sale.refresh_from_db()
+
+        self.assertEqual(self.producto.stock_actual, 8)
+        self.assertEqual(updated_sale.valor_neto, Decimal("2000.00"))
+
+        difference_movement = MovimientoKardex.objects.get(
+            movement_type=KardexMovementType.AJUSTE_INVENTARIO
+        )
+        self.assertEqual(difference_movement.cantidad, 3)
+        self.assertEqual(difference_movement.stock_antes, 5)
+        self.assertEqual(difference_movement.stock_despues, 8)
+
+    def test_replace_sale_details_with_insufficient_difference_rolls_back(self):
+        venta = create_sale_with_details(
+            sale_data=self.sale_data(),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 8,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError) as context:
+            replace_sale_details_with_differential_kardex(
+                venta=venta,
+                details_data=[
+                    {
+                        "producto": self.producto,
+                        "cantidad": 11,
+                        "valor_unitario": Decimal("1000.00"),
+                    }
+                ],
+                reason="Intento de aumento sin stock suficiente.",
+                user=self.user,
+            )
+
+        self.producto.refresh_from_db()
+        venta.refresh_from_db()
+
+        self.assertEqual(self.producto.stock_actual, 2)
+        self.assertEqual(
+            venta.detalles.filter(status=BaseStatus.ACTIVO).count(),
+            1,
+        )
+        self.assertEqual(
+            venta.detalles.filter(status=BaseStatus.ARCHIVADO).count(),
+            0,
+        )
+        self.assertEqual(
+            MovimientoKardex.objects.filter(
+                movement_type=KardexMovementType.AJUSTE_INVENTARIO
+            ).count(),
+            0,
+        )
+
+        error = context.exception.message_dict
+        self.assertEqual(error["code"][0], VentaAlertCode.STOCK_INSUFICIENTE)
+        self.assertEqual(int(error["cantidad_solicitada"][0]), 3)
+        self.assertEqual(int(error["stock_disponible"][0]), 2)

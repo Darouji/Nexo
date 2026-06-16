@@ -8,6 +8,7 @@ import { getStoredUser, logout } from "../services/authService";
 import { colors } from "../theme/colors";
 import { SalesPage } from "./SalesPage";
 import { CommercialPage } from "./CommercialPage";
+import { StatisticsPage } from "./StatisticsPage";
 import type { AuthUser } from "../types/auth";
 
 interface DashboardPageProps {
@@ -59,6 +60,9 @@ export function DashboardPage({ onLogout }: DashboardPageProps) {
 
       case "Entidades comerciales":
         return <CommercialPage />;
+
+      case "Estadísticas":
+        return <StatisticsPage />;
 
       default:
         return (

@@ -1,5 +1,7 @@
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Exists, OuterRef, Q
+from django.utils.dateparse import parse_date
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -13,12 +15,12 @@ from apps.accounts.permissions import (
     IsConsultaOrOperativoGlobal,
     user_has_role,
 )
-from apps.core.models import RecordChangeLog
+from apps.core.models import AlertSeverity, BaseStatus, RecordChangeLog
 from apps.core.serializers import RecordChangeLogSerializer
 from apps.inventory.models import MovimientoKardex
 from apps.inventory.serializers import MovimientoKardexSerializer
 
-from .models import DetalleVenta, Venta
+from .models import DetalleVenta, Venta, VentaAlert, VentaStatus
 from .serializers import (
     ActualizarLineasVentaSerializer,
     AnularVentaSerializer,
@@ -40,6 +42,75 @@ def raise_drf_validation_error(error):
         raise DRFValidationError(error.messages)
 
     raise DRFValidationError(str(error))
+
+
+def split_csv_param(value):
+    if not value:
+        return []
+
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def parse_bool_param(value, param_name):
+    if value is None or value == "":
+        return None
+
+    normalized_value = str(value).strip().lower()
+
+    if normalized_value in ["1", "true", "yes", "si", "sí"]:
+        return True
+
+    if normalized_value in ["0", "false", "no"]:
+        return False
+
+    raise DRFValidationError(
+        {param_name: "Valor booleano inválido. Use true/false, 1/0 o sí/no."}
+    )
+
+
+def parse_date_param(value, param_name):
+    if not value:
+        return None
+
+    parsed_value = parse_date(str(value))
+
+    if parsed_value is None:
+        raise DRFValidationError(
+            {param_name: "Fecha inválida. Use formato YYYY-MM-DD."}
+        )
+
+    return parsed_value
+
+
+def validate_choice_values(values, allowed_values, param_name):
+    invalid_values = [value for value in values if value not in allowed_values]
+
+    if invalid_values:
+        raise DRFValidationError(
+            {
+                param_name: (
+                    "Valor no permitido. "
+                    f"Valores inválidos: {', '.join(invalid_values)}."
+                )
+            }
+        )
+
+    return values
+
+
+def parse_id_values(value, param_name):
+    values = split_csv_param(value)
+    ids = []
+
+    for value in values:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            raise DRFValidationError(
+                {param_name: "Debe enviar IDs numéricos separados por coma."}
+            )
+
+    return ids
 
 
 class CanManageSales(BasePermission):
@@ -138,6 +209,151 @@ class VentaViewSet(SalesPermissionMixin, viewsets.ModelViewSet):
         "updated_at",
     ]
     ordering = ["-fecha_venta", "-created_at"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+
+        active_alerts = VentaAlert.objects.filter(
+            venta=OuterRef("pk"),
+            is_active=True,
+        )
+        blocking_alerts = active_alerts.filter(
+            severity=AlertSeverity.BLOQUEANTE,
+        )
+
+        queryset = queryset.annotate(
+            has_active_alerts=Exists(active_alerts),
+            has_blocking_alerts=Exists(blocking_alerts),
+        )
+
+        sale_status_values = validate_choice_values(
+            split_csv_param(params.get("sale_status")),
+            {choice[0] for choice in VentaStatus.choices},
+            "sale_status",
+        )
+        if sale_status_values:
+            queryset = queryset.filter(sale_status__in=sale_status_values)
+
+        status_values = validate_choice_values(
+            split_csv_param(params.get("status")),
+            {choice[0] for choice in BaseStatus.choices},
+            "status",
+        )
+        if status_values:
+            queryset = queryset.filter(status__in=status_values)
+
+        minera_ids = parse_id_values(params.get("minera"), "minera")
+        if minera_ids:
+            queryset = queryset.filter(minera_id__in=minera_ids)
+
+        area_ids = parse_id_values(params.get("area"), "area")
+        if area_ids:
+            queryset = queryset.filter(area_id__in=area_ids)
+
+        subarea_ids = parse_id_values(params.get("subarea"), "subarea")
+        if subarea_ids:
+            queryset = queryset.filter(subarea_id__in=subarea_ids)
+
+        contacto_ids = parse_id_values(params.get("contacto"), "contacto")
+        if contacto_ids:
+            queryset = queryset.filter(contacto_id__in=contacto_ids)
+
+        operador_ids = parse_id_values(params.get("operador"), "operador")
+        if operador_ids:
+            queryset = queryset.filter(operador_id__in=operador_ids)
+
+        fecha_desde = parse_date_param(
+            params.get("fecha_desde") or params.get("fecha_venta_desde"),
+            "fecha_desde",
+        )
+        if fecha_desde:
+            queryset = queryset.filter(fecha_venta__gte=fecha_desde)
+
+        fecha_hasta = parse_date_param(
+            params.get("fecha_hasta") or params.get("fecha_venta_hasta"),
+            "fecha_hasta",
+        )
+        if fecha_hasta:
+            queryset = queryset.filter(fecha_venta__lte=fecha_hasta)
+
+        fecha_factura_desde = parse_date_param(
+            params.get("fecha_factura_desde"),
+            "fecha_factura_desde",
+        )
+        if fecha_factura_desde:
+            queryset = queryset.filter(fecha_factura__gte=fecha_factura_desde)
+
+        fecha_factura_hasta = parse_date_param(
+            params.get("fecha_factura_hasta"),
+            "fecha_factura_hasta",
+        )
+        if fecha_factura_hasta:
+            queryset = queryset.filter(fecha_factura__lte=fecha_factura_hasta)
+
+        stock_descontado = parse_bool_param(
+            params.get("stock_descontado"),
+            "stock_descontado",
+        )
+        if stock_descontado is not None:
+            queryset = queryset.filter(stock_descontado=stock_descontado)
+
+        has_alerts = parse_bool_param(params.get("has_alerts"), "has_alerts")
+        if has_alerts is True:
+            queryset = queryset.filter(has_active_alerts=True)
+        elif has_alerts is False:
+            queryset = queryset.filter(has_active_alerts=False)
+
+        alert_severity_values = validate_choice_values(
+            split_csv_param(params.get("alert_severity")),
+            {choice[0] for choice in AlertSeverity.choices},
+            "alert_severity",
+        )
+        if alert_severity_values:
+            queryset = queryset.filter(
+                alerts__is_active=True,
+                alerts__severity__in=alert_severity_values,
+            )
+
+        validation_summary = params.get("validation_summary")
+        if validation_summary:
+            allowed_summaries = {"OK", "CON_ALERTAS", "BLOQUEANTE"}
+            validate_choice_values(
+                [validation_summary],
+                allowed_summaries,
+                "validation_summary",
+            )
+
+            if validation_summary == "OK":
+                queryset = queryset.filter(has_active_alerts=False)
+            elif validation_summary == "CON_ALERTAS":
+                queryset = queryset.filter(has_active_alerts=True)
+            elif validation_summary == "BLOQUEANTE":
+                queryset = queryset.filter(has_blocking_alerts=True)
+
+        has_factura = parse_bool_param(params.get("has_factura"), "has_factura")
+        factura_filter = Q(factura_numero__gt="") | (
+            Q(factura_pdf__isnull=False) & ~Q(factura_pdf="")
+        )
+        if has_factura is True:
+            queryset = queryset.filter(factura_filter)
+        elif has_factura is False:
+            queryset = queryset.exclude(factura_filter)
+
+        has_guia = parse_bool_param(params.get("has_guia"), "has_guia")
+        guia_filter = Q(numero_guia_hes__gt="") | (
+            Q(guia_pdf__isnull=False) & ~Q(guia_pdf="")
+        )
+        if has_guia is True:
+            queryset = queryset.filter(guia_filter)
+        elif has_guia is False:
+            queryset = queryset.exclude(guia_filter)
+
+        return queryset
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        return queryset.distinct()
 
     @action(detail=True, methods=["post"], url_path="concretar")
     def concretar(self, request, pk=None):

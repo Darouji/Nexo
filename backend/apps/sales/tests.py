@@ -104,6 +104,12 @@ class SalesServiceTests(TestCase):
         client.force_authenticate(user=user or self.user)
         return client
 
+    def response_results(self, response):
+        if isinstance(response.data, dict) and "results" in response.data:
+            return response.data["results"]
+
+        return response.data
+
     def test_create_sale_discounts_stock_and_creates_kardex_exit(self):
         venta = create_sale_with_details(
             sale_data=self.sale_data(),
@@ -756,3 +762,142 @@ class SalesServiceTests(TestCase):
         response = client.get(reverse("venta-trazabilidad", args=[venta.pk]))
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_api_list_sales_filters_by_sale_status(self):
+        create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-FILTER-001",
+                orden_compra="OC-FILTER-001",
+                numero_guia_hes="G-FILTER-001",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        concreted_sale = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-FILTER-002",
+                orden_compra="OC-FILTER-002",
+                numero_guia_hes="G-FILTER-002",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+        concretar_sale(venta=concreted_sale, user=self.user)
+
+        client = self.authenticated_client()
+
+        response = client.get(
+            reverse("venta-list"),
+            {"sale_status": VentaStatus.CONCRETADA},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        result_ids = {result["id"] for result in self.response_results(response)}
+
+        self.assertEqual(result_ids, {concreted_sale.pk})
+
+    def test_api_list_sales_filters_by_blocking_validation_summary(self):
+        create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-BLOCKING-FILTER",
+                orden_compra="OC-BLOCKING-FILTER-001",
+                numero_guia_hes="G-BLOCKING-FILTER-001",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        blocked_sale = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-BLOCKING-FILTER",
+                orden_compra="OC-BLOCKING-FILTER-002",
+                numero_guia_hes="G-BLOCKING-FILTER-002",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        client = self.authenticated_client()
+
+        response = client.get(
+            reverse("venta-list"),
+            {"validation_summary": "BLOQUEANTE"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        result_ids = {result["id"] for result in self.response_results(response)}
+
+        self.assertEqual(result_ids, {blocked_sale.pk})
+
+    def test_api_list_sales_filters_by_missing_invoice(self):
+        create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="F-HAS-INVOICE",
+                orden_compra="OC-HAS-INVOICE",
+                numero_guia_hes="G-HAS-INVOICE",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        sale_without_invoice = create_sale_with_details(
+            sale_data=self.sale_data(
+                factura_numero="",
+                orden_compra="OC-WITHOUT-INVOICE",
+                numero_guia_hes="G-WITHOUT-INVOICE",
+            ),
+            details_data=[
+                {
+                    "producto": self.producto,
+                    "cantidad": 1,
+                    "valor_unitario": Decimal("1000.00"),
+                }
+            ],
+            user=self.user,
+        )
+
+        client = self.authenticated_client()
+
+        response = client.get(
+            reverse("venta-list"),
+            {"has_factura": "false"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        result_ids = {result["id"] for result in self.response_results(response)}
+
+        self.assertEqual(result_ids, {sale_without_invoice.pk})

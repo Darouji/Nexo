@@ -25,7 +25,7 @@ import { getApiErrorMessage } from "../services/api";
 import type { AuthUser } from "../types/auth";
 
 type LoginPageProps = {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (user: AuthUser) => void;
 };
 
 type SignalColor = {

@@ -246,6 +246,42 @@ function buildHomeAlerts(stats: DashboardStatistics | null): HomeAlert[] {
 }
 
 export function HomePage({ user, onSectionChange }: HomePageProps) {
+  const [stats, setStats] = useState<DashboardStatistics | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState("");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchDashboardStatistics()
+      .then((data) => {
+        if (!isMounted) return;
+
+        setStats(data);
+        setStatsError("");
+      })
+      .catch(() => {
+        if (!isMounted) return;
+
+        setStatsError(
+          "No se pudieron cargar las estadísticas reales de inicio.",
+        );
+      })
+      .finally(() => {
+        if (!isMounted) return;
+
+        setLoadingStats(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const quickStats = buildQuickStats(stats);
+  const alerts = buildHomeAlerts(stats);
+  const urgentAlertsCount = alerts.length;
+
   return (
     <Box sx={{ width: "100%" }}>
       <Box
@@ -314,8 +350,13 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
                   lineHeight: 1.5,
                 }}
               >
-                Tienes 3 alertas activas, 7 documentos pendientes y 5 productos
-                bajo stock crítico.
+                {loadingStats
+                  ? "Cargando indicadores reales de la plataforma..."
+                  : `Tienes ${urgentAlertsCount} alertas operativas activas, ${
+                      stats?.documents.documents_total || 0
+                    } documentos registrados y ${
+                      stats?.inventory.critical_products_count || 0
+                    } productos bajo stock crítico.`}
               </Typography>
             </Box>
 
@@ -346,6 +387,12 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
           </Stack>
         </Box>
       </Box>
+
+      {statsError ? (
+        <Alert severity="warning" variant="outlined" sx={{ mb: 3 }}>
+          {statsError}
+        </Alert>
+      ) : null}
 
       <Box
         sx={{
@@ -594,6 +641,12 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
           <Divider sx={{ borderColor: colors.border.light, mb: 2 }} />
 
           <Stack spacing={1.5}>
+            {alerts.length === 0 ? (
+              <Alert severity="success" variant="outlined">
+                No hay alertas urgentes según los datos actuales del backend.
+              </Alert>
+            ) : null}
+
             {alerts.map((alert) => (
               <Alert
                 key={alert.title}

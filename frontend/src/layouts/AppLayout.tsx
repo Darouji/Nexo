@@ -124,7 +124,7 @@ const menuItems: MenuItem[] = [
     accent: colors.modules.commercial,
   },
   {
-    label: "Productos",
+    label: "Inventario",
     moduleKey: "inventario",
     fallbackRoles: [
       "ADMINISTRADOR",

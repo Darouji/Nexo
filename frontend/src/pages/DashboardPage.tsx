@@ -61,7 +61,7 @@ const sectionAccessRules: Record<string, SectionAccessRule> = {
     moduleKey: "comercial",
     fallbackRoles: READ_ROLES,
   },
-  Productos: {
+  Inventario: {
     moduleKey: "inventario",
     fallbackRoles: READ_ROLES,
   },
@@ -117,7 +117,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
       case "Usuarios":
         return <UsersPage currentUser={user} />;
 
-      case "Productos":
+      case "Inventario":
         return <ProductsPage />;
 
       case "Ventas / Ingresos":

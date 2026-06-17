@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import {
   Alert,
   Autocomplete,
@@ -26,6 +25,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import type { GridColDef } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../components/SmartDataGrid";
+import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   fetchAreas,
   fetchContactos,
@@ -131,40 +131,6 @@ function createEmptyLine(): SaleLineFormState {
     valor_unitario: "0",
     codigo_sap: "",
   };
-}
-
-function getErrorMessage(error: unknown) {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as
-      | { detail?: string; [key: string]: unknown }
-      | undefined;
-
-    if (data?.detail) {
-      return data.detail;
-    }
-
-    if (data && typeof data === "object") {
-      return Object.entries(data)
-        .map(([field, value]) => {
-          if (Array.isArray(value)) {
-            return `${field}: ${value.join(", ")}`;
-          }
-
-          if (value && typeof value === "object") {
-            return `${field}: ${JSON.stringify(value)}`;
-          }
-
-          return `${field}: ${String(value)}`;
-        })
-        .join(" | ");
-    }
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "No se pudo completar la operación.";
 }
 
 function formatDate(value: string | null) {

@@ -1,12 +1,10 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
 import HistoryIcon from "@mui/icons-material/History";
 import {
   Alert,
   Autocomplete,
   Box,
   Button,
-  Card,
   Checkbox,
   Chip,
   Dialog,
@@ -24,8 +22,16 @@ import AddBoxIcon from "@mui/icons-material/AddBox";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+import CategoryIcon from "@mui/icons-material/Category";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import type { GridColDef } from "@mui/x-data-grid";
+import { MetricCard } from "../components/MetricCard";
+import { PageHeader } from "../components/PageHeader";
+import { SectionCard } from "../components/SectionCard";
 import { SmartDataGrid } from "../components/SmartDataGrid";
+import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   createProduct,
   ensureCategoryByName,
@@ -97,32 +103,6 @@ const emptyKardexDialog: KardexDialogState = {
   movements: [],
   loading: false,
 };
-
-function getErrorMessage(error: unknown) {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as
-      | { detail?: string; [key: string]: unknown }
-      | undefined;
-
-    if (data?.detail) {
-      return data.detail;
-    }
-
-    if (data && typeof data === "object") {
-      return Object.entries(data)
-        .map(([field, value]) => {
-          if (Array.isArray(value)) {
-            return `${field}: ${value.join(", ")}`;
-          }
-
-          return `${field}: ${String(value)}`;
-        })
-        .join(" | ");
-    }
-  }
-
-  return "No se pudo completar la operación.";
-}
 
 function getStockStatusColor(status: ProductStockStatus) {
   if (status === "OK") {
@@ -675,47 +655,37 @@ export function ProductsPage() {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        spacing={2}
-        sx={{
-          alignItems: { xs: "flex-start", md: "center" },
-          justifyContent: "space-between",
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{ color: colors.text.primary, fontWeight: 900 }}
-          >
-            Inventario de Productos
-          </Typography>
+      <PageHeader
+        title="Inventario de Productos"
+        subtitle="Módulo central del sistema: productos, categorías, stock actual, stock crítico, unidades en camino y movimientos Kardex."
+        eyebrow="Inventario y Kardex"
+        icon={<Inventory2Icon />}
+        tone={colors.modules.inventory}
+        actions={
+          <>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleOpenCreateProduct}
+            >
+              Nuevo producto
+            </Button>
 
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Módulo conectado al backend: productos, stock actual, stock crítico,
-            productos en camino, creación real y movimientos Kardex autorizados.
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleOpenCreateProduct}
-          >
-            Nuevo producto
-          </Button>
-
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => void loadProducts()}
-            disabled={loading}
-          >
-            Actualizar
-          </Button>
-        </Stack>
-      </Stack>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => void loadProducts()}
+              disabled={loading}
+              sx={{
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+            >
+              Actualizar
+            </Button>
+          </>
+        }
+      />
 
       <Box
         sx={{
@@ -728,89 +698,54 @@ export function ProductsPage() {
           gap: 2,
         }}
       >
-        <Card
-          sx={{
-            p: 2.2,
-            bgcolor: colors.background.paper,
-            border: `1px solid ${colors.border.light}`,
+        <MetricCard
+          title="Productos registrados"
+          value={formatNumber(productos.length)}
+          helper="Catálogo activo del sistema"
+          icon={<Inventory2Icon />}
+          tone={colors.modules.inventory}
+        />
+
+        <MetricCard
+          title="Controlan stock"
+          value={formatNumber(stockControlledCount)}
+          helper="Generan movimientos Kardex"
+          icon={<CategoryIcon />}
+          tone={{
+            main: colors.status.success,
+            soft: colors.status.successSoft,
+            border: colors.status.success,
           }}
-        >
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Productos registrados
-          </Typography>
+        />
 
-          <Typography
-            variant="h4"
-            sx={{ color: colors.text.primary, fontWeight: 900 }}
-          >
-            {formatNumber(productos.length)}
-          </Typography>
-        </Card>
-
-        <Card
-          sx={{
-            p: 2.2,
-            bgcolor: colors.background.paper,
-            border: `1px solid ${colors.border.light}`,
+        <MetricCard
+          title="Stock crítico"
+          value={formatNumber(stockCriticalCount)}
+          helper="Requieren revisión operativa"
+          icon={<WarningAmberIcon />}
+          tone={{
+            main: colors.status.error,
+            soft: colors.status.errorSoft,
+            border: colors.status.error,
           }}
-        >
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Controlan stock
-          </Typography>
+        />
 
-          <Typography
-            variant="h4"
-            sx={{ color: colors.status.success, fontWeight: 900 }}
-          >
-            {formatNumber(stockControlledCount)}
-          </Typography>
-        </Card>
-
-        <Card
-          sx={{
-            p: 2.2,
-            bgcolor: colors.background.paper,
-            border: `1px solid ${colors.border.light}`,
+        <MetricCard
+          title="Unidades en camino"
+          value={formatNumber(incomingStockTotal)}
+          helper="Stock pendiente de recepción"
+          icon={<LocalShippingIcon />}
+          tone={{
+            main: colors.status.warning,
+            soft: colors.status.warningSoft,
+            border: colors.secondary.border,
           }}
-        >
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Stock crítico
-          </Typography>
-
-          <Typography
-            variant="h4"
-            sx={{ color: colors.status.error, fontWeight: 900 }}
-          >
-            {formatNumber(stockCriticalCount)}
-          </Typography>
-        </Card>
-
-        <Card
-          sx={{
-            p: 2.2,
-            bgcolor: colors.background.paper,
-            border: `1px solid ${colors.border.light}`,
-          }}
-        >
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Unidades en camino
-          </Typography>
-
-          <Typography
-            variant="h4"
-            sx={{ color: colors.status.warning, fontWeight: 900 }}
-          >
-            {formatNumber(incomingStockTotal)}
-          </Typography>
-        </Card>
+        />
       </Box>
 
-      <Card
-        sx={{
-          p: 2,
-          bgcolor: colors.background.paper,
-          border: `1px solid ${colors.border.light}`,
-        }}
+      <SectionCard
+        title="Búsqueda y filtros"
+        subtitle="Busca por modelo, categoría, detalle o código SAP."
       >
         <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
           <TextField
@@ -851,12 +786,16 @@ export function ProductsPage() {
               void loadProducts("");
             }}
             disabled={loading}
-            sx={{ minWidth: { xs: "100%", md: 120 } }}
+            sx={{
+              minWidth: { xs: "100%", md: 120 },
+              color: colors.text.primary,
+              borderColor: colors.border.medium,
+            }}
           >
             Limpiar
           </Button>
         </Stack>
-      </Card>
+      </SectionCard>
 
       {successMessage ? (
         <Alert severity="success" variant="outlined">
@@ -870,7 +809,12 @@ export function ProductsPage() {
         </Alert>
       ) : null}
 
-      <SmartDataGrid rows={productos} columns={columns} loading={loading} />
+      <SectionCard
+        title="Catálogo de productos"
+        subtitle="Stock actual, stock crítico, productos en camino, control de Kardex y acciones operativas."
+      >
+        <SmartDataGrid rows={productos} columns={columns} loading={loading} />
+      </SectionCard>
 
       <Dialog
         open={productDialogOpen}

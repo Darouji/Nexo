@@ -1,4 +1,5 @@
 import { api } from "./api";
+import type { KardexMovement } from "./inventoryService";
 
 export type SaleStatus = "INGRESADA" | "CONCRETADA" | "ANULADA" | string;
 
@@ -80,20 +81,6 @@ export type Sale = {
   updated_at: string;
 };
 
-type PaginatedResponse<T> = {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
-};
-
-type SaleListResponse = Sale[] | PaginatedResponse<Sale>;
-
-type SaleListParams = {
-  search?: string;
-  ordering?: string;
-};
-
 export type SalesSummary = {
   ventas: {
     total: number;
@@ -118,13 +105,67 @@ export type SalesSummary = {
   };
 };
 
-function extractResults<T>(data: T[] | PaginatedResponse<T>) {
-  if (Array.isArray(data)) {
-    return data;
-  }
+export type SaleTraceChange = {
+  [key: string]: unknown;
+  id: number;
+  content_type: number;
+  content_type_label: string;
+  object_id: string;
+  action: string;
+  action_display: string;
+  field_name: string;
+  old_value: string;
+  new_value: string;
+  changed_by: number | null;
+  changed_by_name: string;
+  origin: string;
+  origin_display: string;
+  reason: string;
+  created_at: string;
+};
 
-  return data.results ?? [];
-}
+export type SaleTraceability = {
+  venta: Sale;
+  cambios: SaleTraceChange[];
+  movimientos_kardex: KardexMovement[];
+};
+
+type PaginatedResponse<T> = {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+};
+
+type SaleListResponse = Sale[] | PaginatedResponse<Sale>;
+
+type CsvParam<T extends string | number> = T | T[];
+
+export type SaleListParams = {
+  search?: string;
+  ordering?: string;
+
+  sale_status?: CsvParam<SaleStatus>;
+  status?: CsvParam<string>;
+
+  minera?: CsvParam<number>;
+  area?: CsvParam<number>;
+  subarea?: CsvParam<number>;
+  contacto?: CsvParam<number>;
+  operador?: CsvParam<number>;
+
+  fecha_desde?: string;
+  fecha_hasta?: string;
+  fecha_factura_desde?: string;
+  fecha_factura_hasta?: string;
+
+  stock_descontado?: boolean;
+  has_alerts?: boolean;
+  alert_severity?: CsvParam<string>;
+  validation_summary?: SaleValidationSummary;
+  has_factura?: boolean;
+  has_guia?: boolean;
+};
 
 export type CreateSaleLinePayload = {
   producto: number;
@@ -148,12 +189,89 @@ export type CreateSalePayload = {
   lineas: CreateSaleLinePayload[];
 };
 
+export type UpdateSaleMetadataPayload = Partial<
+  Pick<
+    CreateSalePayload,
+    | "fecha_venta"
+    | "fecha_factura"
+    | "factura_numero"
+    | "orden_compra"
+    | "minera"
+    | "area"
+    | "subarea"
+    | "contacto"
+    | "tipo_documento"
+    | "numero_guia_hes"
+    | "observations"
+  >
+>;
+
+export type UpdateSaleLinesPayload = {
+  motivo: string;
+  lineas: CreateSaleLinePayload[];
+};
+
+function extractResults<T>(data: T[] | PaginatedResponse<T>) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  return data.results ?? [];
+}
+
+function toCsv<T extends string | number>(value?: CsvParam<T>) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    const cleanValues = value.filter((item) => item !== "" && item !== null);
+
+    return cleanValues.length > 0 ? cleanValues.join(",") : undefined;
+  }
+
+  return value;
+}
+
+function toBooleanParam(value?: boolean) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value ? "true" : "false";
+}
+
+function buildSaleListParams(params: SaleListParams = {}) {
+  return {
+    search: params.search?.trim() || undefined,
+    ordering: params.ordering || "-fecha_venta,-created_at",
+
+    sale_status: toCsv(params.sale_status),
+    status: toCsv(params.status),
+
+    minera: toCsv(params.minera),
+    area: toCsv(params.area),
+    subarea: toCsv(params.subarea),
+    contacto: toCsv(params.contacto),
+    operador: toCsv(params.operador),
+
+    fecha_desde: params.fecha_desde || undefined,
+    fecha_hasta: params.fecha_hasta || undefined,
+    fecha_factura_desde: params.fecha_factura_desde || undefined,
+    fecha_factura_hasta: params.fecha_factura_hasta || undefined,
+
+    stock_descontado: toBooleanParam(params.stock_descontado),
+    has_alerts: toBooleanParam(params.has_alerts),
+    alert_severity: toCsv(params.alert_severity),
+    validation_summary: params.validation_summary || undefined,
+    has_factura: toBooleanParam(params.has_factura),
+    has_guia: toBooleanParam(params.has_guia),
+  };
+}
+
 export async function fetchSales(params: SaleListParams = {}) {
   const response = await api.get<SaleListResponse>("/sales/ventas/", {
-    params: {
-      search: params.search?.trim() || undefined,
-      ordering: params.ordering || "-fecha_venta,-created_at",
-    },
+    params: buildSaleListParams(params),
   });
 
   return extractResults(response.data);
@@ -161,17 +279,42 @@ export async function fetchSales(params: SaleListParams = {}) {
 
 export async function fetchSalesSummary(params: SaleListParams = {}) {
   const response = await api.get<SalesSummary>("/sales/ventas/resumen/", {
-    params: {
-      search: params.search?.trim() || undefined,
-      ordering: params.ordering || "-fecha_venta,-created_at",
-    },
+    params: buildSaleListParams(params),
   });
 
   return response.data;
 }
 
+export async function fetchSale(saleId: number) {
+  const response = await api.get<Sale>(`/sales/ventas/${saleId}/`);
+  return response.data;
+}
+
 export async function createSale(payload: CreateSalePayload) {
   const response = await api.post<Sale>("/sales/ventas/", payload);
+  return response.data;
+}
+
+export async function updateSaleMetadata(
+  saleId: number,
+  payload: UpdateSaleMetadataPayload,
+) {
+  const response = await api.patch<Sale>(`/sales/ventas/${saleId}/`, payload);
+  return response.data;
+}
+
+export async function updateSaleLines(
+  saleId: number,
+  payload: UpdateSaleLinesPayload,
+) {
+  const response = await api.post<Sale>(
+    `/sales/ventas/${saleId}/actualizar-lineas/`,
+    {
+      motivo: payload.motivo.trim(),
+      lineas: payload.lineas,
+    },
+  );
+
   return response.data;
 }
 
@@ -184,6 +327,14 @@ export async function annulSale(saleId: number, motivo: string) {
   const response = await api.post<Sale>(`/sales/ventas/${saleId}/anular/`, {
     motivo: motivo.trim(),
   });
+
+  return response.data;
+}
+
+export async function fetchSaleTraceability(saleId: number) {
+  const response = await api.get<SaleTraceability>(
+    `/sales/ventas/${saleId}/trazabilidad/`,
+  );
 
   return response.data;
 }

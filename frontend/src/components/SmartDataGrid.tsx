@@ -2,30 +2,37 @@ import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 import type { GridColDef, GridValidRowModel } from "@mui/x-data-grid";
 import { esES } from "@mui/x-data-grid/locales";
 import { Box } from "@mui/material";
+import { EmptyState } from "./StateFeedback";
 import { colors } from "../theme/colors";
 
 interface SmartDataGridProps {
   rows: GridValidRowModel[];
   columns: GridColDef[];
   loading?: boolean;
+  height?: number | string;
+  minHeight?: number | string;
+  hideToolbar?: boolean;
 }
 
 export function SmartDataGrid({
   rows,
   columns,
   loading = false,
+  height = 650,
+  minHeight = 360,
+  hideToolbar = false,
 }: SmartDataGridProps) {
-  // Inyección automática de la columna dinámica "N°" solicitada en el documento
   const baseColumns: GridColDef[] = [
     {
       field: "numero_fila",
       headerName: "N°",
-      width: 60,
+      width: 64,
       filterable: false,
       sortable: false,
       disableColumnMenu: true,
-      // Calcula el número de fila matemáticamente en el frontend
-      renderCell: (index) => index.api.getAllRowIds().indexOf(index.id) + 1,
+      align: "center",
+      headerAlign: "center",
+      renderCell: (params) => params.api.getAllRowIds().indexOf(params.id) + 1,
     },
     ...columns,
   ];
@@ -33,11 +40,14 @@ export function SmartDataGrid({
   return (
     <Box
       sx={{
-        height: 650,
+        height: rows.length > 0 ? height : minHeight,
+        minHeight,
         width: "100%",
         bgcolor: colors.background.paper,
-        borderRadius: 1,
-        boxShadow: `0 0 10px rgba(0, 0, 0, 0.5)`,
+        borderRadius: colors.radius.lg,
+        border: `1px solid ${colors.border.light}`,
+        boxShadow: colors.shadow.card,
+        overflow: "hidden",
       }}
     >
       <DataGrid
@@ -45,36 +55,81 @@ export function SmartDataGrid({
         columns={baseColumns}
         loading={loading}
         localeText={esES.components.MuiDataGrid.defaultProps.localeText}
-        slots={{ toolbar: GridToolbar }} // Activa los botones de Exportar a Excel, Filtros y Vistas
+        slots={{
+          toolbar: hideToolbar ? undefined : GridToolbar,
+          noRowsOverlay: EmptyState,
+          noResultsOverlay: EmptyState,
+        }}
         disableRowSelectionOnClick
+        pageSizeOptions={[10, 25, 50, 100]}
+        initialState={{
+          pagination: {
+            paginationModel: {
+              pageSize: 10,
+            },
+          },
+        }}
         sx={{
-          border: `1px solid ${colors.border.light}`,
+          border: "none",
           color: colors.text.primary,
-          // Estilos Cyberpunk Sobrio para la Malla
+          bgcolor: colors.background.paper,
+
           "& .MuiDataGrid-cell": {
             borderColor: colors.border.light,
+            outline: "none",
           },
+
+          "& .MuiDataGrid-cell:focus, & .MuiDataGrid-cell:focus-within": {
+            outline: "none",
+          },
+
+          "& .MuiDataGrid-columnHeader:focus, & .MuiDataGrid-columnHeader:focus-within":
+            {
+              outline: "none",
+            },
+
           "& .MuiDataGrid-columnHeaders": {
             backgroundColor: colors.background.header,
             borderColor: colors.border.light,
             color: colors.text.secondary,
-            fontWeight: 800,
+            fontWeight: 900,
             textTransform: "uppercase",
-            fontSize: "0.85rem",
+            fontSize: "0.82rem",
           },
+
+          "& .MuiDataGrid-columnHeaderTitle": {
+            fontWeight: 900,
+          },
+
+          "& .MuiDataGrid-row:hover": {
+            backgroundColor: colors.action.hover,
+          },
+
+          "& .MuiDataGrid-row.Mui-selected": {
+            backgroundColor: colors.action.selected,
+          },
+
           "& .MuiDataGrid-footerContainer": {
             borderColor: colors.border.light,
             backgroundColor: colors.background.header,
           },
+
           "& .MuiDataGrid-toolbarContainer": {
-            padding: 1,
+            p: 1,
+            borderBottom: `1px solid ${colors.border.light}`,
+
             "& .MuiButton-root": {
               color: colors.primary.main,
+              fontWeight: 850,
             },
           },
-          // Color de hover para las filas
-          "& .MuiDataGrid-row:hover": {
-            backgroundColor: "rgba(0, 240, 255, 0.04)",
+
+          "& .MuiTablePagination-root": {
+            color: colors.text.secondary,
+          },
+
+          "& .MuiDataGrid-overlayWrapper": {
+            minHeight,
           },
         }}
       />

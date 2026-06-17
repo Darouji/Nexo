@@ -26,6 +26,8 @@ import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import SearchIcon from "@mui/icons-material/Search";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import type { GridColDef, GridValidRowModel } from "@mui/x-data-grid";
+import { PageHeader } from "../components/PageHeader";
+import { SectionCard } from "../components/SectionCard";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import { colors } from "../theme/colors";
 
@@ -488,79 +490,14 @@ export function PurchasesPage() {
 
   return (
     <Stack spacing={3}>
-      <Box
-        sx={{
-          position: "relative",
-          overflow: "hidden",
-          border: `1px solid ${colors.border.light}`,
-          borderRadius: colors.radius.xl,
-          p: { xs: 3, md: 4 },
-          background: `${colors.gradients.heroAccent}, ${colors.gradients.hero}`,
-          boxShadow: colors.shadow.elevated,
-        }}
-      >
-        <Box
-          sx={{
-            position: "absolute",
-            inset: 0,
-            backgroundImage: colors.gradients.subtlePattern,
-            backgroundSize: "44px 44px",
-            pointerEvents: "none",
-          }}
-        />
-
-        <Stack
-          direction={{ xs: "column", md: "row" }}
-          spacing={3}
-          sx={{
-            position: "relative",
-            zIndex: 1,
-            alignItems: { xs: "flex-start", md: "center" },
-            justifyContent: "space-between",
-          }}
-        >
-          <Box>
-            <Chip
-              label="Abastecimiento y egresos"
-              icon={<ReceiptLongIcon />}
-              variant="outlined"
-              size="small"
-              sx={{
-                mb: 2,
-                color: colors.modules.purchases.main,
-                bgcolor: colors.modules.purchases.soft,
-                borderColor: colors.modules.purchases.border,
-                fontWeight: 850,
-              }}
-            />
-
-            <Typography
-              variant="h3"
-              sx={{
-                color: colors.text.primary,
-                fontWeight: 950,
-                letterSpacing: "-0.05em",
-                mb: 1,
-              }}
-            >
-              Compras / Egresos
-            </Typography>
-
-            <Typography
-              variant="h6"
-              sx={{
-                color: colors.text.secondary,
-                maxWidth: 840,
-                lineHeight: 1.5,
-                fontWeight: 500,
-              }}
-            >
-              Vista preliminar para compras nacionales e internacionales, costos
-              reales, seguimiento logístico y recepción inventariable.
-            </Typography>
-          </Box>
-
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+      <PageHeader
+        title="Compras / Egresos"
+        subtitle="Vista preliminar para compras nacionales e internacionales, costos reales, seguimiento logístico y recepción inventariable."
+        eyebrow="Abastecimiento y egresos"
+        icon={<ReceiptLongIcon />}
+        tone={colors.modules.purchases}
+        actions={
+          <>
             <Button
               variant="contained"
               startIcon={<AddShoppingCartIcon />}
@@ -582,9 +519,9 @@ export function PurchasesPage() {
             >
               Adjuntar documento
             </Button>
-          </Stack>
-        </Stack>
-      </Box>
+          </>
+        }
+      />
 
       <Alert severity="info" variant="outlined">
         Este módulo sigue siendo frontend demostrativo: no guarda compras, no
@@ -636,140 +573,92 @@ export function PurchasesPage() {
         />
       </Box>
 
-      <Card
-        sx={{
-          bgcolor: colors.background.paper,
-          border: `1px solid ${colors.border.light}`,
-          boxShadow: colors.shadow.card,
-        }}
-      >
-        <CardContent>
-          <Stack spacing={2.5}>
-            <Stack
-              direction={{ xs: "column", lg: "row" }}
-              spacing={2}
-              sx={{
-                alignItems: { xs: "stretch", lg: "center" },
-                justifyContent: "space-between",
+      <SectionCard
+        title="Control preliminar de compras"
+        subtitle="Busca por proveedor, país, tipo, estado, seguimiento o impacto en inventario."
+        actions={
+          <>
+            <TextField
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar compras..."
+              size="small"
+              sx={{ minWidth: { xs: "100%", md: 280 } }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                },
               }}
+            />
+
+            <TextField
+              select
+              label="Estado"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              size="small"
+              sx={{ minWidth: { xs: "100%", md: 200 } }}
             >
-              <Box>
-                <Typography
-                  variant="h5"
-                  sx={{ color: colors.text.primary, fontWeight: 900 }}
-                >
-                  Control preliminar de compras
-                </Typography>
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="COTIZADA">Cotizada</MenuItem>
+              <MenuItem value="COMPRADA">Comprada</MenuItem>
+              <MenuItem value="EN_TRANSITO">En tránsito</MenuItem>
+              <MenuItem value="EN_ADUANA">En aduana</MenuItem>
+              <MenuItem value="RECIBIDA_PARCIAL">Recibida parcial</MenuItem>
+              <MenuItem value="RECIBIDA_COMPLETA">Recibida completa</MenuItem>
+              <MenuItem value="CERRADA">Cerrada</MenuItem>
+              <MenuItem value="ANULADA">Anulada</MenuItem>
+            </TextField>
 
-                <Typography variant="body2" sx={{ color: colors.text.muted }}>
-                  Busca por proveedor, país, tipo, estado, seguimiento o impacto
-                  en inventario.
-                </Typography>
-              </Box>
-
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                <TextField
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Buscar compras..."
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 280 } }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <TextField
-                  select
-                  label="Estado"
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 200 } }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="COTIZADA">Cotizada</MenuItem>
-                  <MenuItem value="COMPRADA">Comprada</MenuItem>
-                  <MenuItem value="EN_TRANSITO">En tránsito</MenuItem>
-                  <MenuItem value="EN_ADUANA">En aduana</MenuItem>
-                  <MenuItem value="RECIBIDA_PARCIAL">Recibida parcial</MenuItem>
-                  <MenuItem value="RECIBIDA_COMPLETA">
-                    Recibida completa
-                  </MenuItem>
-                  <MenuItem value="CERRADA">Cerrada</MenuItem>
-                  <MenuItem value="ANULADA">Anulada</MenuItem>
-                </TextField>
-
-                <TextField
-                  select
-                  label="Moneda"
-                  value={currencyFilter}
-                  onChange={(event) => setCurrencyFilter(event.target.value)}
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 135 } }}
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  <MenuItem value="CLP">CLP</MenuItem>
-                  <MenuItem value="USD">USD</MenuItem>
-                </TextField>
-              </Stack>
-            </Stack>
-
-            <SmartDataGrid rows={filteredPurchases} columns={columns} />
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Card
-        sx={{
-          bgcolor: colors.background.paper,
-          border: `1px solid ${colors.border.light}`,
-          boxShadow: colors.shadow.card,
-        }}
+            <TextField
+              select
+              label="Moneda"
+              value={currencyFilter}
+              onChange={(event) => setCurrencyFilter(event.target.value)}
+              size="small"
+              sx={{ minWidth: { xs: "100%", md: 135 } }}
+            >
+              <MenuItem value="">Todas</MenuItem>
+              <MenuItem value="CLP">CLP</MenuItem>
+              <MenuItem value="USD">USD</MenuItem>
+            </TextField>
+          </>
+        }
       >
-        <CardContent>
-          <Typography
-            variant="h6"
-            sx={{ color: colors.text.primary, fontWeight: 900, mb: 1 }}
-          >
-            Reglas visibles del módulo
+        <SmartDataGrid rows={filteredPurchases} columns={columns} />
+      </SectionCard>
+
+      <SectionCard title="Reglas visibles del módulo">
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "repeat(3, minmax(0, 1fr))",
+            },
+            gap: 2,
+          }}
+        >
+          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+            Las compras pueden ser nacionales o internacionales, inventariables
+            o no inventariables.
           </Typography>
 
-          <Divider sx={{ borderColor: colors.border.light, mb: 2 }} />
+          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+            Las compras en USD deben conservar el tipo de cambio usado al
+            momento del registro.
+          </Typography>
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "repeat(3, minmax(0, 1fr))",
-              },
-              gap: 2,
-            }}
-          >
-            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-              Las compras pueden ser nacionales o internacionales,
-              inventariables o no inventariables.
-            </Typography>
-
-            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-              Las compras en USD deben conservar el tipo de cambio usado al
-              momento del registro.
-            </Typography>
-
-            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-              El costo real considera proveedor, envío, aduana, impuestos y
-              otros costos operativos.
-            </Typography>
-          </Box>
-        </CardContent>
-      </Card>
+          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+            El costo real considera proveedor, envío, aduana, impuestos y otros
+            costos operativos.
+          </Typography>
+        </Box>
+      </SectionCard>
 
       <Dialog
         open={Boolean(selectedPurchase)}

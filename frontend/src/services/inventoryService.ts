@@ -54,6 +54,14 @@ export type KardexMovement = {
   stock_antes: number;
   stock_despues: number;
   motivo: string;
+  reference_content_type: number | null;
+  reference_object_id: string;
+  reference_repr: string;
+  reference: {
+    content_type: number | null;
+    object_id: string;
+    repr: string;
+  } | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -70,8 +78,7 @@ type ProductListResponse = Product[] | PaginatedResponse<Product>;
 type CategoryListResponse = Category[] | PaginatedResponse<Category>;
 type KardexListResponse = KardexMovement[] | PaginatedResponse<KardexMovement>;
 
-type KardexListParams = {
-  producto?: number;
+type CategoryListParams = {
   search?: string;
   ordering?: string;
 };
@@ -80,6 +87,22 @@ type ProductListParams = {
   search?: string;
   ordering?: string;
 };
+
+type KardexListParams = {
+  producto?: number;
+  movement_type?: string;
+  origin?: string;
+  status?: string;
+  search?: string;
+  ordering?: string;
+};
+
+export type CreateCategoryPayload = {
+  name: string;
+  description?: string;
+};
+
+export type UpdateCategoryPayload = Partial<CreateCategoryPayload>;
 
 export type CreateProductPayload = {
   categoria: number;
@@ -90,6 +113,8 @@ export type CreateProductPayload = {
   en_camino: number;
   controla_stock: boolean;
 };
+
+export type UpdateProductPayload = Partial<CreateProductPayload>;
 
 export type StockMovementPayload = {
   cantidad: number;
@@ -102,19 +127,6 @@ function extractResults<T>(data: T[] | PaginatedResponse<T>) {
   }
 
   return data.results ?? [];
-}
-
-export async function fetchCategories() {
-  const response = await api.get<CategoryListResponse>(
-    "/inventory/categorias/",
-    {
-      params: {
-        ordering: "name",
-      },
-    },
-  );
-
-  return extractResults(response.data);
 }
 
 function normalizeComparableText(value: string) {
@@ -144,13 +156,65 @@ function findCategoryByName(categories: Category[], name: string) {
   });
 }
 
-export async function createCategory(name: string) {
-  const response = await api.post<Category>("/inventory/categorias/", {
-    name: name.trim(),
-    description: "",
-  });
+export async function fetchCategories(params: CategoryListParams = {}) {
+  const response = await api.get<CategoryListResponse>(
+    "/inventory/categorias/",
+    {
+      params: {
+        search: params.search?.trim() || undefined,
+        ordering: params.ordering || "name",
+      },
+    },
+  );
+
+  return extractResults(response.data);
+}
+
+export async function fetchCategory(categoryId: number) {
+  const response = await api.get<Category>(
+    `/inventory/categorias/${categoryId}/`,
+  );
 
   return response.data;
+}
+
+export async function createCategory(payload: CreateCategoryPayload | string) {
+  const normalizedPayload =
+    typeof payload === "string"
+      ? {
+          name: payload.trim(),
+          description: "",
+        }
+      : {
+          name: payload.name.trim(),
+          description: payload.description?.trim() || "",
+        };
+
+  const response = await api.post<Category>(
+    "/inventory/categorias/",
+    normalizedPayload,
+  );
+
+  return response.data;
+}
+
+export async function updateCategory(
+  categoryId: number,
+  payload: UpdateCategoryPayload,
+) {
+  const response = await api.patch<Category>(
+    `/inventory/categorias/${categoryId}/`,
+    {
+      name: payload.name?.trim(),
+      description: payload.description?.trim(),
+    },
+  );
+
+  return response.data;
+}
+
+export async function inactivateCategory(categoryId: number) {
+  await api.delete(`/inventory/categorias/${categoryId}/`);
 }
 
 export async function ensureCategoryByName(
@@ -187,21 +251,40 @@ export async function ensureCategoryByName(
 }
 
 export async function fetchProducts(params: ProductListParams = {}) {
-  const normalizedParams = {
-    search: params.search?.trim() || undefined,
-    ordering: params.ordering || undefined,
-  };
-
   const response = await api.get<ProductListResponse>("/inventory/productos/", {
-    params: normalizedParams,
+    params: {
+      search: params.search?.trim() || undefined,
+      ordering: params.ordering || "categoria__name,modelo",
+    },
   });
 
   return extractResults(response.data);
 }
 
+export async function fetchProduct(productId: number) {
+  const response = await api.get<Product>(`/inventory/productos/${productId}/`);
+  return response.data;
+}
+
 export async function createProduct(payload: CreateProductPayload) {
   const response = await api.post<Product>("/inventory/productos/", payload);
   return response.data;
+}
+
+export async function updateProduct(
+  productId: number,
+  payload: UpdateProductPayload,
+) {
+  const response = await api.patch<Product>(
+    `/inventory/productos/${productId}/`,
+    payload,
+  );
+
+  return response.data;
+}
+
+export async function inactivateProduct(productId: number) {
+  await api.delete(`/inventory/productos/${productId}/`);
 }
 
 export async function registerManualStockEntry(
@@ -210,7 +293,10 @@ export async function registerManualStockEntry(
 ) {
   const response = await api.post<KardexMovement>(
     `/inventory/productos/${productId}/entrada-manual/`,
-    payload,
+    {
+      cantidad: payload.cantidad,
+      motivo: payload.motivo.trim(),
+    },
   );
 
   return response.data;
@@ -222,7 +308,10 @@ export async function registerInventoryAdjustment(
 ) {
   const response = await api.post<KardexMovement>(
     `/inventory/productos/${productId}/ajuste-inventario/`,
-    payload,
+    {
+      cantidad: payload.cantidad,
+      motivo: payload.motivo.trim(),
+    },
   );
 
   return response.data;
@@ -232,6 +321,9 @@ export async function fetchKardexMovements(params: KardexListParams = {}) {
   const response = await api.get<KardexListResponse>("/inventory/kardex/", {
     params: {
       producto: params.producto,
+      movement_type: params.movement_type || undefined,
+      origin: params.origin || undefined,
+      status: params.status || undefined,
       search: params.search?.trim() || undefined,
       ordering: params.ordering || "-created_at",
     },

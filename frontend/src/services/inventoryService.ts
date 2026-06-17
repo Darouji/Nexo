@@ -83,9 +83,17 @@ type CategoryListParams = {
   ordering?: string;
 };
 
-type ProductListParams = {
+type CsvParam<T extends string | number> = T | T[];
+
+export type ProductListParams = {
   search?: string;
   ordering?: string;
+  categoria?: CsvParam<number>;
+  category?: CsvParam<number>;
+  status?: CsvParam<string>;
+  controla_stock?: boolean;
+  stock_status?: CsvParam<ProductStockStatus>;
+  stock_critico?: boolean;
 };
 
 type KardexListParams = {
@@ -127,6 +135,27 @@ function extractResults<T>(data: T[] | PaginatedResponse<T>) {
   }
 
   return data.results ?? [];
+}
+
+function toCsv<T extends string | number>(value?: CsvParam<T>) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    const cleanValues = value.filter((item) => item !== "" && item !== null);
+    return cleanValues.length > 0 ? cleanValues.join(",") : undefined;
+  }
+
+  return value;
+}
+
+function toBooleanParam(value?: boolean) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value ? "true" : "false";
 }
 
 function normalizeComparableText(value: string) {
@@ -255,6 +284,12 @@ export async function fetchProducts(params: ProductListParams = {}) {
     params: {
       search: params.search?.trim() || undefined,
       ordering: params.ordering || "categoria__name,modelo",
+      categoria: toCsv(params.categoria),
+      category: toCsv(params.category),
+      status: toCsv(params.status),
+      controla_stock: toBooleanParam(params.controla_stock),
+      stock_status: toCsv(params.stock_status),
+      stock_critico: toBooleanParam(params.stock_critico),
     },
   });
 

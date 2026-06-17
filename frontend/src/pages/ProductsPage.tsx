@@ -13,6 +13,7 @@ import {
   DialogTitle,
   FormControlLabel,
   InputAdornment,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -51,6 +52,7 @@ import type {
   CreateProductPayload,
   KardexMovement,
   Product,
+  ProductListParams,
   ProductStockStatus,
 } from "../services/inventoryService";
 import { colors } from "../theme/colors";
@@ -172,6 +174,18 @@ function parseInteger(value: string, fallback = 0) {
   return parsed;
 }
 
+function parseOptionalBoolean(value: string) {
+  if (value === "true") {
+    return true;
+  }
+
+  if (value === "false") {
+    return false;
+  }
+
+  return undefined;
+}
+
 function categoryExistsVisually(categories: Category[], name: string) {
   const normalizedName = name.trim().toLowerCase();
 
@@ -188,6 +202,10 @@ export function ProductsPage() {
   const [productos, setProductos] = useState<Product[]>([]);
   const [categorias, setCategorias] = useState<Category[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ACTIVO");
+  const [stockControlFilter, setStockControlFilter] = useState("");
+  const [stockStatusFilter, setStockStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingMovement, setSavingMovement] = useState(false);
@@ -205,22 +223,86 @@ export function ProductsPage() {
     useState<MovementDialogState>(emptyMovementDialog);
   const [kardexDialog, setKardexDialog] =
     useState<KardexDialogState>(emptyKardexDialog);
+  const [globalKardexMovements, setGlobalKardexMovements] = useState<
+    KardexMovement[]
+  >([]);
+  const [globalKardexLoading, setGlobalKardexLoading] = useState(true);
+  const [globalKardexSearchTerm, setGlobalKardexSearchTerm] = useState("");
+  const [globalKardexMovementType, setGlobalKardexMovementType] = useState("");
+  const [globalKardexOrigin, setGlobalKardexOrigin] = useState("");
 
-  const loadProducts = async (search = searchTerm) => {
+  type ProductFilterOverrides = {
+    search?: string;
+    category?: string;
+    status?: string;
+    stockControl?: string;
+    stockStatus?: string;
+  };
+
+  const loadProducts = async (
+    searchOrFilters: string | ProductFilterOverrides = searchTerm,
+  ) => {
+    const filters =
+      typeof searchOrFilters === "string"
+        ? { search: searchOrFilters }
+        : searchOrFilters;
+
+    const resolvedSearch = filters.search ?? searchTerm;
+    const resolvedCategory = filters.category ?? categoryFilter;
+    const resolvedStatus = filters.status ?? statusFilter;
+    const resolvedStockControl = filters.stockControl ?? stockControlFilter;
+    const resolvedStockStatus = filters.stockStatus ?? stockStatusFilter;
+
+    const params: ProductListParams = {
+      search: resolvedSearch,
+      ordering: "categoria__name,modelo",
+      categoria: resolvedCategory ? Number(resolvedCategory) : undefined,
+      status: resolvedStatus || undefined,
+      controla_stock: parseOptionalBoolean(resolvedStockControl),
+      stock_status: resolvedStockStatus || undefined,
+    };
+
     try {
       setLoading(true);
       setErrorMessage("");
 
-      const data = await fetchProducts({
-        search,
-        ordering: "categoria__name,modelo",
-      });
+      const data = await fetchProducts(params);
 
       setProductos(data);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadGlobalKardex = async (
+    filters: {
+      search?: string;
+      movementType?: string;
+      origin?: string;
+    } = {},
+  ) => {
+    const search = filters.search ?? globalKardexSearchTerm;
+    const movementType = filters.movementType ?? globalKardexMovementType;
+    const origin = filters.origin ?? globalKardexOrigin;
+
+    try {
+      setGlobalKardexLoading(true);
+      setErrorMessage("");
+
+      const movements = await fetchKardexMovements({
+        search,
+        movement_type: movementType,
+        origin,
+        ordering: "-created_at",
+      });
+
+      setGlobalKardexMovements(movements);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setGlobalKardexLoading(false);
     }
   };
 
@@ -231,14 +313,19 @@ export function ProductsPage() {
       fetchProducts({
         search: "",
         ordering: "categoria__name,modelo",
+        status: "ACTIVO",
       }),
       fetchCategories(),
+      fetchKardexMovements({
+        ordering: "-created_at",
+      }),
     ])
-      .then(([productsData, categoriesData]) => {
+      .then(([productsData, categoriesData, kardexData]) => {
         if (!isMounted) return;
 
         setProductos(productsData);
         setCategorias(categoriesData);
+        setGlobalKardexMovements(kardexData);
         setErrorMessage("");
       })
       .catch((error: unknown) => {
@@ -250,6 +337,7 @@ export function ProductsPage() {
         if (!isMounted) return;
 
         setLoading(false);
+        setGlobalKardexLoading(false);
       });
 
     return () => {
@@ -358,6 +446,8 @@ export function ProductsPage() {
       setEditingProduct(null);
       setProductForm(emptyProductForm);
       await loadProducts(editingProduct ? searchTerm : "");
+      await loadGlobalKardex();
+
       if (!editingProduct) {
         setSearchTerm("");
       }
@@ -478,6 +568,7 @@ export function ProductsPage() {
       setSuccessMessage("Movimiento Kardex registrado correctamente.");
       closeMovementDialog();
       await loadProducts(searchTerm);
+      await loadGlobalKardex();
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -846,53 +937,122 @@ export function ProductsPage() {
         title="Búsqueda y filtros"
         subtitle="Busca por modelo, categoría, detalle o código SAP."
       >
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-          <TextField
-            label="Buscar producto"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void loadProducts(searchTerm);
-              }
-            }}
-            fullWidth
-            placeholder="Modelo, categoría, detalle o código SAP"
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: colors.text.muted }} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
+        <Stack spacing={1.5}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+            <TextField
+              label="Buscar producto"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void loadProducts();
+                }
+              }}
+              fullWidth
+              placeholder="Modelo, categoría, detalle o código SAP"
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: colors.text.muted }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
 
-          <Button
-            variant="contained"
-            onClick={() => void loadProducts(searchTerm)}
-            disabled={loading}
-            sx={{ minWidth: { xs: "100%", md: 140 } }}
-          >
-            Buscar
-          </Button>
+            <Button
+              variant="contained"
+              onClick={() => void loadProducts()}
+              disabled={loading}
+              sx={{ minWidth: { xs: "100%", md: 140 } }}
+            >
+              Buscar
+            </Button>
 
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setSearchTerm("");
-              void loadProducts("");
-            }}
-            disabled={loading}
-            sx={{
-              minWidth: { xs: "100%", md: 120 },
-              color: colors.text.primary,
-              borderColor: colors.border.medium,
-            }}
-          >
-            Limpiar
-          </Button>
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setSearchTerm("");
+                setCategoryFilter("");
+                setStatusFilter("ACTIVO");
+                setStockControlFilter("");
+                setStockStatusFilter("");
+
+                void loadProducts({
+                  search: "",
+                  category: "",
+                  status: "ACTIVO",
+                  stockControl: "",
+                  stockStatus: "",
+                });
+              }}
+              disabled={loading}
+              sx={{
+                minWidth: { xs: "100%", md: 120 },
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+            >
+              Limpiar
+            </Button>
+          </Stack>
+
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+            <TextField
+              select
+              label="Categoría"
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {categorias.map((category) => (
+                <MenuItem key={category.id} value={String(category.id)}>
+                  {category.name}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <TextField
+              select
+              label="Estado registro"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="ACTIVO">Activo</MenuItem>
+              <MenuItem value="INACTIVO">Inactivo</MenuItem>
+              <MenuItem value="ANULADO">Anulado</MenuItem>
+              <MenuItem value="ARCHIVADO">Archivado</MenuItem>
+            </TextField>
+
+            <TextField
+              select
+              label="Control stock"
+              value={stockControlFilter}
+              onChange={(event) => setStockControlFilter(event.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="true">Controla stock</MenuItem>
+              <MenuItem value="false">No controla stock</MenuItem>
+            </TextField>
+
+            <TextField
+              select
+              label="Estado stock"
+              value={stockStatusFilter}
+              onChange={(event) => setStockStatusFilter(event.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="OK">Stock correcto</MenuItem>
+              <MenuItem value="STOCK_CRITICO">Stock crítico</MenuItem>
+              <MenuItem value="NO_CONTROLA_STOCK">No controla stock</MenuItem>
+            </TextField>
+          </Stack>
         </Stack>
       </SectionCard>
 
@@ -913,6 +1073,111 @@ export function ProductsPage() {
         subtitle="Stock actual, stock crítico, productos en camino, control de Kardex y acciones operativas."
       >
         <SmartDataGrid rows={productos} columns={columns} loading={loading} />
+      </SectionCard>
+
+      <SectionCard
+        title="Kardex global"
+        subtitle="Historial auditado de todos los movimientos de stock del sistema."
+      >
+        <Stack
+          direction={{ xs: "column", lg: "row" }}
+          spacing={1.5}
+          sx={{ mb: 2 }}
+        >
+          <TextField
+            label="Buscar movimiento"
+            value={globalKardexSearchTerm}
+            onChange={(event) => setGlobalKardexSearchTerm(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                void loadGlobalKardex();
+              }
+            }}
+            fullWidth
+            placeholder="Producto, código SAP, motivo, referencia u operador"
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: colors.text.muted }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+
+          <TextField
+            select
+            label="Movimiento"
+            value={globalKardexMovementType}
+            onChange={(event) =>
+              setGlobalKardexMovementType(event.target.value)
+            }
+            sx={{ minWidth: { xs: "100%", lg: 230 } }}
+          >
+            <MenuItem value="">Todos</MenuItem>
+            <MenuItem value="ENTRADA_MANUAL">Entrada manual</MenuItem>
+            <MenuItem value="AJUSTE_INVENTARIO">Ajuste de inventario</MenuItem>
+            <MenuItem value="SALIDA_VENTA">Salida por venta</MenuItem>
+            <MenuItem value="REVERSA_ANULACION">Reversa por anulación</MenuItem>
+            <MenuItem value="ENTRADA_IMPORTACION">
+              Entrada por importación
+            </MenuItem>
+          </TextField>
+
+          <TextField
+            select
+            label="Origen"
+            value={globalKardexOrigin}
+            onChange={(event) => setGlobalKardexOrigin(event.target.value)}
+            sx={{ minWidth: { xs: "100%", lg: 190 } }}
+          >
+            <MenuItem value="">Todos</MenuItem>
+            <MenuItem value="MANUAL">Manual</MenuItem>
+            <MenuItem value="AUTOMATICO">Automático</MenuItem>
+            <MenuItem value="API">API</MenuItem>
+            <MenuItem value="IMPORTACION_EXCEL">Importación Excel</MenuItem>
+            <MenuItem value="SISTEMA">Sistema</MenuItem>
+          </TextField>
+
+          <Button
+            variant="contained"
+            onClick={() => void loadGlobalKardex()}
+            disabled={globalKardexLoading}
+            sx={{ minWidth: { xs: "100%", lg: 140 } }}
+          >
+            Buscar
+          </Button>
+
+          <Button
+            variant="outlined"
+            disabled={globalKardexLoading}
+            onClick={() => {
+              setGlobalKardexSearchTerm("");
+              setGlobalKardexMovementType("");
+              setGlobalKardexOrigin("");
+
+              void loadGlobalKardex({
+                search: "",
+                movementType: "",
+                origin: "",
+              });
+            }}
+            sx={{
+              minWidth: { xs: "100%", lg: 120 },
+              color: colors.text.primary,
+              borderColor: colors.border.medium,
+            }}
+          >
+            Limpiar
+          </Button>
+        </Stack>
+
+        <SmartDataGrid
+          rows={globalKardexMovements}
+          columns={kardexColumns}
+          loading={globalKardexLoading}
+        />
       </SectionCard>
 
       <Dialog

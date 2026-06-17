@@ -1,4 +1,5 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import F, Q
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -9,6 +10,7 @@ from apps.accounts.permissions import (
     IsConsultaOrOperativoGlobal,
     IsOperativoGlobal,
 )
+from apps.core.models import BaseStatus
 
 from .models import Categoria, MovimientoKardex, Producto
 from .serializers import (
@@ -29,6 +31,61 @@ def raise_drf_validation_error(error):
         raise DRFValidationError(error.messages)
 
     raise DRFValidationError(str(error))
+
+
+def split_csv_param(value):
+    if not value:
+        return []
+
+    return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def parse_bool_param(value, param_name):
+    if value is None or value == "":
+        return None
+
+    normalized_value = str(value).strip().lower()
+
+    if normalized_value in ["1", "true", "yes", "si", "sí"]:
+        return True
+
+    if normalized_value in ["0", "false", "no"]:
+        return False
+
+    raise DRFValidationError(
+        {param_name: "Valor booleano inválido. Use true/false, 1/0 o sí/no."}
+    )
+
+
+def validate_choice_values(values, allowed_values, param_name):
+    invalid_values = [value for value in values if value not in allowed_values]
+
+    if invalid_values:
+        raise DRFValidationError(
+            {
+                param_name: (
+                    "Valor no permitido. "
+                    f"Valores inválidos: {', '.join(invalid_values)}."
+                )
+            }
+        )
+
+    return values
+
+
+def parse_id_values(value, param_name):
+    values = split_csv_param(value)
+    ids = []
+
+    for value in values:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            raise DRFValidationError(
+                {param_name: "Debe enviar IDs numéricos separados por coma."}
+            )
+
+    return ids
 
 
 class InventoryPermissionMixin:
@@ -88,6 +145,80 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         "updated_at",
     ]
     ordering = ["categoria__name", "modelo"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+
+        category_ids = parse_id_values(
+            params.get("categoria") or params.get("category"),
+            "categoria",
+        )
+        if category_ids:
+            queryset = queryset.filter(categoria_id__in=category_ids)
+
+        status_values = validate_choice_values(
+            split_csv_param(params.get("status")),
+            {choice[0] for choice in BaseStatus.choices},
+            "status",
+        )
+        if status_values:
+            queryset = queryset.filter(status__in=status_values)
+
+        controla_stock = parse_bool_param(
+            params.get("controla_stock"),
+            "controla_stock",
+        )
+        if controla_stock is not None:
+            queryset = queryset.filter(controla_stock=controla_stock)
+
+        stock_status_values = validate_choice_values(
+            split_csv_param(params.get("stock_status")),
+            {"OK", "STOCK_CRITICO", "NO_CONTROLA_STOCK"},
+            "stock_status",
+        )
+
+        if stock_status_values:
+            stock_status_query = None
+
+            for stock_status in stock_status_values:
+                if stock_status == "OK":
+                    condition = Q(
+                        controla_stock=True,
+                        stock_actual__gt=F("stock_critico"),
+                    )
+                elif stock_status == "STOCK_CRITICO":
+                    condition = Q(
+                        controla_stock=True,
+                        stock_actual__lte=F("stock_critico"),
+                    )
+                else:
+                    condition = Q(controla_stock=False)
+
+                stock_status_query = (
+                    condition
+                    if stock_status_query is None
+                    else stock_status_query | condition
+                )
+
+            queryset = queryset.filter(stock_status_query)
+
+        stock_critico = parse_bool_param(
+            params.get("stock_critico"),
+            "stock_critico",
+        )
+        if stock_critico is True:
+            queryset = queryset.filter(
+                controla_stock=True,
+                stock_actual__lte=F("stock_critico"),
+            )
+        elif stock_critico is False:
+            queryset = queryset.exclude(
+                controla_stock=True,
+                stock_actual__lte=F("stock_critico"),
+            )
+
+        return queryset
 
     @action(detail=True, methods=["post"], url_path="entrada-manual")
     def entrada_manual(self, request, pk=None):

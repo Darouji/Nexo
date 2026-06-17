@@ -26,7 +26,10 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import CategoryIcon from "@mui/icons-material/Category";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteIcon from "@mui/icons-material/Delete";
 import type { GridColDef } from "@mui/x-data-grid";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { MetricCard } from "../components/MetricCard";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
@@ -38,8 +41,10 @@ import {
   fetchCategories,
   fetchKardexMovements,
   fetchProducts,
+  inactivateProduct,
   registerInventoryAdjustment,
   registerManualStockEntry,
+  updateProduct,
 } from "../services/inventoryService";
 import type {
   Category,
@@ -189,6 +194,10 @@ export function ProductsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productToInactivate, setProductToInactivate] =
+    useState<Product | null>(null);
+  const [inactivatingProduct, setInactivatingProduct] = useState(false);
 
   const [productForm, setProductForm] =
     useState<ProductFormState>(emptyProductForm);
@@ -262,13 +271,42 @@ export function ProductsPage() {
   );
 
   const handleOpenCreateProduct = () => {
+    setEditingProduct(null);
     setProductForm(emptyProductForm);
     setProductDialogOpen(true);
     setErrorMessage("");
     setSuccessMessage("");
   };
 
-  const handleCreateProduct = async () => {
+  const handleOpenEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setProductForm({
+      categoria_name: product.categoria_name || "",
+      modelo: product.modelo || "",
+      detalle: product.detalle || "",
+      codigo_sap: product.codigo_sap || "",
+      stock_critico: String(product.stock_critico ?? 0),
+      en_camino: String(product.en_camino ?? 0),
+      controla_stock: product.controla_stock,
+      initial_stock: "0",
+      initial_stock_motivo: "Stock inicial registrado desde frontend.",
+    });
+    setProductDialogOpen(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const handleCloseProductDialog = () => {
+    if (savingProduct) {
+      return;
+    }
+
+    setProductDialogOpen(false);
+    setEditingProduct(null);
+    setProductForm(emptyProductForm);
+  };
+
+  const handleSaveProduct = async () => {
     try {
       setSavingProduct(true);
       setErrorMessage("");
@@ -289,32 +327,68 @@ export function ProductsPage() {
         controla_stock: productForm.controla_stock,
       };
 
-      const createdProduct = await createProduct(payload);
-      const initialStock = parseInteger(productForm.initial_stock);
+      if (editingProduct) {
+        await updateProduct(editingProduct.id, payload);
 
-      if (payload.controla_stock && initialStock > 0) {
-        await registerManualStockEntry(createdProduct.id, {
-          cantidad: initialStock,
-          motivo:
-            productForm.initial_stock_motivo.trim() ||
-            "Stock inicial registrado desde frontend.",
-        });
+        setSuccessMessage(
+          `Producto "${payload.modelo}" actualizado correctamente.`,
+        );
+      } else {
+        const createdProduct = await createProduct(payload);
+        const initialStock = parseInteger(productForm.initial_stock);
+
+        if (payload.controla_stock && initialStock > 0) {
+          await registerManualStockEntry(createdProduct.id, {
+            cantidad: initialStock,
+            motivo:
+              productForm.initial_stock_motivo.trim() ||
+              "Stock inicial registrado desde frontend.",
+          });
+        }
+
+        setSuccessMessage(
+          `Producto creado correctamente en la categoría "${category.name}".`,
+        );
       }
 
       const updatedCategories = await fetchCategories();
       setCategorias(updatedCategories);
 
       setProductDialogOpen(false);
+      setEditingProduct(null);
       setProductForm(emptyProductForm);
-      setSuccessMessage(
-        `Producto creado correctamente en la categoría "${category.name}".`,
-      );
-      await loadProducts("");
-      setSearchTerm("");
+      await loadProducts(editingProduct ? searchTerm : "");
+      if (!editingProduct) {
+        setSearchTerm("");
+      }
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setSavingProduct(false);
+    }
+  };
+
+  const handleInactivateProduct = async () => {
+    if (!productToInactivate) {
+      return;
+    }
+
+    try {
+      setInactivatingProduct(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      await inactivateProduct(productToInactivate.id);
+
+      setSuccessMessage(
+        `Producto "${productToInactivate.modelo}" inactivado correctamente.`,
+      );
+      setProductToInactivate(null);
+      await loadProducts(searchTerm);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setInactivatingProduct(false);
     }
   };
 
@@ -526,7 +600,7 @@ export function ProductsPage() {
     {
       field: "actions",
       headerName: "Acciones",
-      width: 365,
+      width: 560,
       sortable: false,
       filterable: false,
       renderCell: (params) => {
@@ -535,6 +609,14 @@ export function ProductsPage() {
 
         return (
           <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => handleOpenEditProduct(product)}
+            >
+              Editar
+            </Button>
             <Button
               size="small"
               variant="outlined"
@@ -562,6 +644,23 @@ export function ProductsPage() {
               onClick={() => void openKardexDialog(product)}
             >
               Kardex
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<DeleteIcon />}
+              disabled={product.status !== "ACTIVO"}
+              onClick={() => setProductToInactivate(product)}
+              sx={{
+                color: colors.status.error,
+                borderColor: colors.status.error,
+                "&:hover": {
+                  bgcolor: colors.status.errorSoft,
+                  borderColor: colors.status.error,
+                },
+              }}
+            >
+              Inactivar
             </Button>
           </Stack>
         );
@@ -818,11 +917,13 @@ export function ProductsPage() {
 
       <Dialog
         open={productDialogOpen}
-        onClose={() => setProductDialogOpen(false)}
+        onClose={handleCloseProductDialog}
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Nuevo producto</DialogTitle>
+        <DialogTitle>
+          {editingProduct ? "Editar producto" : "Nuevo producto"}
+        </DialogTitle>
 
         <DialogContent>
           <Stack spacing={2.2} sx={{ mt: 1 }}>
@@ -969,7 +1070,7 @@ export function ProductsPage() {
               label="Este producto controla stock y genera Kardex"
             />
 
-            {productForm.controla_stock ? (
+            {productForm.controla_stock && !editingProduct ? (
               <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
                 <TextField
                   label="Stock inicial"
@@ -1002,18 +1103,22 @@ export function ProductsPage() {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setProductDialogOpen(false)}>Cancelar</Button>
+          <Button onClick={handleCloseProductDialog}>Cancelar</Button>
 
           <Button
             variant="contained"
-            onClick={() => void handleCreateProduct()}
+            onClick={() => void handleSaveProduct()}
             disabled={
               savingProduct ||
               !productForm.categoria_name.trim() ||
               !productForm.modelo.trim()
             }
           >
-            {savingProduct ? "Guardando..." : "Crear producto"}
+            {savingProduct
+              ? "Guardando..."
+              : editingProduct
+                ? "Guardar cambios"
+                : "Crear producto"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1131,6 +1236,25 @@ export function ProductsPage() {
           <Button onClick={closeKardexDialog}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(productToInactivate)}
+        title="Inactivar producto"
+        description={
+          productToInactivate
+            ? `El producto "${productToInactivate.modelo}" quedará inactivo. No se eliminará físicamente y su historial Kardex seguirá disponible.`
+            : undefined
+        }
+        confirmLabel="Inactivar"
+        destructive
+        loading={inactivatingProduct}
+        onClose={() => {
+          if (!inactivatingProduct) {
+            setProductToInactivate(null);
+          }
+        }}
+        onConfirm={() => void handleInactivateProduct()}
+      />
     </Box>
   );
 }

@@ -65,6 +65,10 @@ const palettes = {
         inverse: "#0B0F16",
       },
 
+      brand: {
+        serkanBlue: "#001034",
+      },
+
       primary: {
         main: "#5B7CFA",
         hover: "#6F8DFF",
@@ -219,6 +223,10 @@ const palettes = {
         secondary: "rgba(0, 0, 0, 0.70)",
         muted: "rgba(0, 0, 0, 0.54)",
         inverse: "#FFFFFF",
+      },
+
+      brand: {
+        serkanBlue: "#001034",
       },
 
       primary: {

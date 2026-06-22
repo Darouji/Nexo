@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { BrandLogo } from "../components/BrandLogo";
 import type { ReactNode, SyntheticEvent } from "react";
 import {
   AppBar,
@@ -20,7 +21,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import BusinessIcon from "@mui/icons-material/Business";
 import CloseIcon from "@mui/icons-material/Close";
@@ -477,47 +477,7 @@ function SidebarContent({
           borderBottom: `1px solid ${colors.border.light}`,
         }}
       >
-        <Stack direction="row" spacing={1.4} sx={{ alignItems: "center" }}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              display: "grid",
-              placeItems: "center",
-              borderRadius: colors.radius.md,
-              color: colors.primary.main,
-              bgcolor: colors.primary.soft,
-              border: `1px solid ${colors.primary.border}`,
-            }}
-          >
-            <AdminPanelSettingsIcon />
-          </Box>
-
-          <Box>
-            <Typography
-              variant="h5"
-              sx={{
-                color: colors.text.primary,
-                fontWeight: 950,
-                letterSpacing: "0.02em",
-                lineHeight: 1,
-              }}
-            >
-              SERKAN
-            </Typography>
-
-            <Typography
-              variant="caption"
-              sx={{
-                color: colors.primary.main,
-                fontWeight: 850,
-                letterSpacing: "0.09em",
-              }}
-            >
-              V2 CONTROL OPERATIVO
-            </Typography>
-          </Box>
-        </Stack>
+        <BrandLogo height={46} maxWidth={180} subtitle="V2 CONTROL OPERATIVO" />
       </Box>
 
       <Box sx={{ px: 1.4, py: 1.4, flex: 1, overflowY: "auto" }}>
@@ -747,29 +707,11 @@ function HorizontalLayout({
       >
         <Toolbar sx={{ justifyContent: "space-between", py: 1, px: 3, gap: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <Box>
-              <Typography
-                variant="h5"
-                sx={{
-                  fontWeight: 900,
-                  color: colors.text.primary,
-                  letterSpacing: "0.5px",
-                }}
-              >
-                SERKAN
-              </Typography>
-
-              <Typography
-                variant="caption"
-                sx={{
-                  color: colors.primary.main,
-                  fontWeight: 700,
-                  letterSpacing: "0.09em",
-                }}
-              >
-                V2 // CONTROL OPERATIVO
-              </Typography>
-            </Box>
+            <BrandLogo
+              height={42}
+              maxWidth={170}
+              subtitle="V2 // CONTROL OPERATIVO"
+            />
           </Box>
 
           <Stack

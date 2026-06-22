@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BrandLogo } from "../components/BrandLogo";
 import type { ReactNode, SyntheticEvent } from "react";
 import {
   Alert,
@@ -179,8 +180,14 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 }}
               >
                 <Box>
+                  <BrandLogo
+                    height={76}
+                    maxWidth={280}
+                    subtitle="CONTROL OPERATIVO"
+                    sx={{ mb: 2.5 }}
+                  />
                   <Chip
-                    label="SERKAN V2 // CONTROL OPERATIVO"
+                    label="ACCESO SEGURO"
                     icon={<ShieldOutlinedIcon />}
                     variant="outlined"
                     sx={{

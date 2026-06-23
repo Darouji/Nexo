@@ -4,7 +4,6 @@ from rest_framework import serializers
 
 from .models import (
     Categoria,
-    KardexMovementType,
     MovimientoKardex,
     PendientePorRecibir,
     Producto,
@@ -33,7 +32,10 @@ class CategoriaSerializer(serializers.ModelSerializer):
 
 
 class ProductoSerializer(serializers.ModelSerializer):
-    categoria_name = serializers.CharField(source="categoria.name", read_only=True)
+    categoria_name = serializers.CharField(
+        source="categoria.name",
+        read_only=True,
+    )
     stock = serializers.SerializerMethodField()
     por_recibir = serializers.SerializerMethodField()
     stock_inicial = serializers.IntegerField(
@@ -94,70 +96,68 @@ class ProductoSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate(self, attrs):
+        initial_stock = attrs.get("stock_inicial", 0)
 
-def validate(self, attrs):
-    initial_stock = attrs.get("stock_inicial", 0)
-
-    controla_stock = attrs.get(
-        "controla_stock",
-        self.instance.controla_stock if self.instance else True,
-    )
-
-    if self.instance and "stock_inicial" in self.initial_data:
-        raise serializers.ValidationError(
-            {
-                "stock_inicial": (
-                    "El stock inicial solo se puede registrar al crear un producto. "
-                    "Para cambios posteriores use Gestionar inventario."
-                )
-            }
+        controla_stock = attrs.get(
+            "controla_stock",
+            self.instance.controla_stock if self.instance else True,
         )
 
-    if initial_stock > 0 and not controla_stock:
-        raise serializers.ValidationError(
-            {
-                "stock_inicial": (
-                    "Un producto que no maneja inventario no puede tener stock inicial."
-                )
-            }
-        )
-
-    if initial_stock > 0 and not attrs.get("motivo_stock_inicial", "").strip():
-        raise serializers.ValidationError(
-            {
-                "motivo_stock_inicial": (
-                    "El motivo del stock inicial es obligatorio cuando la cantidad "
-                    "es mayor a cero."
-                )
-            }
-        )
-
-    return attrs
-
-
-def create(self, validated_data):
-    initial_stock = validated_data.pop("stock_inicial", 0)
-
-    initial_stock_reason = validated_data.pop(
-        "motivo_stock_inicial",
-        "",
-    ).strip()
-
-    request = self.context.get("request")
-    user = request.user if request and request.user.is_authenticated else None
-
-    with transaction.atomic():
-        product = Producto.objects.create(**validated_data)
-
-        if initial_stock > 0:
-            register_manual_entry(
-                producto=product,
-                cantidad=initial_stock,
-                motivo=initial_stock_reason,
-                user=user,
+        if self.instance and "stock_inicial" in self.initial_data:
+            raise serializers.ValidationError(
+                {
+                    "stock_inicial": (
+                        "El stock inicial solo se puede registrar al crear un producto. "
+                        "Para cambios posteriores use Gestionar inventario."
+                    )
+                }
             )
 
-    return product
+        if initial_stock > 0 and not controla_stock:
+            raise serializers.ValidationError(
+                {
+                    "stock_inicial": (
+                        "Un producto que no maneja inventario no puede tener stock inicial."
+                    )
+                }
+            )
+
+        if initial_stock > 0 and not attrs.get("motivo_stock_inicial", "").strip():
+            raise serializers.ValidationError(
+                {
+                    "motivo_stock_inicial": (
+                        "El motivo del stock inicial es obligatorio cuando la cantidad "
+                        "es mayor a cero."
+                    )
+                }
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        initial_stock = validated_data.pop("stock_inicial", 0)
+
+        initial_stock_reason = validated_data.pop(
+            "motivo_stock_inicial",
+            "",
+        ).strip()
+
+        request = self.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+
+        with transaction.atomic():
+            product = Producto.objects.create(**validated_data)
+
+            if initial_stock > 0:
+                register_manual_entry(
+                    producto=product,
+                    cantidad=initial_stock,
+                    motivo=initial_stock_reason,
+                    user=user,
+                )
+
+        return product
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_stock(self, obj):
@@ -168,12 +168,12 @@ def create(self, validated_data):
         if hasattr(obj, "por_recibir_total"):
             return obj.por_recibir_total
 
-    return sum(
-        pendiente.cantidad_pendiente
-        for pendiente in obj.pendientes_por_recibir.filter(
-            estado__in=["PENDIENTE", "PARCIAL"]
+        return sum(
+            pendiente.cantidad_pendiente
+            for pendiente in obj.pendientes_por_recibir.filter(
+                estado__in=["PENDIENTE", "PARCIAL"]
+            )
         )
-    )
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_stock_status(self, obj):

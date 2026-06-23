@@ -268,6 +268,15 @@ class Producto(BaseModel):
                     or has_kardex
                     or has_open_pending_receipts
                 ):
+                    raise ValidationError(
+                        {
+                            "controla_stock": (
+                                "No se puede desactivar el manejo de inventario si el producto "
+                                "tiene stock físico, movimientos Kardex o unidades pendientes "
+                                "por recibir."
+                            )
+                        }
+                    )
 
     def save(self, *args, **kwargs):
         self.modelo_normalized = normalize_text(self.modelo)
@@ -326,8 +335,7 @@ class PendientePorRecibir(BaseModel):
             models.CheckConstraint(
                 condition=models.Q(
                     cantidad_recibida__lte=(
-                        models.F("cantidad_original")
-                        - models.F("cantidad_cancelada")
+                        models.F("cantidad_original") - models.F("cantidad_cancelada")
                     )
                 ),
                 name="pending_receipt_quantities_do_not_exceed_original",
@@ -342,11 +350,7 @@ class PendientePorRecibir(BaseModel):
 
     @property
     def cantidad_pendiente(self):
-        return (
-            self.cantidad_original
-            - self.cantidad_recibida
-            - self.cantidad_cancelada
-        )
+        return self.cantidad_original - self.cantidad_recibida - self.cantidad_cancelada
 
     def calcular_estado(self):
         if self.cantidad_pendiente > 0:
@@ -367,9 +371,7 @@ class PendientePorRecibir(BaseModel):
         super().clean()
 
         if not self.producto_id:
-            raise ValidationError(
-                {"producto": "El producto es obligatorio."}
-            )
+            raise ValidationError({"producto": "El producto es obligatorio."})
 
         if self.producto_id and not self.producto.controla_stock:
             raise ValidationError(
@@ -383,17 +385,10 @@ class PendientePorRecibir(BaseModel):
 
         if self.cantidad_original <= 0:
             raise ValidationError(
-                {
-                    "cantidad_original": (
-                        "La cantidad original debe ser positiva."
-                    )
-                }
+                {"cantidad_original": ("La cantidad original debe ser positiva.")}
             )
 
-        if (
-            self.cantidad_recibida + self.cantidad_cancelada
-            > self.cantidad_original
-        ):
+        if self.cantidad_recibida + self.cantidad_cancelada > self.cantidad_original:
             raise ValidationError(
                 {
                     "cantidad_recibida": (
@@ -420,9 +415,7 @@ class PendientePorRecibir(BaseModel):
         update_fields = kwargs.get("update_fields")
 
         if update_fields is not None:
-            kwargs["update_fields"] = list(
-                set(update_fields) | {"estado"}
-            )
+            kwargs["update_fields"] = list(set(update_fields) | {"estado"})
 
         super().save(*args, **kwargs)
 

@@ -112,35 +112,35 @@ const emptyKardexDialog: KardexDialogState = {
 };
 
 function getStockStatusColor(status: ProductStockStatus) {
-  if (status === "OK") {
+  if (status === "STOCK_CORRECTO") {
     return colors.status.success;
   }
 
-  if (status === "STOCK_CRITICO") {
+  if (status === "BAJO_MINIMO") {
+    return colors.status.warning;
+  }
+
+  if (status === "SIN_STOCK") {
     return colors.status.error;
   }
 
-  if (status === "NO_CONTROLA_STOCK") {
-    return colors.status.info;
-  }
-
-  return colors.status.warning;
+  return colors.status.info;
 }
 
 function getStockStatusLabel(status: ProductStockStatus) {
-  if (status === "OK") {
+  if (status === "STOCK_CORRECTO") {
     return "Stock correcto";
   }
 
-  if (status === "STOCK_CRITICO") {
-    return "Stock crítico";
+  if (status === "BAJO_MINIMO") {
+    return "Bajo mínimo";
   }
 
-  if (status === "NO_CONTROLA_STOCK") {
-    return "No controla stock";
+  if (status === "SIN_STOCK") {
+    return "Sin stock";
   }
 
-  return String(status).replaceAll("_", " ");
+  return "No controla stock";
 }
 
 function formatNumber(value: number) {
@@ -346,7 +346,9 @@ export function ProductsPage() {
   }, []);
 
   const stockCriticalCount = productos.filter(
-    (producto) => producto.stock_status === "STOCK_CRITICO",
+    (producto) =>
+      producto.stock_status === "BAJO_MINIMO" ||
+      producto.stock_status === "SIN_STOCK",
   ).length;
 
   const stockControlledCount = productos.filter(
@@ -767,6 +769,25 @@ export function ProductsPage() {
       renderCell: (params) => formatDateTime(String(params.value || "")),
     },
     {
+      field: "producto_modelo",
+      headerName: "Modelo",
+      minWidth: 190,
+      flex: 0.8,
+    },
+    {
+      field: "producto_categoria",
+      headerName: "Categoría",
+      minWidth: 160,
+      flex: 0.7,
+    },
+    {
+      field: "producto_codigo_sap",
+      headerName: "Código SAP",
+      minWidth: 145,
+      flex: 0.6,
+      renderCell: (params) => params.value || "Sin código",
+    },
+    {
       field: "movement_type_display",
       headerName: "Movimiento",
       minWidth: 190,
@@ -1016,7 +1037,7 @@ export function ProductsPage() {
 
             <TextField
               select
-              label="Estado registro"
+              label="Estado del producto"
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
               fullWidth
@@ -1024,7 +1045,7 @@ export function ProductsPage() {
               <MenuItem value="">Todos</MenuItem>
               <MenuItem value="ACTIVO">Activo</MenuItem>
               <MenuItem value="INACTIVO">Inactivo</MenuItem>
-              <MenuItem value="ANULADO">Anulado</MenuItem>
+              <MenuItem value="DESCONTINUADO">Descontinuado</MenuItem>
               <MenuItem value="ARCHIVADO">Archivado</MenuItem>
             </TextField>
 
@@ -1048,8 +1069,9 @@ export function ProductsPage() {
               fullWidth
             >
               <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="OK">Stock correcto</MenuItem>
-              <MenuItem value="STOCK_CRITICO">Stock crítico</MenuItem>
+              <MenuItem value="STOCK_CORRECTO">Stock correcto</MenuItem>
+              <MenuItem value="BAJO_MINIMO">Bajo mínimo</MenuItem>
+              <MenuItem value="SIN_STOCK">Sin stock</MenuItem>
               <MenuItem value="NO_CONTROLA_STOCK">No controla stock</MenuItem>
             </TextField>
           </Stack>

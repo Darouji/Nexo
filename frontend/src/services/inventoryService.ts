@@ -1,10 +1,10 @@
 import { api } from "./api";
 
 export type ProductStockStatus =
-  | "OK"
-  | "STOCK_CRITICO"
-  | "NO_CONTROLA_STOCK"
-  | string;
+  | "STOCK_CORRECTO"
+  | "BAJO_MINIMO"
+  | "SIN_STOCK"
+  | "NO_CONTROLA_STOCK";
 
 export type Category = {
   [key: string]: unknown;
@@ -32,7 +32,10 @@ export type Product = {
   stock_critico: number;
   en_camino: number;
   controla_stock: boolean;
+  descontinuado: boolean;
   stock_status: ProductStockStatus;
+  estado_producto: string;
+  estado_producto_display: string;
   status: string;
   created_at: string;
   updated_at: string;
@@ -44,6 +47,7 @@ export type KardexMovement = {
   producto: number;
   producto_modelo: string;
   producto_categoria: string;
+  producto_codigo_sap: string;
   movement_type: string;
   movement_type_display: string;
   origin: string;

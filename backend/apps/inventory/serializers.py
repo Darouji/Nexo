@@ -28,6 +28,8 @@ class ProductoSerializer(serializers.ModelSerializer):
     categoria_name = serializers.CharField(source="categoria.name", read_only=True)
     stock = serializers.SerializerMethodField()
     stock_status = serializers.SerializerMethodField()
+    estado_producto = serializers.SerializerMethodField()
+    estado_producto_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Producto
@@ -45,7 +47,10 @@ class ProductoSerializer(serializers.ModelSerializer):
             "stock_critico",
             "en_camino",
             "controla_stock",
+            "descontinuado",
             "stock_status",
+            "estado_producto",
+            "estado_producto_display",
             "status",
             "created_at",
             "updated_at",
@@ -58,6 +63,8 @@ class ProductoSerializer(serializers.ModelSerializer):
             "stock",
             "stock_actual",
             "stock_status",
+            "estado_producto",
+            "estado_producto_display",
             "created_at",
             "updated_at",
         ]
@@ -68,19 +75,25 @@ class ProductoSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_stock_status(self, obj):
-        if not obj.controla_stock:
-            return "NO_CONTROLA_STOCK"
+        return obj.stock_status
 
-        if obj.is_stock_critical:
-            return "STOCK_CRITICO"
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_estado_producto(self, obj):
+        return obj.estado_producto
 
-        return "OK"
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_estado_producto_display(self, obj):
+        return obj.estado_producto_display
 
 
 class MovimientoKardexSerializer(serializers.ModelSerializer):
     producto_modelo = serializers.CharField(source="producto.modelo", read_only=True)
     producto_categoria = serializers.CharField(
         source="producto.categoria.name", read_only=True
+    )
+    producto_codigo_sap = serializers.CharField(
+        source="producto.codigo_sap",
+        read_only=True,
     )
     operador_nombre = serializers.SerializerMethodField()
     movement_type_display = serializers.CharField(
@@ -97,6 +110,7 @@ class MovimientoKardexSerializer(serializers.ModelSerializer):
             "producto",
             "producto_modelo",
             "producto_categoria",
+            "producto_codigo_sap",
             "movement_type",
             "movement_type_display",
             "origin",

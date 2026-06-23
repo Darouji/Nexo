@@ -12,7 +12,12 @@ from apps.accounts.permissions import (
 )
 from apps.core.models import BaseStatus
 
-from .models import Categoria, MovimientoKardex, Producto
+from .models import (
+    Categoria,
+    MovimientoKardex,
+    Producto,
+    ProductStockStatus,
+)
 from .serializers import (
     CategoriaSerializer,
     InventoryAdjustmentSerializer,
@@ -140,6 +145,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         "stock_critico",
         "en_camino",
         "controla_stock",
+        "descontinuado",
         "status",
         "created_at",
         "updated_at",
@@ -157,13 +163,39 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         if category_ids:
             queryset = queryset.filter(categoria_id__in=category_ids)
 
-        status_values = validate_choice_values(
+        product_status_values = validate_choice_values(
             split_csv_param(params.get("status")),
-            {choice[0] for choice in BaseStatus.choices},
+            {
+                BaseStatus.ACTIVO,
+                BaseStatus.INACTIVO,
+                BaseStatus.ARCHIVADO,
+                "DESCONTINUADO",
+            },
             "status",
         )
-        if status_values:
-            queryset = queryset.filter(status__in=status_values)
+
+        if product_status_values:
+            product_status_query = None
+
+            for product_status in product_status_values:
+                if product_status == "DESCONTINUADO":
+                    condition = Q(
+                        descontinuado=True,
+                        status=BaseStatus.ACTIVO,
+                    )
+                else:
+                    condition = Q(
+                        status=product_status,
+                        descontinuado=False,
+                    )
+
+                product_status_query = (
+                    condition
+                    if product_status_query is None
+                    else product_status_query | condition
+                )
+
+            queryset = queryset.filter(product_status_query)
 
         controla_stock = parse_bool_param(
             params.get("controla_stock"),
@@ -174,7 +206,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
 
         stock_status_values = validate_choice_values(
             split_csv_param(params.get("stock_status")),
-            {"OK", "STOCK_CRITICO", "NO_CONTROLA_STOCK"},
+            {choice[0] for choice in ProductStockStatus.choices},
             "stock_status",
         )
 
@@ -182,15 +214,21 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
             stock_status_query = None
 
             for stock_status in stock_status_values:
-                if stock_status == "OK":
+                if stock_status == ProductStockStatus.STOCK_CORRECTO:
                     condition = Q(
                         controla_stock=True,
                         stock_actual__gt=F("stock_critico"),
                     )
-                elif stock_status == "STOCK_CRITICO":
+                elif stock_status == ProductStockStatus.BAJO_MINIMO:
                     condition = Q(
                         controla_stock=True,
+                        stock_actual__gt=0,
                         stock_actual__lte=F("stock_critico"),
+                    )
+                elif stock_status == ProductStockStatus.SIN_STOCK:
+                    condition = Q(
+                        controla_stock=True,
+                        stock_actual=0,
                     )
                 else:
                     condition = Q(controla_stock=False)

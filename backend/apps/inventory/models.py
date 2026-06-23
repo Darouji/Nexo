@@ -4,7 +4,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.core.models import AuditOrigin, BaseModel
+from apps.core.models import AuditOrigin, BaseModel, BaseStatus
 from apps.core.utils import normalize_text
 
 
@@ -14,6 +14,13 @@ class KardexMovementType(models.TextChoices):
     SALIDA_VENTA = "SALIDA_VENTA", "Salida por venta"
     REVERSA_ANULACION = "REVERSA_ANULACION", "Reversa por anulación"
     AJUSTE_INVENTARIO = "AJUSTE_INVENTARIO", "Ajuste de inventario"
+
+
+class ProductStockStatus(models.TextChoices):
+    STOCK_CORRECTO = "STOCK_CORRECTO", "Stock correcto"
+    BAJO_MINIMO = "BAJO_MINIMO", "Bajo mínimo"
+    SIN_STOCK = "SIN_STOCK", "Sin stock"
+    NO_CONTROLA_STOCK = "NO_CONTROLA_STOCK", "No controla stock"
 
 
 class Categoria(BaseModel):
@@ -88,16 +95,25 @@ class Producto(BaseModel):
     )
     stock_critico = models.PositiveIntegerField(
         default=0,
-        verbose_name="Stock crítico",
+        verbose_name="Stock mínimo",
     )
+
+    # Campo temporal. Será reemplazado por registros auditables
+    # de PendientePorRecibir en la siguiente fase.
     en_camino = models.PositiveIntegerField(
         default=0,
         verbose_name="En camino",
     )
+
     controla_stock = models.BooleanField(
         default=True,
         db_index=True,
-        verbose_name="Controla stock",
+        verbose_name="Maneja inventario",
+    )
+    descontinuado = models.BooleanField(
+        default=False,
+        db_index=True,
+        verbose_name="Descontinuado",
     )
 
     class Meta:
@@ -109,6 +125,7 @@ class Producto(BaseModel):
             models.Index(fields=["modelo_normalized"]),
             models.Index(fields=["codigo_sap_normalized"]),
             models.Index(fields=["controla_stock", "stock_actual"]),
+            models.Index(fields=["descontinuado", "status"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -128,26 +145,49 @@ class Producto(BaseModel):
 
     @property
     def stock(self):
-        """
-        Alias de compatibilidad de lectura.
-
-        No debe usarse para modificar stock.
-        El valor real controlado por Kardex es stock_actual.
-        """
         return self.stock_actual
 
     @property
-    def is_stock_critical(self):
+    def stock_status(self):
         if not self.controla_stock:
-            return False
+            return ProductStockStatus.NO_CONTROLA_STOCK
 
-        return self.stock_actual <= self.stock_critico
+        if self.stock_actual == 0:
+            return ProductStockStatus.SIN_STOCK
+
+        if self.stock_actual <= self.stock_critico:
+            return ProductStockStatus.BAJO_MINIMO
+
+        return ProductStockStatus.STOCK_CORRECTO
+
+    @property
+    def is_stock_critical(self):
+        return self.stock_status in [
+            ProductStockStatus.BAJO_MINIMO,
+            ProductStockStatus.SIN_STOCK,
+        ]
+
+    @property
+    def estado_producto(self):
+        if self.descontinuado:
+            return "DESCONTINUADO"
+
+        return self.status
+
+    @property
+    def estado_producto_display(self):
+        if self.descontinuado:
+            return "Descontinuado"
+
+        return self.get_status_display()
 
     def clean(self):
         super().clean()
 
         if not self.categoria_id:
-            raise ValidationError({"categoria": "El producto debe tener una categoría."})
+            raise ValidationError(
+                {"categoria": "El producto debe tener una categoría."}
+            )
 
         if not self.modelo or not self.modelo.strip():
             raise ValidationError({"modelo": "El modelo del producto es obligatorio."})
@@ -156,6 +196,61 @@ class Producto(BaseModel):
             raise ValidationError(
                 {"stock_actual": "El stock actual no puede ser negativo."}
             )
+
+        if self.status == BaseStatus.ANULADO:
+            raise ValidationError(
+                {
+                    "status": (
+                        "Un producto no puede quedar anulado. "
+                        "Use Activo, Inactivo, Descontinuado o Archivado."
+                    )
+                }
+            )
+
+        if self.descontinuado and self.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {
+                    "descontinuado": (
+                        "Un producto descontinuado debe conservar estado base Activo "
+                        "para evitar estados contradictorios."
+                    )
+                }
+            )
+
+        if (
+            self.status in [BaseStatus.INACTIVO, BaseStatus.ARCHIVADO]
+            and self.stock_actual != 0
+        ):
+            raise ValidationError(
+                {
+                    "status": (
+                        "No se puede inactivar ni archivar un producto con stock físico. "
+                        "Use Descontinuado hasta regularizar el inventario."
+                    )
+                }
+            )
+
+        if self.pk:
+            original = (
+                Producto.objects.filter(pk=self.pk)
+                .values("controla_stock", "stock_actual")
+                .first()
+            )
+
+            if original and original["controla_stock"] and not self.controla_stock:
+                has_kardex = MovimientoKardex.objects.filter(
+                    producto_id=self.pk
+                ).exists()
+
+                if original["stock_actual"] != 0 or has_kardex:
+                    raise ValidationError(
+                        {
+                            "controla_stock": (
+                                "No se puede desactivar el manejo de inventario "
+                                "si el producto tiene stock físico o movimientos Kardex."
+                            )
+                        }
+                    )
 
     def save(self, *args, **kwargs):
         self.modelo_normalized = normalize_text(self.modelo)
@@ -253,10 +348,14 @@ class MovimientoKardex(BaseModel):
             )
 
         if self.cantidad == 0:
-            raise ValidationError({"cantidad": "La cantidad del movimiento no puede ser cero."})
+            raise ValidationError(
+                {"cantidad": "La cantidad del movimiento no puede ser cero."}
+            )
 
         if not self.motivo or not self.motivo.strip():
-            raise ValidationError({"motivo": "El motivo del movimiento es obligatorio."})
+            raise ValidationError(
+                {"motivo": "El motivo del movimiento es obligatorio."}
+            )
 
         positive_types = [
             KardexMovementType.ENTRADA_IMPORTACION,
@@ -266,16 +365,12 @@ class MovimientoKardex(BaseModel):
 
         if self.movement_type in positive_types and self.cantidad <= 0:
             raise ValidationError(
-                {
-                    "cantidad": "Este tipo de movimiento debe tener cantidad positiva."
-                }
+                {"cantidad": "Este tipo de movimiento debe tener cantidad positiva."}
             )
 
         if self.movement_type == KardexMovementType.SALIDA_VENTA and self.cantidad >= 0:
             raise ValidationError(
-                {
-                    "cantidad": "La salida por venta debe tener cantidad negativa."
-                }
+                {"cantidad": "La salida por venta debe tener cantidad negativa."}
             )
 
         if self.stock_despues < 0:

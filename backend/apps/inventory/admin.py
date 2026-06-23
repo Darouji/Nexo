@@ -21,9 +21,15 @@ class ProductoAdmin(admin.ModelAdmin):
         "stock_critico",
         "en_camino",
         "controla_stock",
+        "descontinuado",
         "status",
     )
-    list_filter = ("status", "categoria", "controla_stock")
+    list_filter = (
+        "status",
+        "descontinuado",
+        "categoria",
+        "controla_stock",
+    )
     search_fields = (
         "modelo",
         "modelo_normalized",

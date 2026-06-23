@@ -11,6 +11,7 @@ from apps.core.utils import normalize_text
 class KardexMovementType(models.TextChoices):
     ENTRADA_IMPORTACION = "ENTRADA_IMPORTACION", "Entrada por importación"
     ENTRADA_MANUAL = "ENTRADA_MANUAL", "Entrada manual"
+    ENTRADA_RECEPCION = "ENTRADA_RECEPCION", "Entrada por recepción"
     SALIDA_VENTA = "SALIDA_VENTA", "Salida por venta"
     REVERSA_ANULACION = "REVERSA_ANULACION", "Reversa por anulación"
     AJUSTE_INVENTARIO = "AJUSTE_INVENTARIO", "Ajuste de inventario"
@@ -21,6 +22,20 @@ class ProductStockStatus(models.TextChoices):
     BAJO_MINIMO = "BAJO_MINIMO", "Bajo mínimo"
     SIN_STOCK = "SIN_STOCK", "Sin stock"
     NO_CONTROLA_STOCK = "NO_CONTROLA_STOCK", "No controla stock"
+
+
+class PendientePorRecibirStatus(models.TextChoices):
+    PENDIENTE = "PENDIENTE", "Pendiente"
+    PARCIAL = "PARCIAL", "Parcial"
+    RECIBIDA = "RECIBIDA", "Recibida"
+    CANCELADA = "CANCELADA", "Cancelada"
+    CERRADA_PARCIAL = "CERRADA_PARCIAL", "Cerrada parcial"
+
+
+ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS = (
+    PendientePorRecibirStatus.PENDIENTE,
+    PendientePorRecibirStatus.PARCIAL,
+)
 
 
 class Categoria(BaseModel):
@@ -217,18 +232,24 @@ class Producto(BaseModel):
                 }
             )
 
-        if (
-            self.status in [BaseStatus.INACTIVO, BaseStatus.ARCHIVADO]
-            and self.stock_actual != 0
-        ):
-            raise ValidationError(
-                {
-                    "status": (
-                        "No se puede inactivar ni archivar un producto con stock físico. "
-                        "Use Descontinuado hasta regularizar el inventario."
-                    )
-                }
-            )
+        if self.pk:
+            has_open_pending_receipts = PendientePorRecibir.objects.filter(
+                producto_id=self.pk,
+                estado__in=ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
+            ).exists()
+
+            if self.status in [BaseStatus.INACTIVO, BaseStatus.ARCHIVADO] and (
+                self.stock_actual != 0 or has_open_pending_receipts
+            ):
+                raise ValidationError(
+                    {
+                        "status": (
+                            "No se puede desactivar el manejo de inventario si el producto "
+                            "tiene stock físico, movimientos Kardex o unidades pendientes "
+                            "por recibir."
+                        )
+                    }
+                )
 
         if self.pk:
             original = (
@@ -242,20 +263,167 @@ class Producto(BaseModel):
                     producto_id=self.pk
                 ).exists()
 
-                if original["stock_actual"] != 0 or has_kardex:
-                    raise ValidationError(
-                        {
-                            "controla_stock": (
-                                "No se puede desactivar el manejo de inventario "
-                                "si el producto tiene stock físico o movimientos Kardex."
-                            )
-                        }
-                    )
+                if (
+                    original["stock_actual"] != 0
+                    or has_kardex
+                    or has_open_pending_receipts
+                ):
 
     def save(self, *args, **kwargs):
         self.modelo_normalized = normalize_text(self.modelo)
         self.codigo_sap_normalized = normalize_text(self.codigo_sap)
         self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class PendientePorRecibir(BaseModel):
+    producto = models.ForeignKey(
+        Producto,
+        on_delete=models.PROTECT,
+        related_name="pendientes_por_recibir",
+        verbose_name="Producto",
+    )
+    cantidad_original = models.PositiveIntegerField(
+        verbose_name="Cantidad original",
+    )
+    cantidad_recibida = models.PositiveIntegerField(
+        default=0,
+        editable=False,
+        verbose_name="Cantidad recibida",
+    )
+    cantidad_cancelada = models.PositiveIntegerField(
+        default=0,
+        editable=False,
+        verbose_name="Cantidad cancelada",
+    )
+    estado = models.CharField(
+        max_length=30,
+        choices=PendientePorRecibirStatus.choices,
+        default=PendientePorRecibirStatus.PENDIENTE,
+        db_index=True,
+        verbose_name="Estado de recepción",
+    )
+    referencia = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Referencia",
+    )
+    motivo = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Motivo de registro",
+    )
+
+    class Meta:
+        verbose_name = "Pendiente por recibir"
+        verbose_name_plural = "Pendientes por recibir"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["producto", "estado"]),
+            models.Index(fields=["estado", "created_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    cantidad_recibida__lte=(
+                        models.F("cantidad_original")
+                        - models.F("cantidad_cancelada")
+                    )
+                ),
+                name="pending_receipt_quantities_do_not_exceed_original",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.producto.modelo} | Por recibir: "
+            f"{self.cantidad_pendiente}/{self.cantidad_original}"
+        )
+
+    @property
+    def cantidad_pendiente(self):
+        return (
+            self.cantidad_original
+            - self.cantidad_recibida
+            - self.cantidad_cancelada
+        )
+
+    def calcular_estado(self):
+        if self.cantidad_pendiente > 0:
+            if self.cantidad_recibida == 0 and self.cantidad_cancelada == 0:
+                return PendientePorRecibirStatus.PENDIENTE
+
+            return PendientePorRecibirStatus.PARCIAL
+
+        if self.cantidad_recibida == self.cantidad_original:
+            return PendientePorRecibirStatus.RECIBIDA
+
+        if self.cantidad_cancelada == self.cantidad_original:
+            return PendientePorRecibirStatus.CANCELADA
+
+        return PendientePorRecibirStatus.CERRADA_PARCIAL
+
+    def clean(self):
+        super().clean()
+
+        if not self.producto_id:
+            raise ValidationError(
+                {"producto": "El producto es obligatorio."}
+            )
+
+        if self.producto_id and not self.producto.controla_stock:
+            raise ValidationError(
+                {
+                    "producto": (
+                        "No se puede registrar una recepción pendiente para un producto "
+                        "que no maneja inventario."
+                    )
+                }
+            )
+
+        if self.cantidad_original <= 0:
+            raise ValidationError(
+                {
+                    "cantidad_original": (
+                        "La cantidad original debe ser positiva."
+                    )
+                }
+            )
+
+        if (
+            self.cantidad_recibida + self.cantidad_cancelada
+            > self.cantidad_original
+        ):
+            raise ValidationError(
+                {
+                    "cantidad_recibida": (
+                        "La suma de la cantidad recibida y cancelada no puede superar "
+                        "la cantidad original."
+                    )
+                }
+            )
+
+        if not self.motivo.strip() and not self.referencia.strip():
+            raise ValidationError(
+                {
+                    "motivo": (
+                        "Debe indicar un motivo o una referencia para registrar "
+                        "un pendiente por recibir."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.estado = self.calcular_estado()
+        self.full_clean()
+
+        update_fields = kwargs.get("update_fields")
+
+        if update_fields is not None:
+            kwargs["update_fields"] = list(
+                set(update_fields) | {"estado"}
+            )
+
         super().save(*args, **kwargs)
 
 
@@ -360,6 +528,7 @@ class MovimientoKardex(BaseModel):
         positive_types = [
             KardexMovementType.ENTRADA_IMPORTACION,
             KardexMovementType.ENTRADA_MANUAL,
+            KardexMovementType.ENTRADA_RECEPCION,
             KardexMovementType.REVERSA_ANULACION,
         ]
 

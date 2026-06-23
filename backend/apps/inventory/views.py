@@ -1,6 +1,14 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import F, Q
-from rest_framework import filters, status, viewsets
+from django.db.models import (
+    ExpressionWrapper,
+    F,
+    IntegerField,
+    Q,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -13,19 +21,31 @@ from apps.accounts.permissions import (
 from apps.core.models import BaseStatus
 
 from .models import (
+    ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
     Categoria,
     MovimientoKardex,
+    PendientePorRecibir,
+    PendientePorRecibirStatus,
     Producto,
     ProductStockStatus,
 )
 from .serializers import (
     CategoriaSerializer,
+    CrearPendientePorRecibirSerializer,
     InventoryAdjustmentSerializer,
     ManualStockEntrySerializer,
     MovimientoKardexSerializer,
+    OperacionPendientePorRecibirSerializer,
+    PendientePorRecibirSerializer,
     ProductoSerializer,
 )
-from .services import register_inventory_adjustment, register_manual_entry
+from .services import (
+    cancel_pending_receipt,
+    create_pending_receipt,
+    receive_pending_receipt,
+    register_inventory_adjustment,
+    register_manual_entry,
+)
 
 
 def raise_drf_validation_error(error):
@@ -144,6 +164,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         "stock_actual",
         "stock_critico",
         "en_camino",
+        "por_recibir_total",
         "controla_stock",
         "descontinuado",
         "status",
@@ -153,7 +174,31 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
     ordering = ["categoria__name", "modelo"]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        pending_quantity_expression = ExpressionWrapper(
+            F("pendientes_por_recibir__cantidad_original")
+            - F("pendientes_por_recibir__cantidad_recibida")
+            - F("pendientes_por_recibir__cantidad_cancelada"),
+            output_field=IntegerField(),
+        )
+
+        queryset = (
+            super()
+            .get_queryset()
+            .annotate(
+                por_recibir_total=Coalesce(
+                    Sum(
+                        pending_quantity_expression,
+                        filter=Q(
+                            pendientes_por_recibir__estado__in=(
+                                ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS
+                            )
+                        ),
+                    ),
+                    Value(0),
+                    output_field=IntegerField(),
+                )
+            )
+        )
         params = self.request.query_params
 
         category_ids = parse_id_values(
@@ -295,6 +340,136 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
 
         output_serializer = MovimientoKardexSerializer(movement)
         return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PendientePorRecibirViewSet(
+    InventoryPermissionMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = PendientePorRecibir.objects.select_related(
+        "producto",
+        "producto__categoria",
+        "created_by",
+        "updated_by",
+    ).all()
+
+    serializer_class = PendientePorRecibirSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+
+    search_fields = [
+        "producto__modelo",
+        "producto__codigo_sap",
+        "producto__categoria__name",
+        "referencia",
+        "motivo",
+    ]
+
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "cantidad_original",
+        "cantidad_recibida",
+        "cantidad_cancelada",
+        "estado",
+    ]
+
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+
+        product_ids = parse_id_values(
+            params.get("producto"),
+            "producto",
+        )
+
+        if product_ids:
+            queryset = queryset.filter(producto_id__in=product_ids)
+
+        receipt_statuses = validate_choice_values(
+            split_csv_param(params.get("estado")),
+            {choice[0] for choice in PendientePorRecibirStatus.choices},
+            "estado",
+        )
+
+        if receipt_statuses:
+            queryset = queryset.filter(estado__in=receipt_statuses)
+
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        serializer = CrearPendientePorRecibirSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            pending_receipt = create_pending_receipt(
+                producto=serializer.validated_data["producto"],
+                cantidad=serializer.validated_data["cantidad"],
+                motivo=serializer.validated_data.get("motivo", ""),
+                referencia=serializer.validated_data.get("referencia", ""),
+                user=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        output_serializer = PendientePorRecibirSerializer(pending_receipt)
+
+        return Response(
+            output_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="recibir")
+    def recibir(self, request, pk=None):
+        pending_receipt = self.get_object()
+
+        serializer = OperacionPendientePorRecibirSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_pending_receipt, movement = receive_pending_receipt(
+                pending_receipt=pending_receipt,
+                cantidad=serializer.validated_data["cantidad"],
+                motivo=serializer.validated_data["motivo"],
+                user=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        return Response(
+            {
+                "pendiente": PendientePorRecibirSerializer(
+                    updated_pending_receipt
+                ).data,
+                "movimiento_kardex": MovimientoKardexSerializer(movement).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="cancelar")
+    def cancelar(self, request, pk=None):
+        pending_receipt = self.get_object()
+
+        serializer = OperacionPendientePorRecibirSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_pending_receipt = cancel_pending_receipt(
+                pending_receipt=pending_receipt,
+                cantidad=serializer.validated_data["cantidad"],
+                motivo=serializer.validated_data["motivo"],
+                user=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        return Response(
+            PendientePorRecibirSerializer(updated_pending_receipt).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelViewSet):

@@ -238,7 +238,7 @@ export function ProductsPage() {
     category?: string;
     status?: string;
     stockControl?: string;
-    stockStatus?: string;
+    stockStatus?: ProductStockStatus | "";
   };
 
   const loadProducts = async (
@@ -1067,7 +1067,19 @@ export function ProductsPage() {
               select
               label="Estado stock"
               value={stockStatusFilter}
-              onChange={(event) => setStockStatusFilter(event.target.value)}
+              onChange={(event) => {
+                const nextStockStatus = event.target.value;
+
+                if (
+                  nextStockStatus === "" ||
+                  nextStockStatus === "STOCK_CORRECTO" ||
+                  nextStockStatus === "BAJO_MINIMO" ||
+                  nextStockStatus === "SIN_STOCK" ||
+                  nextStockStatus === "NO_CONTROLA_STOCK"
+                ) {
+                  setStockStatusFilter(nextStockStatus);
+                }
+              }}
               fullWidth
             >
               <MenuItem value="">Todos</MenuItem>

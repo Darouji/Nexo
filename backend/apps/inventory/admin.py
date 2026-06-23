@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import Categoria, MovimientoKardex, Producto
+from .models import (
+    Categoria,
+    MovimientoKardex,
+    PendientePorRecibir,
+    Producto,
+)
 
 
 @admin.register(Categoria)
@@ -43,6 +48,40 @@ class ProductoAdmin(admin.ModelAdmin):
         "stock_actual",
         "modelo_normalized",
         "codigo_sap_normalized",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
+    )
+
+
+@admin.register(PendientePorRecibir)
+class PendientePorRecibirAdmin(admin.ModelAdmin):
+    list_display = (
+        "producto",
+        "cantidad_original",
+        "cantidad_recibida",
+        "cantidad_cancelada",
+        "cantidad_pendiente",
+        "estado",
+        "referencia",
+        "created_by",
+        "created_at",
+    )
+    list_filter = ("estado", "status", "created_at")
+    search_fields = (
+        "producto__modelo",
+        "producto__codigo_sap",
+        "producto__categoria__name",
+        "referencia",
+        "motivo",
+    )
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "cantidad_recibida",
+        "cantidad_cancelada",
+        "cantidad_pendiente",
+        "estado",
         "created_at",
         "updated_at",
         "created_by",

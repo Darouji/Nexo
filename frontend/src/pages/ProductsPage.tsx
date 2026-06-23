@@ -205,7 +205,9 @@ export function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("ACTIVO");
   const [stockControlFilter, setStockControlFilter] = useState("");
-  const [stockStatusFilter, setStockStatusFilter] = useState("");
+  const [stockStatusFilter, setStockStatusFilter] = useState<
+    ProductStockStatus | ""
+  >("");
   const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingMovement, setSavingMovement] = useState(false);

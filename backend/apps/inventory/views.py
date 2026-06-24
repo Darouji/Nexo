@@ -37,10 +37,12 @@ from .serializers import (
     MovimientoKardexSerializer,
     OperacionPendientePorRecibirSerializer,
     PendientePorRecibirSerializer,
+    ProductoLifecycleActionSerializer,
     ProductoSerializer,
 )
 from .services import (
     cancel_pending_receipt,
+    change_product_lifecycle,
     create_pending_receipt,
     receive_pending_receipt,
     register_inventory_adjustment,
@@ -301,6 +303,49 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
             )
 
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {
+                "detail": (
+                    "Los productos no se inactivan mediante DELETE. "
+                    "Use la acción controlada de ciclo de vida."
+                )
+            },
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="ciclo-vida")
+    def ciclo_vida(self, request, pk=None):
+        producto = self.get_object()
+
+        serializer = ProductoLifecycleActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_product, audit_action = change_product_lifecycle(
+                producto=producto,
+                accion=serializer.validated_data["accion"],
+                motivo=serializer.validated_data["motivo"],
+                user=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        request.audit_action = audit_action
+        request.audit_reason = serializer.validated_data["motivo"]
+        request.audit_instance = updated_product
+        request.audit_metadata = {
+            "lifecycle_action": serializer.validated_data["accion"],
+        }
+
+        return Response(
+            ProductoSerializer(
+                updated_product,
+                context={"request": request},
+            ).data,
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["post"], url_path="entrada-manual")
     def entrada_manual(self, request, pk=None):

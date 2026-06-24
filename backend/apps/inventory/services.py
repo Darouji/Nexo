@@ -9,6 +9,7 @@ from apps.core.audit import (
 from apps.core.models import AuditAction, AuditOrigin, BaseStatus
 
 from .models import (
+    ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
     KardexMovementType,
     MovimientoKardex,
     PendientePorRecibir,
@@ -22,6 +23,20 @@ PENDING_RECEIPT_AUDIT_FIELDS = [
     "estado",
     "updated_by",
 ]
+
+PRODUCT_LIFECYCLE_AUDIT_FIELDS = [
+    "status",
+    "descontinuado",
+    "updated_by",
+]
+
+PRODUCT_LIFECYCLE_AUDIT_ACTIONS = {
+    "INACTIVAR": AuditAction.INACTIVAR,
+    "ARCHIVAR": AuditAction.ARCHIVAR,
+    "REACTIVAR": AuditAction.RESTAURAR,
+    "DESCONTINUAR": AuditAction.CAMBIAR_ESTADO,
+    "REANUDAR": AuditAction.RESTAURAR,
+}
 
 
 def get_operator(user):
@@ -108,6 +123,29 @@ def register_kardex_movement(
             raise ValidationError(
                 {
                     "producto": "Este producto no controla stock y no debe generar Kardex."
+                }
+            )
+
+        if locked_product.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {
+                    "producto": (
+                        "El producto debe estar activo para registrar movimientos "
+                        "de inventario."
+                    )
+                }
+            )
+
+        if locked_product.descontinuado and movement_type in [
+            KardexMovementType.ENTRADA_MANUAL,
+            KardexMovementType.ENTRADA_IMPORTACION,
+        ]:
+            raise ValidationError(
+                {
+                    "producto": (
+                        "No se pueden registrar nuevas entradas de stock para un "
+                        "producto descontinuado."
+                    )
                 }
             )
 
@@ -220,6 +258,152 @@ def register_sale_difference_adjustment(
         origin=AuditOrigin.AUTOMATICO,
         reference=reference,
     )
+
+
+def change_product_lifecycle(
+    *,
+    producto,
+    accion,
+    motivo,
+    user=None,
+):
+    accion = str(accion or "").strip().upper()
+    motivo = str(motivo or "").strip()
+
+    if accion not in PRODUCT_LIFECYCLE_AUDIT_ACTIONS:
+        raise ValidationError(
+            {"accion": "La acción de ciclo de vida indicada no es válida."}
+        )
+
+    if not motivo:
+        raise ValidationError(
+            {"motivo": "El motivo del cambio de estado es obligatorio."}
+        )
+
+    with transaction.atomic():
+        locked_product = Producto.objects.select_for_update().get(pk=producto.pk)
+
+        has_open_pending_receipts = PendientePorRecibir.objects.filter(
+            producto_id=locked_product.pk,
+            estado__in=ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
+        ).exists()
+
+        old_values = capture_field_values(
+            locked_product,
+            PRODUCT_LIFECYCLE_AUDIT_FIELDS,
+        )
+
+        audit_action = PRODUCT_LIFECYCLE_AUDIT_ACTIONS[accion]
+
+        if accion == "INACTIVAR":
+            if locked_product.status != BaseStatus.ACTIVO:
+                raise ValidationError(
+                    {"accion": ("Solo se puede inactivar un producto que está activo.")}
+                )
+
+            if locked_product.stock_actual != 0 or has_open_pending_receipts:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "No se puede inactivar un producto con stock físico "
+                            "o unidades pendientes por recibir."
+                        )
+                    }
+                )
+
+            locked_product.status = BaseStatus.INACTIVO
+            locked_product.descontinuado = False
+
+        elif accion == "ARCHIVAR":
+            if locked_product.status != BaseStatus.INACTIVO:
+                raise ValidationError(
+                    {
+                        "accion": (
+                            "Solo se puede archivar un producto que ya está inactivo."
+                        )
+                    }
+                )
+
+            if locked_product.stock_actual != 0 or has_open_pending_receipts:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "No se puede archivar un producto con stock físico "
+                            "o unidades pendientes por recibir."
+                        )
+                    }
+                )
+
+            locked_product.status = BaseStatus.ARCHIVADO
+            locked_product.descontinuado = False
+
+        elif accion == "REACTIVAR":
+            if locked_product.status not in [
+                BaseStatus.INACTIVO,
+                BaseStatus.ARCHIVADO,
+            ]:
+                raise ValidationError(
+                    {
+                        "accion": (
+                            "Solo se pueden reactivar productos inactivos o archivados."
+                        )
+                    }
+                )
+
+            locked_product.status = BaseStatus.ACTIVO
+            locked_product.descontinuado = False
+
+        elif accion == "DESCONTINUAR":
+            if locked_product.status != BaseStatus.ACTIVO:
+                raise ValidationError(
+                    {
+                        "accion": (
+                            "Solo se puede descontinuar un producto que está activo."
+                        )
+                    }
+                )
+
+            if locked_product.descontinuado:
+                raise ValidationError(
+                    {"accion": "El producto ya se encuentra descontinuado."}
+                )
+
+            locked_product.descontinuado = True
+
+        elif accion == "REANUDAR":
+            if locked_product.status != BaseStatus.ACTIVO:
+                raise ValidationError(
+                    {"accion": ("Debe reactivar el producto antes de reanudarlo.")}
+                )
+
+            if not locked_product.descontinuado:
+                raise ValidationError(
+                    {"accion": "El producto no se encuentra descontinuado."}
+                )
+
+            locked_product.descontinuado = False
+
+        locked_product.updated_by = get_operator(user)
+        locked_product.save(
+            update_fields=[
+                "status",
+                "descontinuado",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_product,
+            old_values=old_values,
+            fields=PRODUCT_LIFECYCLE_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            action=audit_action,
+        )
+
+    return locked_product, audit_action
 
 
 def create_pending_receipt(

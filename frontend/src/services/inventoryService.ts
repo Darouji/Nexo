@@ -78,6 +78,18 @@ export type PendingReceiptStatus =
   | "CANCELADA"
   | "CERRADA_PARCIAL";
 
+export type ProductLifecycleAction =
+  | "INACTIVAR"
+  | "ARCHIVAR"
+  | "REACTIVAR"
+  | "DESCONTINUAR"
+  | "REANUDAR";
+
+export type ProductLifecyclePayload = {
+  accion: ProductLifecycleAction;
+  motivo: string;
+};
+
 export type PendingReceipt = {
   [key: string]: unknown;
   id: number;
@@ -383,8 +395,19 @@ export async function updateProduct(
   return response.data;
 }
 
-export async function inactivateProduct(productId: number) {
-  await api.delete(`/inventory/productos/${productId}/`);
+export async function changeProductLifecycle(
+  productId: number,
+  payload: ProductLifecyclePayload,
+) {
+  const response = await api.post<Product>(
+    `/inventory/productos/${productId}/ciclo-vida/`,
+    {
+      accion: payload.accion,
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
 }
 
 export async function registerManualStockEntry(

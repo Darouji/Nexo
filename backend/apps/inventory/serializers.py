@@ -2,6 +2,8 @@ from django.db import transaction
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
+from apps.core.models import BaseStatus
+
 from .models import (
     Categoria,
     MovimientoKardex,
@@ -89,6 +91,8 @@ class ProductoSerializer(serializers.ModelSerializer):
             "stock_actual",
             "stock_status",
             "por_recibir",
+            "descontinuado",
+            "status",
             "estado_producto",
             "estado_producto_display",
             "created_at",
@@ -96,6 +100,26 @@ class ProductoSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
+        protected_lifecycle_fields = {"status", "descontinuado"}
+        attempted_lifecycle_fields = protected_lifecycle_fields.intersection(
+            self.initial_data.keys()
+        )
+
+        if attempted_lifecycle_fields:
+            raise serializers.ValidationError(
+                {
+                    field_name: (
+                        "Este campo solo puede modificarse mediante la acción "
+                        "controlada de ciclo de vida del producto."
+                    )
+                    for field_name in attempted_lifecycle_fields
+                }
+            )
+
+        if self.instance and self.instance.status != BaseStatus.ACTIVO:
+            raise serializers.ValidationError(
+                {"status": ("Debe reactivar el producto antes de modificar su ficha.")}
+            )
         initial_stock = attrs.get("stock_inicial", 0)
 
         controla_stock = attrs.get(
@@ -288,6 +312,29 @@ class InventoryAdjustmentSerializer(serializers.Serializer):
 
         if not value:
             raise serializers.ValidationError("El motivo es obligatorio.")
+
+        return value
+
+
+class ProductoLifecycleActionSerializer(serializers.Serializer):
+    accion = serializers.ChoiceField(
+        choices=[
+            ("INACTIVAR", "Inactivar"),
+            ("ARCHIVAR", "Archivar"),
+            ("REACTIVAR", "Reactivar"),
+            ("DESCONTINUAR", "Descontinuar"),
+            ("REANUDAR", "Reanudar"),
+        ]
+    )
+    motivo = serializers.CharField(max_length=255)
+
+    def validate_motivo(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "El motivo del cambio de estado es obligatorio."
+            )
 
         return value
 

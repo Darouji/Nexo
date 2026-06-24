@@ -235,14 +235,12 @@ class Producto(BaseModel):
                 raise ValidationError(
                     {
                         "status": (
-                            "No se puede desactivar el manejo de inventario si el producto "
-                            "tiene stock físico, movimientos Kardex o unidades pendientes "
-                            "por recibir."
+                            "No se puede inactivar ni archivar un producto que "
+                            "tiene stock físico o unidades pendientes por recibir."
                         )
                     }
                 )
 
-        if self.pk:
             original = (
                 Producto.objects.filter(pk=self.pk)
                 .values("controla_stock", "stock_actual")
@@ -262,9 +260,9 @@ class Producto(BaseModel):
                     raise ValidationError(
                         {
                             "controla_stock": (
-                                "No se puede desactivar el manejo de inventario si el producto "
-                                "tiene stock físico, movimientos Kardex o unidades pendientes "
-                                "por recibir."
+                                "No se puede desactivar el manejo de inventario si "
+                                "el producto tiene stock físico, movimientos Kardex "
+                                "o unidades pendientes por recibir."
                             )
                         }
                     )

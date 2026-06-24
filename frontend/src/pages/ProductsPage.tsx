@@ -30,7 +30,6 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import type { GridColDef } from "@mui/x-data-grid";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { MetricCard } from "../components/MetricCard";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
@@ -45,7 +44,7 @@ import {
   fetchKardexMovements,
   fetchProducts,
   fetchPendingReceipts,
-  inactivateProduct,
+  changeProductLifecycle,
   receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
@@ -57,6 +56,7 @@ import type {
   PendingReceipt,
   PendingReceiptStatus,
   Product,
+  ProductLifecycleAction,
   ProductListParams,
   ProductStockStatus,
 } from "../services/inventoryService";
@@ -106,6 +106,13 @@ type PendingReceiptOperationDialogState = {
   motivo: string;
 };
 
+const emptyProductLifecycleDialog: ProductLifecycleDialogState = {
+  open: false,
+  product: null,
+  action: null,
+  motivo: "",
+};
+
 const emptyProductForm: ProductFormState = {
   categoria_name: "",
   modelo: "",
@@ -145,6 +152,13 @@ const emptyPendingReceiptOperationDialog: PendingReceiptOperationDialogState = {
   mode: "RECIBIR",
   pendingReceipt: null,
   cantidad: "",
+  motivo: "",
+};
+
+const emptyProductLifecycleDialog: ProductLifecycleDialogState = {
+  open: false,
+  product: null,
+  action: null,
   motivo: "",
 };
 
@@ -272,9 +286,9 @@ export function ProductsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [productToInactivate, setProductToInactivate] =
-    useState<Product | null>(null);
-  const [inactivatingProduct, setInactivatingProduct] = useState(false);
+  const [productLifecycleDialog, setProductLifecycleDialog] =
+    useState<ProductLifecycleDialogState>(emptyProductLifecycleDialog);
+  const [savingProductLifecycle, setSavingProductLifecycle] = useState(false);
 
   const [productForm, setProductForm] =
     useState<ProductFormState>(emptyProductForm);
@@ -556,27 +570,82 @@ export function ProductsPage() {
     }
   };
 
-  const handleInactivateProduct = async () => {
-    if (!productToInactivate) {
+  const openProductLifecycleDialog = (
+    product: Product,
+    action: ProductLifecycleAction,
+  ) => {
+    setProductLifecycleDialog({
+      open: true,
+      product,
+      action,
+      motivo: "",
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const closeProductLifecycleDialog = () => {
+    if (savingProductLifecycle) {
+      return;
+    }
+
+    setProductLifecycleDialog(emptyProductLifecycleDialog);
+  };
+
+  const getProductLifecycleActionLabel = (action: ProductLifecycleAction) => {
+    const labels: Record<ProductLifecycleAction, string> = {
+      INACTIVAR: "Inactivar",
+      ARCHIVAR: "Archivar",
+      REACTIVAR: "Reactivar",
+      DESCONTINUAR: "Descontinuar",
+      REANUDAR: "Reanudar",
+    };
+
+    return labels[action];
+  };
+
+  const getProductLifecycleSuccessLabel = (action: ProductLifecycleAction) => {
+    const labels: Record<ProductLifecycleAction, string> = {
+      INACTIVAR: "inactivado",
+      ARCHIVAR: "archivado",
+      REACTIVAR: "reactivado",
+      DESCONTINUAR: "descontinuado",
+      REANUDAR: "reanudado",
+    };
+
+    return labels[action];
+  };
+
+  const handleProductLifecycle = async () => {
+    const product = productLifecycleDialog.product;
+    const action = productLifecycleDialog.action;
+    const motivo = productLifecycleDialog.motivo.trim();
+
+    if (!product || !action || !motivo) {
+      setErrorMessage("El motivo del cambio de estado es obligatorio.");
       return;
     }
 
     try {
-      setInactivatingProduct(true);
+      setSavingProductLifecycle(true);
       setErrorMessage("");
       setSuccessMessage("");
 
-      await inactivateProduct(productToInactivate.id);
+      await changeProductLifecycle(product.id, {
+        accion: action,
+        motivo,
+      });
 
       setSuccessMessage(
-        `Producto "${productToInactivate.modelo}" inactivado correctamente.`,
+        `Producto "${product.modelo}" ${getProductLifecycleSuccessLabel(action)} correctamente.`,
       );
-      setProductToInactivate(null);
+
+      closeProductLifecycleDialog();
       await loadProducts(searchTerm);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
-      setInactivatingProduct(false);
+      setSavingProductLifecycle(false);
     }
   };
 
@@ -945,32 +1014,49 @@ export function ProductsPage() {
     {
       field: "actions",
       headerName: "Acciones",
-      width: 680,
+      width: 900,
       sortable: false,
       filterable: false,
       renderCell: (params) => {
         const product = params.row as Product;
-        const actionsDisabled = !product.controla_stock;
-        const canRegisterPendingReceipt =
+
+        const isOperationallyActive = product.status === "ACTIVO";
+
+        const canRegisterManualEntry =
+          isOperationallyActive &&
           product.controla_stock &&
-          product.status === "ACTIVO" &&
           !product.descontinuado;
+
+        const canAdjustInventory =
+          isOperationallyActive && product.controla_stock;
+
+        const canRegisterPendingReceipt =
+          isOperationallyActive &&
+          product.controla_stock &&
+          !product.descontinuado;
+
+        const canInactivate =
+          isOperationallyActive &&
+          Number(product.stock_actual || 0) === 0 &&
+          Number(product.por_recibir || 0) === 0;
 
         return (
           <Stack direction="row" spacing={1}>
             <Button
               size="small"
               variant="outlined"
+              disabled={!isOperationallyActive}
               startIcon={<EditIcon />}
               onClick={() => handleOpenEditProduct(product)}
             >
               Editar
             </Button>
+
             <Button
               size="small"
               variant="outlined"
               startIcon={<AddBoxIcon />}
-              disabled={actionsDisabled}
+              disabled={!canRegisterManualEntry}
               onClick={() => openMovementDialog(product, "ENTRADA_MANUAL")}
             >
               Entrada
@@ -990,7 +1076,7 @@ export function ProductsPage() {
               size="small"
               variant="outlined"
               startIcon={<TuneIcon />}
-              disabled={actionsDisabled}
+              disabled={!canAdjustInventory}
               onClick={() => openMovementDialog(product, "AJUSTE_INVENTARIO")}
             >
               Ajuste
@@ -1004,23 +1090,81 @@ export function ProductsPage() {
             >
               Kardex
             </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<DeleteIcon />}
-              disabled={product.status !== "ACTIVO"}
-              onClick={() => setProductToInactivate(product)}
-              sx={{
-                color: colors.status.error,
-                borderColor: colors.status.error,
-                "&:hover": {
-                  bgcolor: colors.status.errorSoft,
-                  borderColor: colors.status.error,
-                },
-              }}
-            >
-              Inactivar
-            </Button>
+
+            {isOperationallyActive ? (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() =>
+                    openProductLifecycleDialog(
+                      product,
+                      product.descontinuado ? "REANUDAR" : "DESCONTINUAR",
+                    )
+                  }
+                >
+                  {product.descontinuado ? "Reanudar" : "Descontinuar"}
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={!canInactivate}
+                  title={
+                    canInactivate
+                      ? ""
+                      : "Solo se puede inactivar un producto sin stock ni unidades pendientes."
+                  }
+                  onClick={() =>
+                    openProductLifecycleDialog(product, "INACTIVAR")
+                  }
+                  sx={{
+                    color: colors.status.error,
+                    borderColor: colors.status.error,
+                    "&:hover": {
+                      bgcolor: colors.status.errorSoft,
+                      borderColor: colors.status.error,
+                    },
+                  }}
+                >
+                  Inactivar
+                </Button>
+              </>
+            ) : null}
+
+            {product.status === "INACTIVO" ? (
+              <>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() =>
+                    openProductLifecycleDialog(product, "REACTIVAR")
+                  }
+                >
+                  Reactivar
+                </Button>
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() =>
+                    openProductLifecycleDialog(product, "ARCHIVAR")
+                  }
+                >
+                  Archivar
+                </Button>
+              </>
+            ) : null}
+
+            {product.status === "ARCHIVADO" ? (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => openProductLifecycleDialog(product, "REACTIVAR")}
+              >
+                Reactivar
+              </Button>
+            ) : null}
           </Stack>
         );
       },
@@ -2158,24 +2302,92 @@ export function ProductsPage() {
         </DialogActions>
       </Dialog>
 
-      <ConfirmDialog
-        open={Boolean(productToInactivate)}
-        title="Inactivar producto"
-        description={
-          productToInactivate
-            ? `El producto "${productToInactivate.modelo}" quedará inactivo. No se eliminará físicamente y su historial Kardex seguirá disponible.`
-            : undefined
-        }
-        confirmLabel="Inactivar"
-        destructive
-        loading={inactivatingProduct}
-        onClose={() => {
-          if (!inactivatingProduct) {
-            setProductToInactivate(null);
-          }
-        }}
-        onConfirm={() => void handleInactivateProduct()}
-      />
-    </Box>
-  );
-}
+            <Dialog
+        open={productLifecycleDialog.open}
+        onClose={closeProductLifecycleDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {productLifecycleDialog.action
+            ? getProductLifecycleActionLabel(productLifecycleDialog.action)
+            : "Gestionar producto"}
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert
+              severity={
+                productLifecycleDialog.action === "ARCHIVAR" ||
+                productLifecycleDialog.action === "INACTIVAR"
+                  ? "warning"
+                  : "info"
+              }
+              variant="outlined"
+            >
+              {productLifecycleDialog.action === "DESCONTINUAR"
+                ? "El producto dejará de aceptar nuevas entradas manuales, importaciones y nuevas unidades por recibir. Su Kardex e historial se conservarán."
+                : productLifecycleDialog.action === "REANUDAR"
+                  ? "El producto volverá a estar disponible para nuevas operaciones de inventario."
+                  : productLifecycleDialog.action === "INACTIVAR"
+                    ? "El producto dejará de estar disponible para operaciones. Solo puede inactivarse sin stock físico ni unidades pendientes."
+                    : productLifecycleDialog.action === "ARCHIVAR"
+                      ? "El producto quedará fuera del catálogo operativo, manteniendo su historial disponible para auditoría."
+                      : "El producto volverá a estar activo y disponible para operaciones de inventario."}
+            </Alert>
+
+            <TextField
+              label="Producto"
+              value={
+                productLifecycleDialog.product
+                  ? `${productLifecycleDialog.product.categoria_name} — ${productLifecycleDialog.product.modelo}`
+                  : ""
+              }
+              fullWidth
+              disabled
+            />
+
+            <TextField
+              label="Motivo"
+              value={productLifecycleDialog.motivo}
+              onChange={(event) =>
+                setProductLifecycleDialog((current) => ({
+                  ...current,
+                  motivo: event.target.value,
+                }))
+              }
+              fullWidth
+              required
+              multiline
+              minRows={3}
+              helperText="Este motivo quedará asociado a la auditoría del producto."
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={closeProductLifecycleDialog}
+            disabled={savingProductLifecycle}
+          >
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={() => void handleProductLifecycle()}
+            disabled={
+              savingProductLifecycle ||
+              !productLifecycleDialog.product ||
+              !productLifecycleDialog.action ||
+              !productLifecycleDialog.motivo.trim()
+            }
+          >
+            {savingProductLifecycle
+              ? "Procesando..."
+              : productLifecycleDialog.action
+                ? getProductLifecycleActionLabel(productLifecycleDialog.action)
+                : "Confirmar"}
+          </Button>
+        </DialogActions>
+      </Dialog>

@@ -1,5 +1,6 @@
 import uuid
 
+from django.contrib.contenttypes.models import ContentType
 from django.utils.deprecation import MiddlewareMixin
 
 from apps.core.models import AuditAction, AuditLog, AuditOrigin
@@ -70,6 +71,30 @@ def get_action_from_method(method):
     return AuditAction.EDITAR
 
 
+def get_audit_target_data(request):
+    instance = getattr(request, "audit_instance", None)
+
+    if instance is None or not getattr(instance, "pk", None):
+        return {
+            "content_type": None,
+            "object_id": "",
+            "model_name": "",
+            "object_repr": request.path,
+        }
+
+    content_type = ContentType.objects.get_for_model(
+        instance,
+        for_concrete_model=False,
+    )
+
+    return {
+        "content_type": content_type,
+        "object_id": str(instance.pk),
+        "model_name": instance._meta.model_name,
+        "object_repr": str(instance)[:255],
+    }
+
+
 class ActivityLogMiddleware(MiddlewareMixin):
     """
     Auditoría liviana por request.
@@ -107,25 +132,38 @@ class ActivityLogMiddleware(MiddlewareMixin):
             return response
 
         try:
+            target_data = get_audit_target_data(request)
+
+            metadata = {
+                "method": request.method,
+                "path": request.path,
+                "status_code": response.status_code,
+                "request_id": request_id,
+            }
+
+            custom_metadata = getattr(request, "audit_metadata", {})
+            if isinstance(custom_metadata, dict):
+                metadata.update(custom_metadata)
+
             AuditLog.objects.create(
                 actor=request.user,
-                action=get_action_from_method(request.method),
-                origin=AuditOrigin.API,
+                action=getattr(
+                    request,
+                    "audit_action",
+                    get_action_from_method(request.method),
+                ),
+                origin=getattr(request, "audit_origin", AuditOrigin.API),
                 module=get_module_from_path(request.path),
-                model_name="",
-                object_repr=request.path,
+                model_name=target_data["model_name"],
+                content_type=target_data["content_type"],
+                object_id=target_data["object_id"],
+                object_repr=target_data["object_repr"],
                 ip_address=get_client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
-                metadata={
-                    "method": request.method,
-                    "path": request.path,
-                    "status_code": response.status_code,
-                    "request_id": request_id,
-                },
+                reason=str(getattr(request, "audit_reason", "") or "").strip(),
+                metadata=metadata,
             )
         except Exception:
-            # La auditoría nunca debe impedir que la respuesta principal termine.
-            # Los errores técnicos se revisarán con logging formal más adelante.
             pass
 
         context_token = getattr(request, "_request_id_context_token", None)

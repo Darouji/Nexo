@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
-from apps.core.models import BaseStatus, RecordChangeLog
+from apps.core.models import AuditAction, AuditLog, BaseStatus, RecordChangeLog
 
 from .models import (
     Categoria,
@@ -17,6 +17,7 @@ from .models import (
 from .serializers import MovimientoKardexSerializer
 from .services import (
     cancel_pending_receipt,
+    change_product_lifecycle,
     create_pending_receipt,
     receive_pending_receipt,
 )
@@ -279,6 +280,96 @@ class PendientePorRecibirServiceTests(TestCase):
         with self.assertRaises(ValidationError):
             self.producto.mark_inactive(user=self.user)
 
+    def test_product_lifecycle_controls_operational_state(self):
+        producto = Producto.objects.create(
+            categoria=self.categoria,
+            modelo="Producto ciclo de vida",
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        change_product_lifecycle(
+            producto=producto,
+            accion="DESCONTINUAR",
+            motivo="El modelo fue reemplazado por una versión nueva.",
+            user=self.user,
+        )
+
+        producto.refresh_from_db()
+
+        self.assertEqual(producto.status, BaseStatus.ACTIVO)
+        self.assertTrue(producto.descontinuado)
+
+        with self.assertRaises(ValidationError):
+            create_pending_receipt(
+                producto=producto,
+                cantidad=2,
+                motivo="No debe permitir nueva reposición.",
+                user=self.user,
+            )
+
+        change_product_lifecycle(
+            producto=producto,
+            accion="REANUDAR",
+            motivo="Se autorizó continuar usando el modelo.",
+            user=self.user,
+        )
+
+        producto.refresh_from_db()
+        self.assertFalse(producto.descontinuado)
+
+        change_product_lifecycle(
+            producto=producto,
+            accion="INACTIVAR",
+            motivo="Producto sin uso ni stock físico.",
+            user=self.user,
+        )
+
+        producto.refresh_from_db()
+        self.assertEqual(producto.status, BaseStatus.INACTIVO)
+
+        change_product_lifecycle(
+            producto=producto,
+            accion="ARCHIVAR",
+            motivo="Catálogo histórico sin uso operativo.",
+            user=self.user,
+        )
+
+        producto.refresh_from_db()
+        self.assertEqual(producto.status, BaseStatus.ARCHIVADO)
+
+        change_product_lifecycle(
+            producto=producto,
+            accion="REACTIVAR",
+            motivo="El producto volvió a estar disponible.",
+            user=self.user,
+        )
+
+        producto.refresh_from_db()
+        self.assertEqual(producto.status, BaseStatus.ACTIVO)
+
+        self.assertTrue(
+            RecordChangeLog.objects.filter(
+                object_id=str(producto.pk),
+                action=AuditAction.INACTIVAR,
+                field_name="status",
+                reason="Producto sin uso ni stock físico.",
+            ).exists()
+        )
+
+    def test_product_with_stock_cannot_be_inactivated(self):
+        with self.assertRaises(ValidationError):
+            change_product_lifecycle(
+                producto=self.producto,
+                accion="INACTIVAR",
+                motivo="Intento inválido con stock disponible.",
+                user=self.user,
+            )
+
+        self.producto.refresh_from_db()
+        self.assertEqual(self.producto.status, BaseStatus.ACTIVO)
+
 
 class PendientePorRecibirApiTests(TestCase):
     def setUp(self):
@@ -371,4 +462,47 @@ class PendientePorRecibirApiTests(TestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_lifecycle_endpoint_audits_reason_and_blocks_direct_status_patch(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        lifecycle_product = Producto.objects.create(
+            categoria=self.categoria,
+            modelo="Producto API ciclo de vida",
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        direct_patch_response = client.patch(
+            f"/api/inventory/productos/{lifecycle_product.pk}/",
+            {"status": "INACTIVO"},
+            format="json",
+        )
+
+        self.assertEqual(
+            direct_patch_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        response = client.post(
+            f"/api/inventory/productos/{lifecycle_product.pk}/ciclo-vida/",
+            {
+                "accion": "INACTIVAR",
+                "motivo": "Producto creado por error y sin movimientos.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], BaseStatus.INACTIVO)
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditAction.INACTIVAR,
+                object_id=str(lifecycle_product.pk),
+                reason="Producto creado por error y sin movimientos.",
+            ).exists()
         )

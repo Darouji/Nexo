@@ -69,6 +69,24 @@ class Categoria(BaseModel):
         if not self.name or not self.name.strip():
             raise ValidationError({"name": "El nombre de la categoría es obligatorio."})
 
+        if self.pk and self.status in [
+            BaseStatus.INACTIVO,
+            BaseStatus.ARCHIVADO,
+        ]:
+            has_operational_products = self.productos.filter(
+                status=BaseStatus.ACTIVO,
+            ).exists()
+
+            if has_operational_products:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "No se puede inactivar ni archivar una categoría que "
+                            "contiene productos activos o descontinuados."
+                        )
+                    }
+                )
+
     def save(self, *args, **kwargs):
         self.name_normalized = normalize_text(self.name)
         self.full_clean()
@@ -193,6 +211,30 @@ class Producto(BaseModel):
         if not self.categoria_id:
             raise ValidationError(
                 {"categoria": "El producto debe tener una categoría."}
+            )
+
+        current_category_id = None
+
+        if self.pk:
+            current_category_id = (
+                Producto.objects.filter(pk=self.pk)
+                .values_list("categoria_id", flat=True)
+                .first()
+            )
+
+        is_new_product = current_category_id is None
+        category_changed = current_category_id != self.categoria_id
+
+        if (is_new_product or category_changed) and (
+            self.categoria.status != BaseStatus.ACTIVO
+        ):
+            raise ValidationError(
+                {
+                    "categoria": (
+                        "Solo se puede crear o reasignar un producto a una "
+                        "categoría activa."
+                    )
+                }
             )
 
         if not self.modelo or not self.modelo.strip():

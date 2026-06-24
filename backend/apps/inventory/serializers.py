@@ -29,8 +29,22 @@ class CategoriaSerializer(serializers.ModelSerializer):
             "id",
             "name_normalized",
             "created_at",
+            "status",
             "updated_at",
         ]
+
+    def validate(self, attrs):
+        if "status" in self.initial_data:
+            raise serializers.ValidationError(
+                {
+                    "status": (
+                        "Este campo solo puede modificarse mediante el ciclo de "
+                        "vida controlado de la categoría."
+                    )
+                }
+            )
+
+        return attrs
 
 
 class ProductoSerializer(serializers.ModelSerializer):

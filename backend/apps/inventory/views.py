@@ -145,6 +145,17 @@ class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
     ordering_fields = ["name", "status", "created_at", "updated_at"]
     ordering = ["name"]
 
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {
+                "detail": (
+                    "Las categorías no se inactivan mediante DELETE. "
+                    "Use la acción controlada de ciclo de vida."
+                )
+            },
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
 
 class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
     queryset = Producto.objects.select_related("categoria").all()

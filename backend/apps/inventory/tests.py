@@ -23,6 +23,72 @@ from .services import (
 )
 
 
+class CategoriaIntegrityTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="category-admin",
+            email="category-admin@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.ADMINISTRADOR,
+        )
+
+        self.active_category = Categoria.objects.create(
+            name="Categoría operativa",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.product = Producto.objects.create(
+            categoria=self.active_category,
+            modelo="Producto asociado a categoría",
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.inactive_category = Categoria.objects.create(
+            name="Categoría inactiva",
+            status=BaseStatus.INACTIVO,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_category_with_operational_products_cannot_be_inactivated(self):
+        self.active_category.status = BaseStatus.INACTIVO
+
+        with self.assertRaises(ValidationError):
+            self.active_category.save()
+
+        self.active_category.refresh_from_db()
+
+        self.assertEqual(
+            self.active_category.status,
+            BaseStatus.ACTIVO,
+        )
+
+    def test_product_cannot_be_created_or_reassigned_to_inactive_category(self):
+        with self.assertRaises(ValidationError):
+            Producto.objects.create(
+                categoria=self.inactive_category,
+                modelo="Producto inválido en categoría inactiva",
+                controla_stock=True,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+
+        self.product.categoria = self.inactive_category
+
+        with self.assertRaises(ValidationError):
+            self.product.save()
+
+        self.product.refresh_from_db()
+
+        self.assertEqual(
+            self.product.categoria_id,
+            self.active_category.pk,
+        )
+
+
 class PendientePorRecibirServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -505,4 +571,35 @@ class PendientePorRecibirApiTests(TestCase):
                 object_id=str(lifecycle_product.pk),
                 reason="Producto creado por error y sin movimientos.",
             ).exists()
+        )
+
+    def test_category_rejects_direct_status_change_and_delete(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        patch_response = client.patch(
+            f"/api/inventory/categorias/{self.categoria.pk}/",
+            {"status": BaseStatus.INACTIVO},
+            format="json",
+        )
+
+        self.assertEqual(
+            patch_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        delete_response = client.delete(
+            f"/api/inventory/categorias/{self.categoria.pk}/",
+        )
+
+        self.assertEqual(
+            delete_response.status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+        self.categoria.refresh_from_db()
+
+        self.assertEqual(
+            self.categoria.status,
+            BaseStatus.ACTIVO,
         )

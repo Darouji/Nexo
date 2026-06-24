@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
-from apps.core.models import RecordChangeLog
+from apps.core.models import BaseStatus, RecordChangeLog
 
 from .models import (
     Categoria,
@@ -186,6 +186,37 @@ class PendientePorRecibirServiceTests(TestCase):
                 motivo="No corresponde para servicios.",
                 user=self.user,
             )
+
+        self.assertEqual(PendientePorRecibir.objects.count(), 0)
+
+    def test_inactive_or_discontinued_product_cannot_have_pending_receipt(self):
+        inactive_product = Producto.objects.create(
+            categoria=self.categoria,
+            modelo="Producto inactivo de prueba",
+            controla_stock=True,
+            status=BaseStatus.INACTIVO,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        discontinued_product = Producto.objects.create(
+            categoria=self.categoria,
+            modelo="Producto descontinuado de prueba",
+            controla_stock=True,
+            descontinuado=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        for producto in [inactive_product, discontinued_product]:
+            with self.subTest(producto=producto.modelo):
+                with self.assertRaises(ValidationError):
+                    create_pending_receipt(
+                        producto=producto,
+                        cantidad=2,
+                        motivo="Prueba de protección backend.",
+                        user=self.user,
+                    )
 
         self.assertEqual(PendientePorRecibir.objects.count(), 0)
 

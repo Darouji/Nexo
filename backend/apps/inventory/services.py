@@ -6,7 +6,7 @@ from apps.core.audit import (
     capture_field_values,
     create_record_change_logs_from_snapshot,
 )
-from apps.core.models import AuditAction, AuditOrigin
+from apps.core.models import AuditAction, AuditOrigin, BaseStatus
 
 from .models import (
     KardexMovementType,
@@ -250,6 +250,16 @@ def create_pending_receipt(
 
     with transaction.atomic():
         locked_product = Producto.objects.select_for_update().get(pk=producto.pk)
+
+        if locked_product.status != BaseStatus.ACTIVO or locked_product.descontinuado:
+            raise ValidationError(
+                {
+                    "producto": (
+                        "Solo se pueden registrar unidades por recibir para "
+                        "productos activos y no descontinuados."
+                    )
+                }
+            )
 
         if not locked_product.controla_stock:
             raise ValidationError(

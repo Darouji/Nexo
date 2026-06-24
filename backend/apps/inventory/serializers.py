@@ -353,6 +353,27 @@ class ProductoLifecycleActionSerializer(serializers.Serializer):
         return value
 
 
+class CategoriaLifecycleActionSerializer(serializers.Serializer):
+    accion = serializers.ChoiceField(
+        choices=[
+            ("INACTIVAR", "Inactivar"),
+            ("ARCHIVAR", "Archivar"),
+            ("REACTIVAR", "Reactivar"),
+        ]
+    )
+    motivo = serializers.CharField(max_length=255)
+
+    def validate_motivo(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "El motivo del cambio de estado es obligatorio."
+            )
+
+        return value
+
+
 class CrearPendientePorRecibirSerializer(serializers.Serializer):
     producto = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all())
     cantidad = serializers.IntegerField(min_value=1)

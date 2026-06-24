@@ -30,6 +30,7 @@ from .models import (
     ProductStockStatus,
 )
 from .serializers import (
+    CategoriaLifecycleActionSerializer,
     CategoriaSerializer,
     CrearPendientePorRecibirSerializer,
     InventoryAdjustmentSerializer,
@@ -42,6 +43,7 @@ from .serializers import (
 )
 from .services import (
     cancel_pending_receipt,
+    change_category_lifecycle,
     change_product_lifecycle,
     create_pending_receipt,
     receive_pending_receipt,
@@ -154,6 +156,41 @@ class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
                 )
             },
             status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="ciclo-vida")
+    def ciclo_vida(self, request, pk=None):
+        categoria = self.get_object()
+
+        serializer = CategoriaLifecycleActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_category, audit_action = change_category_lifecycle(
+                categoria=categoria,
+                accion=serializer.validated_data["accion"],
+                motivo=serializer.validated_data["motivo"],
+                user=request.user,
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        django_request = getattr(request, "_request", request)
+
+        django_request.user = request.user
+        django_request.audit_action = audit_action
+        django_request.audit_reason = serializer.validated_data["motivo"]
+        django_request.audit_instance = updated_category
+        django_request.audit_metadata = {
+            "lifecycle_action": serializer.validated_data["accion"],
+        }
+
+        return Response(
+            CategoriaSerializer(
+                updated_category,
+                context={"request": request},
+            ).data,
+            status=status.HTTP_200_OK,
         )
 
 

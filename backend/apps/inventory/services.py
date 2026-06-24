@@ -10,6 +10,7 @@ from apps.core.models import AuditAction, AuditOrigin, BaseStatus
 
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
+    Categoria,
     KardexMovementType,
     MovimientoKardex,
     PendientePorRecibir,
@@ -38,6 +39,17 @@ PRODUCT_LIFECYCLE_AUDIT_ACTIONS = {
     "REANUDAR": AuditAction.RESTAURAR,
 }
 
+CATEGORY_LIFECYCLE_AUDIT_FIELDS = [
+    "status",
+    "updated_by",
+]
+
+CATEGORY_LIFECYCLE_AUDIT_ACTIONS = {
+    "INACTIVAR": AuditAction.INACTIVAR,
+    "ARCHIVAR": AuditAction.ARCHIVAR,
+    "REACTIVAR": AuditAction.RESTAURAR,
+}
+
 
 def get_operator(user):
     if user is None:
@@ -47,6 +59,126 @@ def get_operator(user):
         return None
 
     return user
+
+
+def change_category_lifecycle(
+    *,
+    categoria,
+    accion,
+    motivo,
+    user=None,
+):
+    if categoria is None:
+        raise ValidationError({"categoria": "La categoría es obligatoria."})
+
+    accion = str(accion or "").strip().upper()
+    motivo = str(motivo or "").strip()
+
+    if accion not in CATEGORY_LIFECYCLE_AUDIT_ACTIONS:
+        raise ValidationError(
+            {"accion": "La acción de ciclo de vida indicada no es válida."}
+        )
+
+    if not motivo:
+        raise ValidationError(
+            {"motivo": "El motivo del cambio de estado es obligatorio."}
+        )
+
+    with transaction.atomic():
+        locked_category = Categoria.objects.select_for_update().get(pk=categoria.pk)
+
+        has_operational_products = Producto.objects.filter(
+            categoria_id=locked_category.pk,
+            status=BaseStatus.ACTIVO,
+        ).exists()
+
+        old_values = capture_field_values(
+            locked_category,
+            CATEGORY_LIFECYCLE_AUDIT_FIELDS,
+        )
+
+        audit_action = CATEGORY_LIFECYCLE_AUDIT_ACTIONS[accion]
+
+        if accion == "INACTIVAR":
+            if locked_category.status != BaseStatus.ACTIVO:
+                raise ValidationError(
+                    {
+                        "accion": (
+                            "Solo se puede inactivar una categoría que está activa."
+                        )
+                    }
+                )
+
+            if has_operational_products:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "No se puede inactivar una categoría que contiene "
+                            "productos activos o descontinuados."
+                        )
+                    }
+                )
+
+            locked_category.status = BaseStatus.INACTIVO
+
+        elif accion == "ARCHIVAR":
+            if locked_category.status != BaseStatus.INACTIVO:
+                raise ValidationError(
+                    {
+                        "accion": (
+                            "Solo se puede archivar una categoría que ya está inactiva."
+                        )
+                    }
+                )
+
+            if has_operational_products:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "No se puede archivar una categoría que contiene "
+                            "productos activos o descontinuados."
+                        )
+                    }
+                )
+
+            locked_category.status = BaseStatus.ARCHIVADO
+
+        elif accion == "REACTIVAR":
+            if locked_category.status not in [
+                BaseStatus.INACTIVO,
+                BaseStatus.ARCHIVADO,
+            ]:
+                raise ValidationError(
+                    {
+                        "accion": (
+                            "Solo se pueden reactivar categorías inactivas o "
+                            "archivadas."
+                        )
+                    }
+                )
+
+            locked_category.status = BaseStatus.ACTIVO
+
+        locked_category.updated_by = get_operator(user)
+        locked_category.save(
+            update_fields=[
+                "status",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_category,
+            old_values=old_values,
+            fields=CATEGORY_LIFECYCLE_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            action=audit_action,
+        )
+
+    return locked_category, audit_action
 
 
 def build_reference_data(reference):

@@ -17,6 +17,7 @@ from .models import (
 from .serializers import MovimientoKardexSerializer
 from .services import (
     cancel_pending_receipt,
+    change_category_lifecycle,
     change_product_lifecycle,
     create_pending_receipt,
     receive_pending_receipt,
@@ -86,6 +87,80 @@ class CategoriaIntegrityTests(TestCase):
         self.assertEqual(
             self.product.categoria_id,
             self.active_category.pk,
+        )
+
+    def test_category_lifecycle_changes_status_and_creates_audit(self):
+        empty_category = Categoria.objects.create(
+            name="Categoría sin productos",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        change_category_lifecycle(
+            categoria=empty_category,
+            accion="INACTIVAR",
+            motivo="La categoría ya no se utilizará operativamente.",
+            user=self.user,
+        )
+
+        empty_category.refresh_from_db()
+
+        self.assertEqual(
+            empty_category.status,
+            BaseStatus.INACTIVO,
+        )
+
+        change_category_lifecycle(
+            categoria=empty_category,
+            accion="ARCHIVAR",
+            motivo="La categoría quedó solo como referencia histórica.",
+            user=self.user,
+        )
+
+        empty_category.refresh_from_db()
+
+        self.assertEqual(
+            empty_category.status,
+            BaseStatus.ARCHIVADO,
+        )
+
+        change_category_lifecycle(
+            categoria=empty_category,
+            accion="REACTIVAR",
+            motivo="La categoría vuelve a estar disponible.",
+            user=self.user,
+        )
+
+        empty_category.refresh_from_db()
+
+        self.assertEqual(
+            empty_category.status,
+            BaseStatus.ACTIVO,
+        )
+
+        self.assertTrue(
+            RecordChangeLog.objects.filter(
+                object_id=str(empty_category.pk),
+                action=AuditAction.INACTIVAR,
+                field_name="status",
+                reason="La categoría ya no se utilizará operativamente.",
+            ).exists()
+        )
+
+    def test_category_lifecycle_cannot_inactivate_with_operational_products(self):
+        with self.assertRaises(ValidationError):
+            change_category_lifecycle(
+                categoria=self.active_category,
+                accion="INACTIVAR",
+                motivo="Intento inválido con productos operativos.",
+                user=self.user,
+            )
+
+        self.active_category.refresh_from_db()
+
+        self.assertEqual(
+            self.active_category.status,
+            BaseStatus.ACTIVO,
         )
 
 
@@ -602,4 +677,34 @@ class PendientePorRecibirApiTests(TestCase):
         self.assertEqual(
             self.categoria.status,
             BaseStatus.ACTIVO,
+        )
+
+    def test_category_lifecycle_endpoint_updates_status_and_audits_reason(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        empty_category = Categoria.objects.create(
+            name="Categoría API sin productos",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        response = client.post(
+            f"/api/inventory/categorias/{empty_category.pk}/ciclo-vida/",
+            {
+                "accion": "INACTIVAR",
+                "motivo": "La categoría quedó sin uso operativo.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], BaseStatus.INACTIVO)
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                action=AuditAction.INACTIVAR,
+                object_id=str(empty_category.pk),
+                reason="La categoría quedó sin uso operativo.",
+            ).exists()
         )

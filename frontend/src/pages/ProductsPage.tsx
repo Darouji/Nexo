@@ -616,6 +616,18 @@ export function ProductsPage() {
     return labels[action];
   };
 
+  const getLifecycleDestinationFilter = (action: ProductLifecycleAction) => {
+    const filters: Record<ProductLifecycleAction, string> = {
+      INACTIVAR: "INACTIVO",
+      ARCHIVAR: "ARCHIVADO",
+      REACTIVAR: "ACTIVO",
+      DESCONTINUAR: "DESCONTINUADO",
+      REANUDAR: "ACTIVO",
+    };
+
+    return filters[action];
+  };
+
   const handleProductLifecycle = async () => {
     const product = productLifecycleDialog.product;
     const action = productLifecycleDialog.action;
@@ -636,12 +648,20 @@ export function ProductsPage() {
         motivo,
       });
 
+      const destinationStatus = getLifecycleDestinationFilter(action);
+
+      setStatusFilter(destinationStatus);
+
       setSuccessMessage(
         `Producto "${product.modelo}" ${getProductLifecycleSuccessLabel(action)} correctamente.`,
       );
 
       setProductLifecycleDialog(emptyProductLifecycleDialog);
-      await loadProducts(searchTerm);
+
+      await loadProducts({
+        search: searchTerm,
+        status: destinationStatus,
+      });
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {

@@ -37,6 +37,8 @@ import { SectionCard } from "../components/SectionCard";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
+  cancelPendingReceipt,
+  createPendingReceipt,
   createProduct,
   ensureCategoryByName,
   fetchCategories,
@@ -44,6 +46,7 @@ import {
   fetchProducts,
   fetchPendingReceipts,
   inactivateProduct,
+  receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
   updateProduct,
@@ -85,6 +88,24 @@ type KardexDialogState = {
   loading: boolean;
 };
 
+type PendingReceiptCreateDialogState = {
+  open: boolean;
+  product: Product | null;
+  cantidad: string;
+  referencia: string;
+  motivo: string;
+};
+
+type PendingReceiptOperationMode = "RECIBIR" | "CANCELAR";
+
+type PendingReceiptOperationDialogState = {
+  open: boolean;
+  mode: PendingReceiptOperationMode;
+  pendingReceipt: PendingReceipt | null;
+  cantidad: string;
+  motivo: string;
+};
+
 const emptyProductForm: ProductFormState = {
   categoria_name: "",
   modelo: "",
@@ -109,6 +130,22 @@ const emptyKardexDialog: KardexDialogState = {
   product: null,
   movements: [],
   loading: false,
+};
+
+const emptyPendingReceiptCreateDialog: PendingReceiptCreateDialogState = {
+  open: false,
+  product: null,
+  cantidad: "",
+  referencia: "",
+  motivo: "",
+};
+
+const emptyPendingReceiptOperationDialog: PendingReceiptOperationDialogState = {
+  open: false,
+  mode: "RECIBIR",
+  pendingReceipt: null,
+  cantidad: "",
+  motivo: "",
 };
 
 function getStockStatusColor(status: ProductStockStatus) {
@@ -254,6 +291,16 @@ export function ProductsPage() {
   const [globalKardexOrigin, setGlobalKardexOrigin] = useState("");
   const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
   const [pendingReceiptsLoading, setPendingReceiptsLoading] = useState(true);
+
+  const [pendingReceiptCreateDialog, setPendingReceiptCreateDialog] =
+    useState<PendingReceiptCreateDialogState>(emptyPendingReceiptCreateDialog);
+
+  const [pendingReceiptOperationDialog, setPendingReceiptOperationDialog] =
+    useState<PendingReceiptOperationDialogState>(
+      emptyPendingReceiptOperationDialog,
+    );
+
+  const [savingPendingReceipt, setSavingPendingReceipt] = useState(false);
 
   type ProductFilterOverrides = {
     search?: string;
@@ -592,6 +639,162 @@ export function ProductsPage() {
     setKardexDialog(emptyKardexDialog);
   };
 
+  const openPendingReceiptCreateDialog = (product: Product) => {
+    setPendingReceiptCreateDialog({
+      open: true,
+      product,
+      cantidad: "",
+      referencia: "",
+      motivo: "",
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const closePendingReceiptCreateDialog = () => {
+    if (savingPendingReceipt) {
+      return;
+    }
+
+    setPendingReceiptCreateDialog(emptyPendingReceiptCreateDialog);
+  };
+
+  const openPendingReceiptOperationDialog = (
+    pendingReceipt: PendingReceipt,
+    mode: PendingReceiptOperationMode,
+  ) => {
+    setPendingReceiptOperationDialog({
+      open: true,
+      mode,
+      pendingReceipt,
+      cantidad:
+        mode === "RECIBIR" ? String(pendingReceipt.cantidad_pendiente) : "",
+      motivo: "",
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const closePendingReceiptOperationDialog = () => {
+    if (savingPendingReceipt) {
+      return;
+    }
+
+    setPendingReceiptOperationDialog(emptyPendingReceiptOperationDialog);
+  };
+
+  const handleCreatePendingReceipt = async () => {
+    const product = pendingReceiptCreateDialog.product;
+    const cantidad = parseInteger(pendingReceiptCreateDialog.cantidad);
+
+    if (!product || cantidad <= 0) {
+      setErrorMessage("Debe indicar una cantidad válida por recibir.");
+      return;
+    }
+
+    if (
+      !pendingReceiptCreateDialog.referencia.trim() &&
+      !pendingReceiptCreateDialog.motivo.trim()
+    ) {
+      setErrorMessage("Debe indicar una referencia o un motivo.");
+      return;
+    }
+
+    try {
+      setSavingPendingReceipt(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      await createPendingReceipt({
+        producto: product.id,
+        cantidad,
+        referencia: pendingReceiptCreateDialog.referencia,
+        motivo: pendingReceiptCreateDialog.motivo,
+      });
+
+      setSuccessMessage(
+        `Se registraron ${formatNumber(cantidad)} unidades por recibir para "${product.modelo}". El stock físico no cambió.`,
+      );
+
+      closePendingReceiptCreateDialog();
+
+      await Promise.all([loadProducts(searchTerm), loadPendingReceipts()]);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingPendingReceipt(false);
+    }
+  };
+
+  const handlePendingReceiptOperation = async () => {
+    const pendingReceipt = pendingReceiptOperationDialog.pendingReceipt;
+    const cantidad = parseInteger(pendingReceiptOperationDialog.cantidad);
+    const motivo = pendingReceiptOperationDialog.motivo.trim();
+
+    if (!pendingReceipt) {
+      return;
+    }
+
+    if (cantidad <= 0) {
+      setErrorMessage("Debe indicar una cantidad válida.");
+      return;
+    }
+
+    if (cantidad > pendingReceipt.cantidad_pendiente) {
+      setErrorMessage(
+        `La cantidad no puede superar las ${formatNumber(
+          pendingReceipt.cantidad_pendiente,
+        )} unidades pendientes.`,
+      );
+      return;
+    }
+
+    if (!motivo) {
+      setErrorMessage("El motivo es obligatorio.");
+      return;
+    }
+
+    try {
+      setSavingPendingReceipt(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      if (pendingReceiptOperationDialog.mode === "RECIBIR") {
+        await receivePendingReceipt(pendingReceipt.id, {
+          cantidad,
+          motivo,
+        });
+
+        setSuccessMessage(
+          `Se recibieron ${formatNumber(cantidad)} unidades de "${pendingReceipt.producto_modelo}". El stock y Kardex fueron actualizados.`,
+        );
+
+        await Promise.all([
+          loadProducts(searchTerm),
+          loadPendingReceipts(),
+          loadGlobalKardex(),
+        ]);
+      } else {
+        await cancelPendingReceipt(pendingReceipt.id, {
+          cantidad,
+          motivo,
+        });
+
+        setSuccessMessage(
+          `Se cancelaron ${formatNumber(cantidad)} unidades pendientes de "${pendingReceipt.producto_modelo}". El stock físico no cambió.`,
+        );
+
+        await Promise.all([loadProducts(searchTerm), loadPendingReceipts()]);
+      }
+
+      closePendingReceiptOperationDialog();
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingPendingReceipt(false);
+    }
+  };
+
   const handleSaveMovement = async () => {
     if (!movementDialog.product) {
       return;
@@ -742,12 +945,16 @@ export function ProductsPage() {
     {
       field: "actions",
       headerName: "Acciones",
-      width: 560,
+      width: 680,
       sortable: false,
       filterable: false,
       renderCell: (params) => {
         const product = params.row as Product;
         const actionsDisabled = !product.controla_stock;
+        const canRegisterPendingReceipt =
+          product.controla_stock &&
+          product.status === "ACTIVO" &&
+          !product.descontinuado;
 
         return (
           <Stack direction="row" spacing={1}>
@@ -767,6 +974,16 @@ export function ProductsPage() {
               onClick={() => openMovementDialog(product, "ENTRADA_MANUAL")}
             >
               Entrada
+            </Button>
+
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<LocalShippingIcon />}
+              disabled={!canRegisterPendingReceipt}
+              onClick={() => openPendingReceiptCreateDialog(product)}
+            >
+              Por recibir
             </Button>
 
             <Button
@@ -1007,6 +1224,57 @@ export function ProductsPage() {
       minWidth: 250,
       flex: 1.2,
       renderCell: (params) => params.value || "Sin motivo",
+    },
+    {
+      field: "actions",
+      headerName: "Acciones",
+      width: 240,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => {
+        const pendingReceipt = params.row as PendingReceipt;
+
+        const canOperate =
+          pendingReceipt.cantidad_pendiente > 0 &&
+          (pendingReceipt.estado === "PENDIENTE" ||
+            pendingReceipt.estado === "PARCIAL");
+
+        return (
+          <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<AddBoxIcon />}
+              disabled={!canOperate}
+              onClick={() =>
+                openPendingReceiptOperationDialog(pendingReceipt, "RECIBIR")
+              }
+            >
+              Recibir
+            </Button>
+
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<DeleteIcon />}
+              disabled={!canOperate}
+              onClick={() =>
+                openPendingReceiptOperationDialog(pendingReceipt, "CANCELAR")
+              }
+              sx={{
+                color: colors.status.error,
+                borderColor: colors.status.error,
+                "&:hover": {
+                  bgcolor: colors.status.errorSoft,
+                  borderColor: colors.status.error,
+                },
+              }}
+            >
+              Cancelar
+            </Button>
+          </Stack>
+        );
+      },
     },
   ];
 
@@ -1570,6 +1838,208 @@ export function ProductsPage() {
               : editingProduct
                 ? "Guardar cambios"
                 : "Crear producto"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={pendingReceiptCreateDialog.open}
+        onClose={closePendingReceiptCreateDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Registrar unidades por recibir</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              Registrar unidades por recibir no modifica el stock físico ni crea
+              Kardex. El stock cambia solamente al confirmar la recepción
+              física.
+            </Alert>
+
+            <TextField
+              label="Producto"
+              value={
+                pendingReceiptCreateDialog.product
+                  ? `${pendingReceiptCreateDialog.product.categoria_name} — ${pendingReceiptCreateDialog.product.modelo}`
+                  : ""
+              }
+              fullWidth
+              disabled
+            />
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                label="Cantidad por recibir"
+                type="number"
+                value={pendingReceiptCreateDialog.cantidad}
+                onChange={(event) =>
+                  setPendingReceiptCreateDialog((current) => ({
+                    ...current,
+                    cantidad: event.target.value,
+                  }))
+                }
+                fullWidth
+                required
+              />
+
+              <TextField
+                label="Referencia"
+                value={pendingReceiptCreateDialog.referencia}
+                onChange={(event) =>
+                  setPendingReceiptCreateDialog((current) => ({
+                    ...current,
+                    referencia: event.target.value,
+                  }))
+                }
+                fullWidth
+                helperText="Ejemplo: OC-2026-001."
+              />
+            </Stack>
+
+            <TextField
+              label="Motivo"
+              value={pendingReceiptCreateDialog.motivo}
+              onChange={(event) =>
+                setPendingReceiptCreateDialog((current) => ({
+                  ...current,
+                  motivo: event.target.value,
+                }))
+              }
+              fullWidth
+              multiline
+              minRows={2}
+              helperText="Debe indicar una referencia o un motivo."
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closePendingReceiptCreateDialog}>Cancelar</Button>
+
+          <Button
+            variant="contained"
+            onClick={() => void handleCreatePendingReceipt()}
+            disabled={
+              savingPendingReceipt ||
+              !pendingReceiptCreateDialog.product ||
+              parseInteger(pendingReceiptCreateDialog.cantidad) <= 0 ||
+              (!pendingReceiptCreateDialog.referencia.trim() &&
+                !pendingReceiptCreateDialog.motivo.trim())
+            }
+          >
+            {savingPendingReceipt ? "Registrando..." : "Registrar pendiente"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={pendingReceiptOperationDialog.open}
+        onClose={closePendingReceiptOperationDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {pendingReceiptOperationDialog.mode === "RECIBIR"
+            ? "Recibir unidades pendientes"
+            : "Cancelar unidades pendientes"}
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert
+              severity={
+                pendingReceiptOperationDialog.mode === "RECIBIR"
+                  ? "success"
+                  : "warning"
+              }
+              variant="outlined"
+            >
+              {pendingReceiptOperationDialog.mode === "RECIBIR"
+                ? "Esta operación aumenta el stock físico y crea un movimiento Kardex auditado."
+                : "Esta operación no modifica el stock físico ni crea un movimiento Kardex."}
+            </Alert>
+
+            <TextField
+              label="Producto"
+              value={
+                pendingReceiptOperationDialog.pendingReceipt
+                  ? `${pendingReceiptOperationDialog.pendingReceipt.producto_categoria} — ${pendingReceiptOperationDialog.pendingReceipt.producto_modelo}`
+                  : ""
+              }
+              fullWidth
+              disabled
+            />
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                label="Pendiente disponible"
+                value={formatNumber(
+                  pendingReceiptOperationDialog.pendingReceipt
+                    ?.cantidad_pendiente ?? 0,
+                )}
+                fullWidth
+                disabled
+              />
+
+              <TextField
+                label={
+                  pendingReceiptOperationDialog.mode === "RECIBIR"
+                    ? "Cantidad a recibir"
+                    : "Cantidad a cancelar"
+                }
+                type="number"
+                value={pendingReceiptOperationDialog.cantidad}
+                onChange={(event) =>
+                  setPendingReceiptOperationDialog((current) => ({
+                    ...current,
+                    cantidad: event.target.value,
+                  }))
+                }
+                fullWidth
+                required
+              />
+            </Stack>
+
+            <TextField
+              label="Motivo"
+              value={pendingReceiptOperationDialog.motivo}
+              onChange={(event) =>
+                setPendingReceiptOperationDialog((current) => ({
+                  ...current,
+                  motivo: event.target.value,
+                }))
+              }
+              fullWidth
+              required
+              multiline
+              minRows={2}
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closePendingReceiptOperationDialog}>Cancelar</Button>
+
+          <Button
+            variant="contained"
+            onClick={() => void handlePendingReceiptOperation()}
+            disabled={
+              savingPendingReceipt ||
+              !pendingReceiptOperationDialog.pendingReceipt ||
+              parseInteger(pendingReceiptOperationDialog.cantidad) <= 0 ||
+              parseInteger(pendingReceiptOperationDialog.cantidad) >
+                (pendingReceiptOperationDialog.pendingReceipt
+                  ?.cantidad_pendiente ?? 0) ||
+              !pendingReceiptOperationDialog.motivo.trim()
+            }
+          >
+            {savingPendingReceipt
+              ? "Procesando..."
+              : pendingReceiptOperationDialog.mode === "RECIBIR"
+                ? "Confirmar recepción"
+                : "Confirmar cancelación"}
           </Button>
         </DialogActions>
       </Dialog>

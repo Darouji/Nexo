@@ -24,7 +24,6 @@ class ProductoAdmin(admin.ModelAdmin):
         "codigo_sap",
         "stock_actual",
         "stock_critico",
-        "en_camino",
         "controla_stock",
         "descontinuado",
         "status",

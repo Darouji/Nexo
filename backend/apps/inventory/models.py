@@ -448,6 +448,28 @@ class MovimientoKardex(BaseModel):
     stock_antes = models.IntegerField(verbose_name="Stock antes")
     stock_despues = models.IntegerField(verbose_name="Stock después")
 
+    producto_modelo_snapshot = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        editable=False,
+        verbose_name="Modelo del producto al registrar",
+    )
+    producto_categoria_snapshot = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        editable=False,
+        verbose_name="Categoría del producto al registrar",
+    )
+    producto_codigo_sap_snapshot = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        editable=False,
+        verbose_name="Código SAP del producto al registrar",
+    )
+
     motivo = models.CharField(max_length=255, verbose_name="Motivo")
 
     reference_content_type = models.ForeignKey(
@@ -484,7 +506,9 @@ class MovimientoKardex(BaseModel):
         ]
 
     def __str__(self):
-        return f"{self.producto.modelo} | {self.movement_type} | {self.cantidad}"
+        producto_modelo = self.producto_modelo_snapshot or self.producto.modelo
+
+        return f"{producto_modelo} | {self.movement_type} | {self.cantidad}"
 
     def clean(self):
         super().clean()
@@ -532,5 +556,17 @@ class MovimientoKardex(BaseModel):
             )
 
     def save(self, *args, **kwargs):
+        if self._state.adding and self.producto_id:
+            producto = self.producto
+
+            if not self.producto_modelo_snapshot:
+                self.producto_modelo_snapshot = producto.modelo
+
+            if not self.producto_categoria_snapshot:
+                self.producto_categoria_snapshot = producto.categoria.name
+
+            if not self.producto_codigo_sap_snapshot:
+                self.producto_codigo_sap_snapshot = producto.codigo_sap
+
         self.full_clean()
         super().save(*args, **kwargs)

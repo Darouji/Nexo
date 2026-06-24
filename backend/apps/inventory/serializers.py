@@ -188,14 +188,9 @@ class ProductoSerializer(serializers.ModelSerializer):
 
 
 class MovimientoKardexSerializer(serializers.ModelSerializer):
-    producto_modelo = serializers.CharField(source="producto.modelo", read_only=True)
-    producto_categoria = serializers.CharField(
-        source="producto.categoria.name", read_only=True
-    )
-    producto_codigo_sap = serializers.CharField(
-        source="producto.codigo_sap",
-        read_only=True,
-    )
+    producto_modelo = serializers.SerializerMethodField()
+    producto_categoria = serializers.SerializerMethodField()
+    producto_codigo_sap = serializers.SerializerMethodField()
     operador_nombre = serializers.SerializerMethodField()
     movement_type_display = serializers.CharField(
         source="get_movement_type_display",
@@ -231,6 +226,18 @@ class MovimientoKardexSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_producto_modelo(self, obj):
+        return obj.producto_modelo_snapshot or obj.producto.modelo
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_producto_categoria(self, obj):
+        return obj.producto_categoria_snapshot or obj.producto.categoria.name
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_producto_codigo_sap(self, obj):
+        return obj.producto_codigo_sap_snapshot or obj.producto.codigo_sap
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_operador_nombre(self, obj):

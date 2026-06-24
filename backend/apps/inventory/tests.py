@@ -14,6 +14,7 @@ from .models import (
     PendientePorRecibirStatus,
     Producto,
 )
+from .serializers import MovimientoKardexSerializer
 from .services import (
     cancel_pending_receipt,
     create_pending_receipt,
@@ -118,6 +119,53 @@ class PendientePorRecibirServiceTests(TestCase):
                 object_id=str(pending_receipt.pk),
                 field_name="cantidad_recibida",
             ).exists()
+        )
+
+    def test_kardex_preserves_product_snapshot_after_product_edit(self):
+        pending_receipt = create_pending_receipt(
+            producto=self.producto,
+            cantidad=4,
+            motivo="Compra para validar trazabilidad histórica.",
+            referencia="OC-SNAPSHOT-001",
+            user=self.user,
+        )
+
+        _, movement = receive_pending_receipt(
+            pending_receipt=pending_receipt,
+            cantidad=2,
+            motivo="Recepción física para prueba de snapshot.",
+            user=self.user,
+        )
+
+        original_modelo = self.producto.modelo
+        original_categoria = self.categoria.name
+        original_codigo_sap = self.producto.codigo_sap
+
+        self.producto.refresh_from_db()
+
+        nueva_categoria = Categoria.objects.create(
+            name="Sensores corregidos",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.producto.modelo = "Sensor Industrial A - Corregido"
+        self.producto.categoria = nueva_categoria
+        self.producto.codigo_sap = "SAP-001-REV"
+        self.producto.save()
+
+        movement_data = MovimientoKardexSerializer(
+            MovimientoKardex.objects.select_related(
+                "producto",
+                "producto__categoria",
+            ).get(pk=movement.pk)
+        ).data
+
+        self.assertEqual(movement_data["producto_modelo"], original_modelo)
+        self.assertEqual(movement_data["producto_categoria"], original_categoria)
+        self.assertEqual(
+            movement_data["producto_codigo_sap"],
+            original_codigo_sap,
         )
 
     def test_cancel_pending_does_not_change_stock_or_create_kardex(self):

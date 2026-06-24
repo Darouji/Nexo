@@ -332,10 +332,13 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
 
-        request.audit_action = audit_action
-        request.audit_reason = serializer.validated_data["motivo"]
-        request.audit_instance = updated_product
-        request.audit_metadata = {
+        django_request = getattr(request, "_request", request)
+
+        django_request.user = request.user
+        django_request.audit_action = audit_action
+        django_request.audit_reason = serializer.validated_data["motivo"]
+        django_request.audit_instance = updated_product
+        django_request.audit_metadata = {
             "lifecycle_action": serializer.validated_data["accion"],
         }
 

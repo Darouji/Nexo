@@ -106,11 +106,11 @@ type PendingReceiptOperationDialogState = {
   motivo: string;
 };
 
-const emptyProductLifecycleDialog: ProductLifecycleDialogState = {
-  open: false,
-  product: null,
-  action: null,
-  motivo: "",
+type ProductLifecycleDialogState = {
+  open: boolean;
+  product: Product | null;
+  action: ProductLifecycleAction | null;
+  motivo: string;
 };
 
 const emptyProductForm: ProductFormState = {
@@ -640,7 +640,7 @@ export function ProductsPage() {
         `Producto "${product.modelo}" ${getProductLifecycleSuccessLabel(action)} correctamente.`,
       );
 
-      closeProductLifecycleDialog();
+      setProductLifecycleDialog(emptyProductLifecycleDialog);
       await loadProducts(searchTerm);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
@@ -2302,7 +2302,7 @@ export function ProductsPage() {
         </DialogActions>
       </Dialog>
 
-            <Dialog
+      <Dialog
         open={productLifecycleDialog.open}
         onClose={closeProductLifecycleDialog}
         fullWidth
@@ -2391,3 +2391,6 @@ export function ProductsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+    </Box>
+  );
+}

@@ -68,7 +68,6 @@ class ProductoSerializer(serializers.ModelSerializer):
             "stock",
             "stock_actual",
             "stock_critico",
-            "en_camino",
             "por_recibir",
             "controla_stock",
             "descontinuado",

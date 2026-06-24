@@ -102,7 +102,6 @@ class Producto(BaseModel):
         db_index=True,
         verbose_name="Código SAP normalizado",
     )
-
     stock_actual = models.IntegerField(
         default=0,
         editable=False,
@@ -112,14 +111,6 @@ class Producto(BaseModel):
         default=0,
         verbose_name="Stock mínimo",
     )
-
-    # Campo temporal. Será reemplazado por registros auditables
-    # de PendientePorRecibir en la siguiente fase.
-    en_camino = models.PositiveIntegerField(
-        default=0,
-        verbose_name="En camino",
-    )
-
     controla_stock = models.BooleanField(
         default=True,
         db_index=True,

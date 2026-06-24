@@ -49,7 +49,6 @@ import {
 } from "../services/inventoryService";
 import type {
   Category,
-  CreateProductPayload,
   KardexMovement,
   Product,
   ProductListParams,
@@ -63,7 +62,6 @@ type ProductFormState = {
   detalle: string;
   codigo_sap: string;
   stock_critico: string;
-  en_camino: string;
   controla_stock: boolean;
   initial_stock: string;
   initial_stock_motivo: string;
@@ -90,7 +88,6 @@ const emptyProductForm: ProductFormState = {
   detalle: "",
   codigo_sap: "",
   stock_critico: "0",
-  en_camino: "0",
   controla_stock: true,
   initial_stock: "0",
   initial_stock_motivo: "Stock inicial registrado desde frontend.",
@@ -358,7 +355,7 @@ export function ProductsPage() {
   ).length;
 
   const incomingStockTotal = productos.reduce(
-    (sum, producto) => sum + Number(producto.en_camino || 0),
+    (sum, producto) => sum + Number(producto.por_recibir || 0),
     0,
   );
 
@@ -378,7 +375,6 @@ export function ProductsPage() {
       detalle: product.detalle || "",
       codigo_sap: product.codigo_sap || "",
       stock_critico: String(product.stock_critico ?? 0),
-      en_camino: String(product.en_camino ?? 0),
       controla_stock: product.controla_stock,
       initial_stock: "0",
       initial_stock_motivo: "Stock inicial registrado desde frontend.",
@@ -409,34 +405,34 @@ export function ProductsPage() {
         categorias,
       );
 
-      const payload: CreateProductPayload = {
+      const productPayload = {
         categoria: category.id,
         modelo: productForm.modelo.trim(),
         detalle: productForm.detalle.trim(),
         codigo_sap: productForm.codigo_sap.trim(),
         stock_critico: Math.max(parseInteger(productForm.stock_critico), 0),
-        en_camino: Math.max(parseInteger(productForm.en_camino), 0),
         controla_stock: productForm.controla_stock,
       };
 
       if (editingProduct) {
-        await updateProduct(editingProduct.id, payload);
+        await updateProduct(editingProduct.id, productPayload);
 
         setSuccessMessage(
-          `Producto "${payload.modelo}" actualizado correctamente.`,
+          `Producto "${productPayload.modelo}" actualizado correctamente.`,
         );
       } else {
-        const createdProduct = await createProduct(payload);
-        const initialStock = parseInteger(productForm.initial_stock);
+        const initialStock = productForm.controla_stock
+          ? Math.max(parseInteger(productForm.initial_stock), 0)
+          : 0;
 
-        if (payload.controla_stock && initialStock > 0) {
-          await registerManualStockEntry(createdProduct.id, {
-            cantidad: initialStock,
-            motivo:
-              productForm.initial_stock_motivo.trim() ||
-              "Stock inicial registrado desde frontend.",
-          });
-        }
+        await createProduct({
+          ...productPayload,
+          stock_inicial: initialStock,
+          motivo_stock_inicial:
+            initialStock > 0
+              ? productForm.initial_stock_motivo.trim()
+              : undefined,
+        });
 
         setSuccessMessage(
           `Producto creado correctamente en la categoría "${category.name}".`,
@@ -449,6 +445,7 @@ export function ProductsPage() {
       setProductDialogOpen(false);
       setEditingProduct(null);
       setProductForm(emptyProductForm);
+
       await loadProducts(editingProduct ? searchTerm : "");
       await loadGlobalKardex();
 
@@ -626,8 +623,8 @@ export function ProductsPage() {
       renderCell: (params) => formatNumber(Number(params.value || 0)),
     },
     {
-      field: "en_camino",
-      headerName: "En camino",
+      field: "por_recibir",
+      headerName: "Por recibir",
       width: 130,
       type: "number",
       renderCell: (params) => formatNumber(Number(params.value || 0)),
@@ -680,12 +677,12 @@ export function ProductsPage() {
       },
     },
     {
-      field: "status",
-      headerName: "Estado registro",
+      field: "estado_producto_display",
+      headerName: "Estado",
       width: 160,
       renderCell: (params) => (
         <Chip
-          label={String(params.value || "SIN_ESTADO").replaceAll("_", " ")}
+          label={String(params.value || "Sin estado")}
           size="small"
           variant="outlined"
           sx={{ fontWeight: 800 }}
@@ -870,7 +867,7 @@ export function ProductsPage() {
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <PageHeader
         title="Inventario de Productos"
-        subtitle="Módulo central del sistema: productos, categorías, stock actual, stock crítico, unidades en camino y movimientos Kardex."
+        subtitle="Módulo central del sistema: productos, categorías, stock actual, stock crítico, unidades por recibir y movimientos Kardex."
         eyebrow="Inventario y Kardex"
         icon={<Inventory2Icon />}
         tone={colors.modules.inventory}
@@ -944,9 +941,9 @@ export function ProductsPage() {
         />
 
         <MetricCard
-          title="Unidades en camino"
+          title="Unidades por recibir"
           value={formatNumber(incomingStockTotal)}
-          helper="Stock pendiente de recepción"
+          helper="Pendientes de recepción física"
           icon={<LocalShippingIcon />}
           tone={{
             main: colors.status.warning,
@@ -1106,7 +1103,7 @@ export function ProductsPage() {
 
       <SectionCard
         title="Catálogo de productos"
-        subtitle="Stock actual, stock crítico, productos en camino, control de Kardex y acciones operativas."
+        subtitle="Stock actual, stock crítico, unidades por recibir, Kardex y acciones operativas."
       >
         <SmartDataGrid rows={productos} columns={columns} loading={loading} />
       </SectionCard>
@@ -1153,6 +1150,7 @@ export function ProductsPage() {
           >
             <MenuItem value="">Todos</MenuItem>
             <MenuItem value="ENTRADA_MANUAL">Entrada manual</MenuItem>
+            <MenuItem value="ENTRADA_RECEPCION">Entrada por recepción</MenuItem>
             <MenuItem value="AJUSTE_INVENTARIO">Ajuste de inventario</MenuItem>
             <MenuItem value="SALIDA_VENTA">Salida por venta</MenuItem>
             <MenuItem value="REVERSA_ANULACION">Reversa por anulación</MenuItem>
@@ -1325,33 +1323,18 @@ export function ProductsPage() {
               minRows={2}
             />
 
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                label="Stock crítico"
-                type="number"
-                value={productForm.stock_critico}
-                onChange={(event) =>
-                  setProductForm((current) => ({
-                    ...current,
-                    stock_critico: event.target.value,
-                  }))
-                }
-                fullWidth
-              />
-
-              <TextField
-                label="En camino"
-                type="number"
-                value={productForm.en_camino}
-                onChange={(event) =>
-                  setProductForm((current) => ({
-                    ...current,
-                    en_camino: event.target.value,
-                  }))
-                }
-                fullWidth
-              />
-            </Stack>
+            <TextField
+              label="Stock crítico"
+              type="number"
+              value={productForm.stock_critico}
+              onChange={(event) =>
+                setProductForm((current) => ({
+                  ...current,
+                  stock_critico: event.target.value,
+                }))
+              }
+              fullWidth
+            />
 
             <FormControlLabel
               control={
@@ -1384,7 +1367,7 @@ export function ProductsPage() {
                     }))
                   }
                   fullWidth
-                  helperText="Se registrará como entrada manual Kardex después de crear el producto."
+                  helperText="Se registrará en la misma operación de creación mediante una entrada Kardex auditada."
                 />
 
                 <TextField

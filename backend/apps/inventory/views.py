@@ -163,7 +163,6 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         "codigo_sap",
         "stock_actual",
         "stock_critico",
-        "en_camino",
         "por_recibir_total",
         "controla_stock",
         "descontinuado",

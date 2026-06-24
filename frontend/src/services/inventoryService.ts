@@ -30,7 +30,7 @@ export type Product = {
   stock: number;
   stock_actual: number;
   stock_critico: number;
-  en_camino: number;
+  por_recibir: number;
   controla_stock: boolean;
   descontinuado: boolean;
   stock_status: ProductStockStatus;
@@ -122,11 +122,14 @@ export type CreateProductPayload = {
   detalle?: string;
   codigo_sap?: string;
   stock_critico: number;
-  en_camino: number;
   controla_stock: boolean;
+  stock_inicial?: number;
+  motivo_stock_inicial?: string;
 };
 
-export type UpdateProductPayload = Partial<CreateProductPayload>;
+export type UpdateProductPayload = Partial<
+  Omit<CreateProductPayload, "stock_inicial" | "motivo_stock_inicial">
+>;
 
 export type StockMovementPayload = {
   cantidad: number;

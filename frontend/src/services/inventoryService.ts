@@ -71,6 +71,54 @@ export type KardexMovement = {
   updated_at: string;
 };
 
+export type PendingReceiptStatus =
+  | "PENDIENTE"
+  | "PARCIAL"
+  | "RECIBIDA"
+  | "CANCELADA"
+  | "CERRADA_PARCIAL";
+
+export type PendingReceipt = {
+  [key: string]: unknown;
+  id: number;
+  producto: number;
+  producto_modelo: string;
+  producto_categoria: string;
+  producto_codigo_sap: string;
+  cantidad_original: number;
+  cantidad_recibida: number;
+  cantidad_cancelada: number;
+  cantidad_pendiente: number;
+  estado: PendingReceiptStatus;
+  estado_display: string;
+  referencia: string;
+  motivo: string;
+  status: string;
+  created_by: number | null;
+  created_by_nombre: string;
+  updated_by: number | null;
+  updated_by_nombre: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatePendingReceiptPayload = {
+  producto: number;
+  cantidad: number;
+  referencia?: string;
+  motivo?: string;
+};
+
+export type PendingReceiptOperationPayload = {
+  cantidad: number;
+  motivo: string;
+};
+
+export type ReceivePendingReceiptResponse = {
+  pendiente: PendingReceipt;
+  movimiento_kardex: KardexMovement;
+};
+
 type PaginatedResponse<T> = {
   count: number;
   next: string | null;
@@ -81,6 +129,9 @@ type PaginatedResponse<T> = {
 type ProductListResponse = Product[] | PaginatedResponse<Product>;
 type CategoryListResponse = Category[] | PaginatedResponse<Category>;
 type KardexListResponse = KardexMovement[] | PaginatedResponse<KardexMovement>;
+type PendingReceiptListResponse =
+  | PendingReceipt[]
+  | PaginatedResponse<PendingReceipt>;
 
 type CategoryListParams = {
   search?: string;
@@ -105,6 +156,13 @@ type KardexListParams = {
   movement_type?: string;
   origin?: string;
   status?: string;
+  search?: string;
+  ordering?: string;
+};
+
+export type PendingReceiptListParams = {
+  producto?: CsvParam<number>;
+  estado?: CsvParam<PendingReceiptStatus>;
   search?: string;
   ordering?: string;
 };
@@ -372,4 +430,68 @@ export async function fetchKardexMovements(params: KardexListParams = {}) {
   });
 
   return extractResults(response.data);
+}
+
+export async function fetchPendingReceipts(
+  params: PendingReceiptListParams = {},
+) {
+  const response = await api.get<PendingReceiptListResponse>(
+    "/inventory/pendientes-por-recibir/",
+    {
+      params: {
+        producto: toCsv(params.producto),
+        estado: toCsv(params.estado),
+        search: params.search?.trim() || undefined,
+        ordering: params.ordering || "-created_at",
+      },
+    },
+  );
+
+  return extractResults(response.data);
+}
+
+export async function createPendingReceipt(
+  payload: CreatePendingReceiptPayload,
+) {
+  const response = await api.post<PendingReceipt>(
+    "/inventory/pendientes-por-recibir/",
+    {
+      producto: payload.producto,
+      cantidad: payload.cantidad,
+      referencia: payload.referencia?.trim() || "",
+      motivo: payload.motivo?.trim() || "",
+    },
+  );
+
+  return response.data;
+}
+
+export async function receivePendingReceipt(
+  pendingReceiptId: number,
+  payload: PendingReceiptOperationPayload,
+) {
+  const response = await api.post<ReceivePendingReceiptResponse>(
+    `/inventory/pendientes-por-recibir/${pendingReceiptId}/recibir/`,
+    {
+      cantidad: payload.cantidad,
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
+}
+
+export async function cancelPendingReceipt(
+  pendingReceiptId: number,
+  payload: PendingReceiptOperationPayload,
+) {
+  const response = await api.post<PendingReceipt>(
+    `/inventory/pendientes-por-recibir/${pendingReceiptId}/cancelar/`,
+    {
+      cantidad: payload.cantidad,
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
 }

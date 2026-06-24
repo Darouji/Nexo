@@ -42,6 +42,7 @@ import {
   fetchCategories,
   fetchKardexMovements,
   fetchProducts,
+  fetchPendingReceipts,
   inactivateProduct,
   registerInventoryAdjustment,
   registerManualStockEntry,
@@ -50,6 +51,8 @@ import {
 import type {
   Category,
   KardexMovement,
+  PendingReceipt,
+  PendingReceiptStatus,
   Product,
   ProductListParams,
   ProductStockStatus,
@@ -138,6 +141,26 @@ function getStockStatusLabel(status: ProductStockStatus) {
   }
 
   return "No controla stock";
+}
+
+function getPendingReceiptStatusColor(status: PendingReceiptStatus) {
+  if (status === "PENDIENTE") {
+    return colors.status.warning;
+  }
+
+  if (status === "PARCIAL") {
+    return colors.status.info;
+  }
+
+  if (status === "RECIBIDA") {
+    return colors.status.success;
+  }
+
+  if (status === "CANCELADA") {
+    return colors.status.error;
+  }
+
+  return colors.text.muted;
 }
 
 function formatNumber(value: number) {
@@ -229,6 +252,8 @@ export function ProductsPage() {
   const [globalKardexSearchTerm, setGlobalKardexSearchTerm] = useState("");
   const [globalKardexMovementType, setGlobalKardexMovementType] = useState("");
   const [globalKardexOrigin, setGlobalKardexOrigin] = useState("");
+  const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
+  const [pendingReceiptsLoading, setPendingReceiptsLoading] = useState(true);
 
   type ProductFilterOverrides = {
     search?: string;
@@ -305,6 +330,23 @@ export function ProductsPage() {
     }
   };
 
+  const loadPendingReceipts = async () => {
+    try {
+      setPendingReceiptsLoading(true);
+      setErrorMessage("");
+
+      const pendingReceiptsData = await fetchPendingReceipts({
+        ordering: "-created_at",
+      });
+
+      setPendingReceipts(pendingReceiptsData);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setPendingReceiptsLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -318,15 +360,21 @@ export function ProductsPage() {
       fetchKardexMovements({
         ordering: "-created_at",
       }),
+      fetchPendingReceipts({
+        ordering: "-created_at",
+      }),
     ])
-      .then(([productsData, categoriesData, kardexData]) => {
-        if (!isMounted) return;
+      .then(
+        ([productsData, categoriesData, kardexData, pendingReceiptsData]) => {
+          if (!isMounted) return;
 
-        setProductos(productsData);
-        setCategorias(categoriesData);
-        setGlobalKardexMovements(kardexData);
-        setErrorMessage("");
-      })
+          setProductos(productsData);
+          setCategorias(categoriesData);
+          setGlobalKardexMovements(kardexData);
+          setPendingReceipts(pendingReceiptsData);
+          setErrorMessage("");
+        },
+      )
       .catch((error: unknown) => {
         if (!isMounted) return;
 
@@ -337,6 +385,7 @@ export function ProductsPage() {
 
         setLoading(false);
         setGlobalKardexLoading(false);
+        setPendingReceiptsLoading(false);
       });
 
     return () => {
@@ -354,8 +403,9 @@ export function ProductsPage() {
     (producto) => producto.controla_stock,
   ).length;
 
-  const incomingStockTotal = productos.reduce(
-    (sum, producto) => sum + Number(producto.por_recibir || 0),
+  const incomingStockTotal = pendingReceipts.reduce(
+    (sum, pendingReceipt) =>
+      sum + Number(pendingReceipt.cantidad_pendiente || 0),
     0,
   );
 
@@ -863,6 +913,103 @@ export function ProductsPage() {
     },
   ];
 
+  const pendingReceiptColumns: GridColDef[] = [
+    {
+      field: "created_at",
+      headerName: "Registrado",
+      width: 160,
+      renderCell: (params) => formatDateTime(String(params.value || "")),
+    },
+    {
+      field: "producto_categoria",
+      headerName: "Categoría",
+      minWidth: 150,
+      flex: 0.7,
+    },
+    {
+      field: "producto_modelo",
+      headerName: "Producto",
+      minWidth: 210,
+      flex: 1,
+    },
+    {
+      field: "producto_codigo_sap",
+      headerName: "Código SAP",
+      minWidth: 145,
+      flex: 0.6,
+      renderCell: (params) => params.value || "Sin código",
+    },
+    {
+      field: "cantidad_original",
+      headerName: "Original",
+      width: 105,
+      type: "number",
+      renderCell: (params) => formatNumber(Number(params.value || 0)),
+    },
+    {
+      field: "cantidad_recibida",
+      headerName: "Recibida",
+      width: 110,
+      type: "number",
+      renderCell: (params) => formatNumber(Number(params.value || 0)),
+    },
+    {
+      field: "cantidad_cancelada",
+      headerName: "Cancelada",
+      width: 115,
+      type: "number",
+      renderCell: (params) => formatNumber(Number(params.value || 0)),
+    },
+    {
+      field: "cantidad_pendiente",
+      headerName: "Pendiente",
+      width: 115,
+      type: "number",
+      renderCell: (params) => (
+        <Typography sx={{ fontWeight: 900 }}>
+          {formatNumber(Number(params.value || 0))}
+        </Typography>
+      ),
+    },
+    {
+      field: "estado",
+      headerName: "Estado",
+      width: 155,
+      renderCell: (params) => {
+        const pendingReceipt = params.row as PendingReceipt;
+        const color = getPendingReceiptStatusColor(pendingReceipt.estado);
+
+        return (
+          <Chip
+            label={pendingReceipt.estado_display}
+            size="small"
+            sx={{
+              color,
+              bgcolor: colors.surface.soft,
+              borderColor: color,
+              border: "1px solid",
+              fontWeight: 800,
+            }}
+          />
+        );
+      },
+    },
+    {
+      field: "referencia",
+      headerName: "Referencia",
+      minWidth: 170,
+      flex: 0.8,
+      renderCell: (params) => params.value || "Sin referencia",
+    },
+    {
+      field: "motivo",
+      headerName: "Motivo",
+      minWidth: 250,
+      flex: 1.2,
+      renderCell: (params) => params.value || "Sin motivo",
+    },
+  ];
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <PageHeader
@@ -884,7 +1031,10 @@ export function ProductsPage() {
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={() => void loadProducts()}
+              onClick={() => {
+                void loadProducts();
+                void loadPendingReceipts();
+              }}
               disabled={loading}
               sx={{
                 color: colors.text.primary,
@@ -1106,6 +1256,23 @@ export function ProductsPage() {
         subtitle="Stock actual, stock crítico, unidades por recibir, Kardex y acciones operativas."
       >
         <SmartDataGrid rows={productos} columns={columns} loading={loading} />
+      </SectionCard>
+
+      <SectionCard
+        title="Pendientes por recibir"
+        subtitle="Unidades esperadas que todavía no modifican el stock físico."
+      >
+        <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+          Registrar una unidad por recibir no aumenta el stock. El stock solo
+          cambia cuando se confirma la recepción física y se crea su movimiento
+          Kardex.
+        </Alert>
+
+        <SmartDataGrid
+          rows={pendingReceipts}
+          columns={pendingReceiptColumns}
+          loading={pendingReceiptsLoading}
+        />
       </SectionCard>
 
       <SectionCard

@@ -90,6 +90,13 @@ export type ProductLifecyclePayload = {
   motivo: string;
 };
 
+export type CategoryLifecycleAction = "INACTIVAR" | "ARCHIVAR" | "REACTIVAR";
+
+export type CategoryLifecyclePayload = {
+  accion: CategoryLifecycleAction;
+  motivo: string;
+};
+
 export type PendingReceipt = {
   [key: string]: unknown;
   id: number;
@@ -319,8 +326,19 @@ export async function updateCategory(
   return response.data;
 }
 
-export async function inactivateCategory(categoryId: number) {
-  await api.delete(`/inventory/categorias/${categoryId}/`);
+export async function changeCategoryLifecycle(
+  categoryId: number,
+  payload: CategoryLifecyclePayload,
+) {
+  const response = await api.post<Category>(
+    `/inventory/categorias/${categoryId}/ciclo-vida/`,
+    {
+      accion: payload.accion,
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
 }
 
 export async function ensureCategoryByName(

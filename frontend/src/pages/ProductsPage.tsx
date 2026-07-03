@@ -214,6 +214,16 @@ function getPendingReceiptStatusColor(status: PendingReceiptStatus) {
   return colors.text.muted;
 }
 
+function getCategoryStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    ACTIVO: "Activo",
+    INACTIVO: "Inactivo",
+    ARCHIVADO: "Archivado",
+  };
+
+  return labels[status] || "Sin estado";
+}
+
 function formatNumber(value: number) {
   return new Intl.NumberFormat("es-CL").format(value);
 }
@@ -285,6 +295,7 @@ export function ProductsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productLifecycleDialog, setProductLifecycleDialog] =
     useState<ProductLifecycleDialogState>(emptyProductLifecycleDialog);
@@ -1191,6 +1202,47 @@ export function ProductsPage() {
     },
   ];
 
+  const categoryColumns: GridColDef[] = [
+    {
+      field: "name",
+      headerName: "Categoría",
+      minWidth: 220,
+      flex: 0.8,
+      renderCell: (params) => (
+        <Typography sx={{ fontWeight: 850 }}>
+          {String(params.value || "Sin nombre")}
+        </Typography>
+      ),
+    },
+    {
+      field: "description",
+      headerName: "Descripción",
+      minWidth: 320,
+      flex: 1.4,
+      renderCell: (params) =>
+        params.value ? String(params.value) : "Sin descripción",
+    },
+    {
+      field: "status",
+      headerName: "Estado",
+      width: 150,
+      renderCell: (params) => (
+        <Chip
+          label={getCategoryStatusLabel(String(params.value || ""))}
+          size="small"
+          variant="outlined"
+          sx={{ fontWeight: 800 }}
+        />
+      ),
+    },
+    {
+      field: "updated_at",
+      headerName: "Última actualización",
+      width: 190,
+      renderCell: (params) => formatDateTime(String(params.value || "")),
+    },
+  ];
+
   const kardexColumns: GridColDef[] = [
     {
       field: "created_at",
@@ -1458,6 +1510,18 @@ export function ProductsPage() {
               onClick={handleOpenCreateProduct}
             >
               Nuevo producto
+            </Button>
+
+            <Button
+              variant="outlined"
+              startIcon={<CategoryIcon />}
+              onClick={() => setCategoryManagerOpen(true)}
+              sx={{
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+            >
+              Gestionar categorías
             </Button>
 
             <Button
@@ -2409,6 +2473,35 @@ export function ProductsPage() {
                 ? getProductLifecycleActionLabel(productLifecycleDialog.action)
                 : "Confirmar"}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={categoryManagerOpen}
+        onClose={() => setCategoryManagerOpen(false)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>Gestión de categorías</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              Las categorías organizan el catálogo de productos. Una categoría
+              inactiva o archivada no puede recibir productos nuevos.
+            </Alert>
+
+            <SmartDataGrid
+              rows={categorias}
+              columns={categoryColumns}
+              height={460}
+              minHeight={300}
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setCategoryManagerOpen(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
     </Box>

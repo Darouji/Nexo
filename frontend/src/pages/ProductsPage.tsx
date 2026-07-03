@@ -60,7 +60,6 @@ import {
   fetchCategories,
   fetchInventorySummary,
   fetchKardexMovements,
-  fetchProducts,
   fetchProductsPage,
   fetchPendingReceipts,
   changeProductLifecycle,

@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
-import HistoryIcon from "@mui/icons-material/History";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Alert,
   Autocomplete,
@@ -13,6 +17,9 @@ import {
   DialogTitle,
   FormControlLabel,
   InputAdornment,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   Stack,
   TextField,
@@ -23,12 +30,17 @@ import AddBoxIcon from "@mui/icons-material/AddBox";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
+import HistoryIcon from "@mui/icons-material/History";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import CategoryIcon from "@mui/icons-material/Category";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import BlockIcon from "@mui/icons-material/Block";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import type { GridColDef } from "@mui/x-data-grid";
 import { MetricCard } from "../components/MetricCard";
 import { PageHeader } from "../components/PageHeader";
@@ -113,6 +125,11 @@ type ProductLifecycleDialogState = {
   motivo: string;
 };
 
+type ProductActionMenuState = {
+  anchorEl: HTMLElement | null;
+  product: Product | null;
+};
+
 const emptyProductForm: ProductFormState = {
   categoria_name: "",
   modelo: "",
@@ -160,6 +177,11 @@ const emptyProductLifecycleDialog: ProductLifecycleDialogState = {
   product: null,
   action: null,
   motivo: "",
+};
+
+const emptyProductActionMenu: ProductActionMenuState = {
+  anchorEl: null,
+  product: null,
 };
 
 function getStockStatusColor(status: ProductStockStatus) {
@@ -326,6 +348,14 @@ export function ProductsPage() {
     );
 
   const [savingPendingReceipt, setSavingPendingReceipt] = useState(false);
+  const pendingReceiptsSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const [inventoryActionMenu, setInventoryActionMenu] =
+    useState<ProductActionMenuState>(emptyProductActionMenu);
+
+  const [moreActionMenu, setMoreActionMenu] = useState<ProductActionMenuState>(
+    emptyProductActionMenu,
+  );
 
   type ProductFilterOverrides = {
     search?: string;
@@ -465,14 +495,12 @@ export function ProductsPage() {
     };
   }, []);
 
-  const stockCriticalCount = productos.filter(
-    (producto) =>
-      producto.stock_status === "BAJO_MINIMO" ||
-      producto.stock_status === "SIN_STOCK",
+  const activeProductsCount = productos.filter(
+    (producto) => producto.status === "ACTIVO" && !producto.descontinuado,
   ).length;
 
-  const stockControlledCount = productos.filter(
-    (producto) => producto.controla_stock,
+  const lowMinimumCount = productos.filter(
+    (producto) => producto.stock_status === "BAJO_MINIMO",
   ).length;
 
   const incomingStockTotal = pendingReceipts.reduce(
@@ -739,6 +767,44 @@ export function ProductsPage() {
     setKardexDialog(emptyKardexDialog);
   };
 
+  const closeProductActionMenus = () => {
+    setInventoryActionMenu(emptyProductActionMenu);
+    setMoreActionMenu(emptyProductActionMenu);
+  };
+
+  const openInventoryActionMenu = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    product: Product,
+  ) => {
+    setMoreActionMenu(emptyProductActionMenu);
+    setInventoryActionMenu({
+      anchorEl: event.currentTarget,
+      product,
+    });
+  };
+
+  const openMoreActionMenu = (
+    event: ReactMouseEvent<HTMLButtonElement>,
+    product: Product,
+  ) => {
+    setInventoryActionMenu(emptyProductActionMenu);
+    setMoreActionMenu({
+      anchorEl: event.currentTarget,
+      product,
+    });
+  };
+
+  const focusPendingReceipts = () => {
+    closeProductActionMenus();
+
+    window.requestAnimationFrame(() => {
+      pendingReceiptsSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  };
+
   const openPendingReceiptCreateDialog = (product: Product) => {
     setPendingReceiptCreateDialog({
       open: true,
@@ -932,30 +998,28 @@ export function ProductsPage() {
 
   const columns: GridColDef[] = [
     {
+      field: "modelo",
+      headerName: "Modelo",
+      minWidth: 220,
+      flex: 1.1,
+      renderCell: (params) => (
+        <Typography sx={{ fontWeight: 850 }}>
+          {params.value || "Sin modelo"}
+        </Typography>
+      ),
+    },
+    {
       field: "categoria_name",
       headerName: "Categoría",
       minWidth: 180,
       flex: 0.8,
     },
     {
-      field: "modelo",
-      headerName: "Modelo",
-      minWidth: 220,
-      flex: 1.2,
-    },
-    {
       field: "codigo_sap",
       headerName: "Código SAP",
-      minWidth: 140,
-      flex: 0.7,
+      minWidth: 145,
+      flex: 0.65,
       renderCell: (params) => params.value || "Sin código",
-    },
-    {
-      field: "detalle",
-      headerName: "Detalle",
-      minWidth: 240,
-      flex: 1.2,
-      renderCell: (params) => params.value || "Sin detalle",
     },
     {
       field: "stock_actual",
@@ -969,13 +1033,6 @@ export function ProductsPage() {
       ),
     },
     {
-      field: "stock_critico",
-      headerName: "Stock crítico",
-      width: 135,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
-    },
-    {
       field: "por_recibir",
       headerName: "Por recibir",
       width: 130,
@@ -983,32 +1040,15 @@ export function ProductsPage() {
       renderCell: (params) => formatNumber(Number(params.value || 0)),
     },
     {
-      field: "controla_stock",
-      headerName: "Control stock",
-      width: 145,
-      renderCell: (params) => {
-        const controlaStock = Boolean(params.value);
-
-        return (
-          <Chip
-            label={controlaStock ? "Sí" : "No"}
-            size="small"
-            sx={{
-              color: controlaStock ? colors.status.success : colors.status.info,
-              bgcolor: colors.surface.soft,
-              borderColor: controlaStock
-                ? colors.status.success
-                : colors.status.info,
-              border: "1px solid",
-              fontWeight: 800,
-            }}
-          />
-        );
-      },
+      field: "stock_critico",
+      headerName: "Stock mínimo",
+      width: 135,
+      type: "number",
+      renderCell: (params) => formatNumber(Number(params.value || 0)),
     },
     {
       field: "stock_status",
-      headerName: "Estado stock",
+      headerName: "Estado de stock",
       width: 180,
       renderCell: (params) => {
         const status = String(params.value || "") as ProductStockStatus;
@@ -1031,8 +1071,8 @@ export function ProductsPage() {
     },
     {
       field: "estado_producto_display",
-      headerName: "Estado",
-      width: 160,
+      headerName: "Estado del producto",
+      width: 175,
       renderCell: (params) => (
         <Chip
           label={String(params.value || "Sin estado")}
@@ -1043,159 +1083,42 @@ export function ProductsPage() {
       ),
     },
     {
+      field: "detalle",
+      headerName: "Detalle",
+      minWidth: 250,
+      flex: 1.2,
+      renderCell: (params) => params.value || "Sin detalle",
+    },
+    {
       field: "actions",
       headerName: "Acciones",
-      width: 900,
+      width: 430,
       sortable: false,
       filterable: false,
       renderCell: (params) => {
         const product = params.row as Product;
 
-        const isOperationallyActive = product.status === "ACTIVO";
-
-        const canRegisterManualEntry =
-          isOperationallyActive &&
-          product.controla_stock &&
-          !product.descontinuado;
-
-        const canAdjustInventory =
-          isOperationallyActive && product.controla_stock;
-
-        const canRegisterPendingReceipt =
-          isOperationallyActive &&
-          product.controla_stock &&
-          !product.descontinuado;
-
-        const canInactivate =
-          isOperationallyActive &&
-          Number(product.stock_actual || 0) === 0 &&
-          Number(product.por_recibir || 0) === 0;
-
         return (
           <Stack direction="row" spacing={1}>
             <Button
               size="small"
-              variant="outlined"
-              disabled={!isOperationallyActive}
-              startIcon={<EditIcon />}
-              onClick={() => handleOpenEditProduct(product)}
+              variant="contained"
+              startIcon={<Inventory2Icon />}
+              endIcon={<KeyboardArrowDownIcon />}
+              onClick={(event) => openInventoryActionMenu(event, product)}
             >
-              Editar
+              Gestionar inventario
             </Button>
 
             <Button
               size="small"
               variant="outlined"
-              startIcon={<AddBoxIcon />}
-              disabled={!canRegisterManualEntry}
-              onClick={() => openMovementDialog(product, "ENTRADA_MANUAL")}
+              startIcon={<MoreHorizIcon />}
+              endIcon={<KeyboardArrowDownIcon />}
+              onClick={(event) => openMoreActionMenu(event, product)}
             >
-              Entrada
+              Más acciones
             </Button>
-
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<LocalShippingIcon />}
-              disabled={!canRegisterPendingReceipt}
-              onClick={() => openPendingReceiptCreateDialog(product)}
-            >
-              Por recibir
-            </Button>
-
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<TuneIcon />}
-              disabled={!canAdjustInventory}
-              onClick={() => openMovementDialog(product, "AJUSTE_INVENTARIO")}
-            >
-              Ajuste
-            </Button>
-
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<HistoryIcon />}
-              onClick={() => void openKardexDialog(product)}
-            >
-              Kardex
-            </Button>
-
-            {isOperationallyActive ? (
-              <>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() =>
-                    openProductLifecycleDialog(
-                      product,
-                      product.descontinuado ? "REANUDAR" : "DESCONTINUAR",
-                    )
-                  }
-                >
-                  {product.descontinuado ? "Reanudar" : "Descontinuar"}
-                </Button>
-
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={!canInactivate}
-                  title={
-                    canInactivate
-                      ? ""
-                      : "Solo se puede inactivar un producto sin stock ni unidades pendientes."
-                  }
-                  onClick={() =>
-                    openProductLifecycleDialog(product, "INACTIVAR")
-                  }
-                  sx={{
-                    color: colors.status.error,
-                    borderColor: colors.status.error,
-                    "&:hover": {
-                      bgcolor: colors.status.errorSoft,
-                      borderColor: colors.status.error,
-                    },
-                  }}
-                >
-                  Inactivar
-                </Button>
-              </>
-            ) : null}
-
-            {product.status === "INACTIVO" ? (
-              <>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() =>
-                    openProductLifecycleDialog(product, "REACTIVAR")
-                  }
-                >
-                  Reactivar
-                </Button>
-
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() =>
-                    openProductLifecycleDialog(product, "ARCHIVAR")
-                  }
-                >
-                  Archivar
-                </Button>
-              </>
-            ) : null}
-
-            {product.status === "ARCHIVADO" ? (
-              <Button
-                size="small"
-                variant="outlined"
-                onClick={() => openProductLifecycleDialog(product, "REACTIVAR")}
-              >
-                Reactivar
-              </Button>
-            ) : null}
           </Stack>
         );
       },
@@ -1429,7 +1352,7 @@ export function ProductsPage() {
     },
     {
       field: "referencia",
-      headerName: "Referencia",
+      headerName: "OC / referencia",
       minWidth: 170,
       flex: 0.8,
       renderCell: (params) => params.value || "Sin referencia",
@@ -1494,6 +1417,45 @@ export function ProductsPage() {
     },
   ];
 
+  const inventoryMenuProduct = inventoryActionMenu.product;
+
+  const inventoryMenuIsOperationallyActive = Boolean(
+    inventoryMenuProduct && inventoryMenuProduct.status === "ACTIVO",
+  );
+
+  const inventoryMenuCanRegisterManualEntry = Boolean(
+    inventoryMenuProduct &&
+    inventoryMenuIsOperationallyActive &&
+    inventoryMenuProduct.controla_stock &&
+    !inventoryMenuProduct.descontinuado,
+  );
+
+  const inventoryMenuCanAdjustStock = Boolean(
+    inventoryMenuProduct &&
+    inventoryMenuIsOperationallyActive &&
+    inventoryMenuProduct.controla_stock,
+  );
+
+  const inventoryMenuCanRegisterPendingReceipt = Boolean(
+    inventoryMenuProduct &&
+    inventoryMenuIsOperationallyActive &&
+    inventoryMenuProduct.controla_stock &&
+    !inventoryMenuProduct.descontinuado,
+  );
+
+  const moreActionProduct = moreActionMenu.product;
+
+  const moreActionIsOperationallyActive = Boolean(
+    moreActionProduct && moreActionProduct.status === "ACTIVO",
+  );
+
+  const moreActionCanInactivate = Boolean(
+    moreActionProduct &&
+    moreActionIsOperationallyActive &&
+    Number(moreActionProduct.stock_actual || 0) === 0 &&
+    Number(moreActionProduct.por_recibir || 0) === 0,
+  );
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <PageHeader
@@ -1514,22 +1476,11 @@ export function ProductsPage() {
 
             <Button
               variant="outlined"
-              startIcon={<CategoryIcon />}
-              onClick={() => setCategoryManagerOpen(true)}
-              sx={{
-                color: colors.text.primary,
-                borderColor: colors.border.medium,
-              }}
-            >
-              Gestionar categorías
-            </Button>
-
-            <Button
-              variant="outlined"
               startIcon={<RefreshIcon />}
               onClick={() => {
                 void loadProducts();
                 void loadPendingReceipts();
+                void loadGlobalKardex();
               }}
               disabled={loading}
               sx={{
@@ -1549,47 +1500,35 @@ export function ProductsPage() {
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, minmax(0, 1fr))",
-            xl: "repeat(4, minmax(0, 1fr))",
+            xl: "repeat(3, minmax(0, 1fr))",
           },
           gap: 2,
         }}
       >
         <MetricCard
-          title="Productos registrados"
-          value={formatNumber(productos.length)}
-          helper="Catálogo activo del sistema"
+          title="Productos activos"
+          value={formatNumber(activeProductsCount)}
+          helper="Disponibles en el catálogo operativo"
           icon={<Inventory2Icon />}
           tone={colors.modules.inventory}
         />
 
         <MetricCard
-          title="Controlan stock"
-          value={formatNumber(stockControlledCount)}
-          helper="Generan movimientos Kardex"
-          icon={<CategoryIcon />}
-          tone={{
-            main: colors.status.success,
-            soft: colors.status.successSoft,
-            border: colors.status.success,
-          }}
-        />
-
-        <MetricCard
-          title="Stock crítico"
-          value={formatNumber(stockCriticalCount)}
-          helper="Requieren revisión operativa"
+          title="Bajo mínimo"
+          value={formatNumber(lowMinimumCount)}
+          helper="Productos que requieren reposición"
           icon={<WarningAmberIcon />}
           tone={{
-            main: colors.status.error,
-            soft: colors.status.errorSoft,
-            border: colors.status.error,
+            main: colors.status.warning,
+            soft: colors.status.warningSoft,
+            border: colors.status.warning,
           }}
         />
 
         <MetricCard
-          title="Unidades por recibir"
+          title="Por recibir"
           value={formatNumber(incomingStockTotal)}
-          helper="Pendientes de recepción física"
+          helper="Unidades pendientes de recepción física"
           icon={<LocalShippingIcon />}
           tone={{
             main: colors.status.warning,
@@ -1749,31 +1688,46 @@ export function ProductsPage() {
 
       <SectionCard
         title="Catálogo de productos"
-        subtitle="Stock actual, stock crítico, unidades por recibir, Kardex y acciones operativas."
+        subtitle="Stock actual, stock mínimo, unidades por recibir, Kardex y acciones operativas."
+        actions={
+          <Button
+            variant="outlined"
+            startIcon={<CategoryIcon />}
+            onClick={() => setCategoryManagerOpen(true)}
+            sx={{
+              color: colors.text.primary,
+              borderColor: colors.border.medium,
+            }}
+          >
+            Gestionar categorías
+          </Button>
+        }
       >
         <SmartDataGrid rows={productos} columns={columns} loading={loading} />
       </SectionCard>
 
-      <SectionCard
-        title="Pendientes por recibir"
-        subtitle="Unidades esperadas que todavía no modifican el stock físico."
-      >
-        <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-          Registrar una unidad por recibir no aumenta el stock. El stock solo
-          cambia cuando se confirma la recepción física y se crea su movimiento
-          Kardex.
-        </Alert>
+      <Box ref={pendingReceiptsSectionRef} sx={{ scrollMarginTop: 24 }}>
+        <SectionCard
+          title="Pendientes por recibir"
+          subtitle="Unidades esperadas que todavía no modifican el stock físico."
+        >
+          <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+            Registrar una unidad por recibir no aumenta el stock. El stock solo
+            cambia cuando se confirma la recepción física y se crea su
+            movimiento Kardex.
+          </Alert>
 
-        <SmartDataGrid
-          rows={pendingReceipts}
-          columns={pendingReceiptColumns}
-          loading={pendingReceiptsLoading}
-        />
-      </SectionCard>
+          <SmartDataGrid
+            rows={pendingReceipts}
+            columns={pendingReceiptColumns}
+            loading={pendingReceiptsLoading}
+          />
+        </SectionCard>
+      </Box>
 
       <SectionCard
-        title="Kardex global"
-        subtitle="Historial auditado de todos los movimientos de stock del sistema."
+        title="Kardex de Inventario"
+        subtitle="Historial de movimientos de stock."
       >
         <Stack
           direction={{ xs: "column", lg: "row" }}
@@ -1987,7 +1941,7 @@ export function ProductsPage() {
             />
 
             <TextField
-              label="Stock crítico"
+              label="Stock mínimo"
               type="number"
               value={productForm.stock_critico}
               onChange={(event) =>
@@ -2014,7 +1968,7 @@ export function ProductsPage() {
                   }
                 />
               }
-              label="Este producto controla stock y genera Kardex"
+              label="Este producto maneja inventario y genera Kardex"
             />
 
             {productForm.controla_stock && !editingProduct ? (
@@ -2113,7 +2067,7 @@ export function ProductsPage() {
               />
 
               <TextField
-                label="Referencia"
+                label="Orden de compra / referencia"
                 value={pendingReceiptCreateDialog.referencia}
                 onChange={(event) =>
                   setPendingReceiptCreateDialog((current) => ({
@@ -2122,7 +2076,8 @@ export function ProductsPage() {
                   }))
                 }
                 fullWidth
-                helperText="Ejemplo: OC-2026-001."
+                placeholder="Ej.: OC-2026-001"
+                helperText="Usa la OC o el identificador que explique el origen de este pendiente."
               />
             </Stack>
 
@@ -2504,6 +2459,177 @@ export function ProductsPage() {
           <Button onClick={() => setCategoryManagerOpen(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+
+      <Menu
+        anchorEl={inventoryActionMenu.anchorEl}
+        open={Boolean(inventoryActionMenu.anchorEl)}
+        onClose={closeProductActionMenus}
+      >
+        {inventoryMenuProduct ? (
+          <>
+            <MenuItem
+              disabled={!inventoryMenuCanRegisterManualEntry}
+              onClick={() => {
+                closeProductActionMenus();
+                openMovementDialog(inventoryMenuProduct, "ENTRADA_MANUAL");
+              }}
+            >
+              <ListItemIcon>
+                <AddBoxIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Registrar entrada física</ListItemText>
+            </MenuItem>
+
+            <MenuItem
+              disabled={!inventoryMenuCanAdjustStock}
+              onClick={() => {
+                closeProductActionMenus();
+                openMovementDialog(inventoryMenuProduct, "AJUSTE_INVENTARIO");
+              }}
+            >
+              <ListItemIcon>
+                <TuneIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Ajustar stock</ListItemText>
+            </MenuItem>
+
+            <MenuItem
+              disabled={!inventoryMenuCanRegisterPendingReceipt}
+              onClick={() => {
+                closeProductActionMenus();
+                openPendingReceiptCreateDialog(inventoryMenuProduct);
+              }}
+            >
+              <ListItemIcon>
+                <LocalShippingIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Registrar por recibir</ListItemText>
+            </MenuItem>
+
+            <MenuItem onClick={focusPendingReceipts}>
+              <ListItemIcon>
+                <LocalShippingIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Gestionar pendientes por recibir</ListItemText>
+            </MenuItem>
+          </>
+        ) : null}
+      </Menu>
+
+      <Menu
+        anchorEl={moreActionMenu.anchorEl}
+        open={Boolean(moreActionMenu.anchorEl)}
+        onClose={closeProductActionMenus}
+      >
+        {moreActionProduct ? (
+          <>
+            <MenuItem
+              onClick={() => {
+                closeProductActionMenus();
+                void openKardexDialog(moreActionProduct);
+              }}
+            >
+              <ListItemIcon>
+                <HistoryIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Ver Kardex</ListItemText>
+            </MenuItem>
+
+            <MenuItem
+              disabled={!moreActionIsOperationallyActive}
+              onClick={() => {
+                closeProductActionMenus();
+                handleOpenEditProduct(moreActionProduct);
+              }}
+            >
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Editar producto</ListItemText>
+            </MenuItem>
+
+            {moreActionProduct.status === "ACTIVO" ? (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    closeProductActionMenus();
+                    openProductLifecycleDialog(
+                      moreActionProduct,
+                      moreActionProduct.descontinuado
+                        ? "REANUDAR"
+                        : "DESCONTINUAR",
+                    );
+                  }}
+                >
+                  <ListItemIcon>
+                    <WarningAmberIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>
+                    {moreActionProduct.descontinuado
+                      ? "Reanudar producto"
+                      : "Descontinuar producto"}
+                  </ListItemText>
+                </MenuItem>
+
+                <MenuItem
+                  disabled={!moreActionCanInactivate}
+                  onClick={() => {
+                    closeProductActionMenus();
+                    openProductLifecycleDialog(moreActionProduct, "INACTIVAR");
+                  }}
+                >
+                  <ListItemIcon>
+                    <BlockIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Inactivar producto</ListItemText>
+                </MenuItem>
+              </>
+            ) : null}
+
+            {moreActionProduct.status === "INACTIVO" ? (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    closeProductActionMenus();
+                    openProductLifecycleDialog(moreActionProduct, "REACTIVAR");
+                  }}
+                >
+                  <ListItemIcon>
+                    <RefreshIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Reactivar producto</ListItemText>
+                </MenuItem>
+
+                <MenuItem
+                  onClick={() => {
+                    closeProductActionMenus();
+                    openProductLifecycleDialog(moreActionProduct, "ARCHIVAR");
+                  }}
+                >
+                  <ListItemIcon>
+                    <ArchiveOutlinedIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText>Archivar producto</ListItemText>
+                </MenuItem>
+              </>
+            ) : null}
+
+            {moreActionProduct.status === "ARCHIVADO" ? (
+              <MenuItem
+                onClick={() => {
+                  closeProductActionMenus();
+                  openProductLifecycleDialog(moreActionProduct, "REACTIVAR");
+                }}
+              >
+                <ListItemIcon>
+                  <RefreshIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Reactivar producto</ListItemText>
+              </MenuItem>
+            ) : null}
+          </>
+        ) : null}
+      </Menu>
     </Box>
   );
 }

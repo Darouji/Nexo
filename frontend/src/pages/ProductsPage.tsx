@@ -11,11 +11,13 @@ import {
   Button,
   Checkbox,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  IconButton,
   InputAdornment,
   ListItemIcon,
   ListItemText,
@@ -327,6 +329,7 @@ export function ProductsPage() {
   const [stockStatusFilter, setStockStatusFilter] = useState<
     ProductStockStatus | ""
   >("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingMovement, setSavingMovement] = useState(false);
@@ -528,6 +531,13 @@ export function ProductsPage() {
       sum + Number(pendingReceipt.cantidad_pendiente || 0),
     0,
   );
+
+  const activeProductFiltersCount = [
+    categoryFilter,
+    statusFilter === "ACTIVO" ? "" : statusFilter,
+    stockControlFilter,
+    stockStatusFilter,
+  ].filter(Boolean).length;
 
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
@@ -1653,13 +1663,13 @@ export function ProductsPage() {
       </Box>
 
       <SectionCard
-        title="Búsqueda y filtros"
+        title="Buscar y filtrar productos"
         subtitle="Busca por modelo, categoría, detalle o código SAP."
       >
         <Stack spacing={1.5}>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
             <TextField
-              label="Buscar producto"
+              label="Buscar productos"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               onKeyDown={(event) => {
@@ -1668,7 +1678,7 @@ export function ProductsPage() {
                 }
               }}
               fullWidth
-              placeholder="Modelo, categoría, detalle o código SAP"
+              placeholder="Producto, categoría, detalle o código SAP..."
               slotProps={{
                 input: {
                   startAdornment: (
@@ -1676,17 +1686,46 @@ export function ProductsPage() {
                       <SearchIcon sx={{ color: colors.text.muted }} />
                     </InputAdornment>
                   ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="Ejecutar búsqueda de productos"
+                        edge="end"
+                        size="small"
+                        onClick={() => void loadProducts()}
+                        disabled={loading}
+                      >
+                        <SearchIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
                 },
               }}
             />
 
             <Button
-              variant="contained"
-              onClick={() => void loadProducts()}
-              disabled={loading}
-              sx={{ minWidth: { xs: "100%", md: 140 } }}
+              variant={
+                filtersOpen || activeProductFiltersCount > 0
+                  ? "contained"
+                  : "outlined"
+              }
+              startIcon={<TuneIcon />}
+              onClick={() => setFiltersOpen((current) => !current)}
+              aria-expanded={filtersOpen}
+              aria-controls="product-filter-panel"
+              sx={{
+                minWidth: { xs: "100%", md: 155 },
+                ...(filtersOpen || activeProductFiltersCount > 0
+                  ? {}
+                  : {
+                      color: colors.text.primary,
+                      borderColor: colors.border.medium,
+                    }),
+              }}
             >
-              Buscar
+              {activeProductFiltersCount > 0
+                ? `Filtros (${activeProductFiltersCount})`
+                : "Filtros"}
             </Button>
 
             <Button
@@ -1697,6 +1736,7 @@ export function ProductsPage() {
                 setStatusFilter("ACTIVO");
                 setStockControlFilter("");
                 setStockStatusFilter("");
+                setFiltersOpen(false);
 
                 void loadProducts({
                   search: "",
@@ -1717,74 +1757,93 @@ export function ProductsPage() {
             </Button>
           </Stack>
 
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-            <TextField
-              select
-              label="Categoría"
-              value={categoryFilter}
-              onChange={(event) => setCategoryFilter(event.target.value)}
-              fullWidth
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {categorias.map((category) => (
-                <MenuItem key={category.id} value={String(category.id)}>
-                  {category.name}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              label="Estado del producto"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              fullWidth
-            >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="ACTIVO">Activo</MenuItem>
-              <MenuItem value="INACTIVO">Inactivo</MenuItem>
-              <MenuItem value="DESCONTINUADO">Descontinuado</MenuItem>
-              <MenuItem value="ARCHIVADO">Archivado</MenuItem>
-            </TextField>
-
-            <TextField
-              select
-              label="Control stock"
-              value={stockControlFilter}
-              onChange={(event) => setStockControlFilter(event.target.value)}
-              fullWidth
-            >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="true">Controla stock</MenuItem>
-              <MenuItem value="false">No controla stock</MenuItem>
-            </TextField>
-
-            <TextField
-              select
-              label="Estado stock"
-              value={stockStatusFilter}
-              onChange={(event) => {
-                const nextStockStatus = event.target.value;
-
-                if (
-                  nextStockStatus === "" ||
-                  nextStockStatus === "STOCK_CORRECTO" ||
-                  nextStockStatus === "BAJO_MINIMO" ||
-                  nextStockStatus === "SIN_STOCK" ||
-                  nextStockStatus === "NO_CONTROLA_STOCK"
-                ) {
-                  setStockStatusFilter(nextStockStatus);
-                }
+          <Collapse in={filtersOpen} timeout="auto" unmountOnExit>
+            <Box
+              id="product-filter-panel"
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  lg: "repeat(4, minmax(0, 1fr))",
+                },
+                gap: 1.5,
+                p: 1.5,
+                border: `1px solid ${colors.border.light}`,
+                borderRadius: colors.radius.md,
+                bgcolor: colors.surface.soft,
               }}
-              fullWidth
             >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="STOCK_CORRECTO">Stock correcto</MenuItem>
-              <MenuItem value="BAJO_MINIMO">Bajo mínimo</MenuItem>
-              <MenuItem value="SIN_STOCK">Sin stock</MenuItem>
-              <MenuItem value="NO_CONTROLA_STOCK">No controla stock</MenuItem>
-            </TextField>
-          </Stack>
+              <TextField
+                select
+                label="Categoría"
+                value={categoryFilter}
+                onChange={(event) => setCategoryFilter(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {categorias.map((category) => (
+                  <MenuItem key={category.id} value={String(category.id)}>
+                    {category.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                select
+                label="Estado del producto"
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="ACTIVO">Activo</MenuItem>
+                <MenuItem value="INACTIVO">Inactivo</MenuItem>
+                <MenuItem value="DESCONTINUADO">Descontinuado</MenuItem>
+                <MenuItem value="ARCHIVADO">Archivado</MenuItem>
+              </TextField>
+
+              <TextField
+                select
+                label="Maneja inventario"
+                value={stockControlFilter}
+                onChange={(event) => setStockControlFilter(event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="true">Maneja inventario</MenuItem>
+                <MenuItem value="false">No maneja inventario</MenuItem>
+              </TextField>
+
+              <TextField
+                select
+                label="Estado de stock"
+                value={stockStatusFilter}
+                onChange={(event) => {
+                  const nextStockStatus = event.target.value;
+
+                  if (
+                    nextStockStatus === "" ||
+                    nextStockStatus === "STOCK_CORRECTO" ||
+                    nextStockStatus === "BAJO_MINIMO" ||
+                    nextStockStatus === "SIN_STOCK" ||
+                    nextStockStatus === "NO_CONTROLA_STOCK"
+                  ) {
+                    setStockStatusFilter(nextStockStatus);
+                  }
+                }}
+                fullWidth
+              >
+                <MenuItem value="">Todos</MenuItem>
+                <MenuItem value="STOCK_CORRECTO">Stock correcto</MenuItem>
+                <MenuItem value="BAJO_MINIMO">Bajo mínimo</MenuItem>
+                <MenuItem value="SIN_STOCK">Sin stock</MenuItem>
+                <MenuItem value="NO_CONTROLA_STOCK">
+                  No maneja inventario
+                </MenuItem>
+              </TextField>
+            </Box>
+          </Collapse>
         </Stack>
       </SectionCard>
 

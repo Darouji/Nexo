@@ -51,6 +51,7 @@ import {
   cancelPendingReceipt,
   createPendingReceipt,
   createProduct,
+  createCategory,
   ensureCategoryByName,
   fetchCategories,
   fetchKardexMovements,
@@ -60,6 +61,7 @@ import {
   receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
+  updateCategory,
   updateProduct,
 } from "../services/inventoryService";
 import type {
@@ -130,6 +132,13 @@ type ProductActionMenuState = {
   product: Product | null;
 };
 
+type CategoryDialogState = {
+  open: boolean;
+  category: Category | null;
+  name: string;
+  description: string;
+};
+
 const emptyProductForm: ProductFormState = {
   categoria_name: "",
   modelo: "",
@@ -182,6 +191,13 @@ const emptyProductLifecycleDialog: ProductLifecycleDialogState = {
 const emptyProductActionMenu: ProductActionMenuState = {
   anchorEl: null,
   product: null,
+};
+
+const emptyCategoryDialog: CategoryDialogState = {
+  open: false,
+  category: null,
+  name: "",
+  description: "",
 };
 
 function getStockStatusColor(status: ProductStockStatus) {
@@ -318,6 +334,10 @@ export function ProductsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [categoryDialog, setCategoryDialog] =
+    useState<CategoryDialogState>(emptyCategoryDialog);
+
+  const [savingCategory, setSavingCategory] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productLifecycleDialog, setProductLifecycleDialog] =
     useState<ProductLifecycleDialogState>(emptyProductLifecycleDialog);
@@ -542,6 +562,79 @@ export function ProductsPage() {
     setProductDialogOpen(false);
     setEditingProduct(null);
     setProductForm(emptyProductForm);
+  };
+
+  const openCreateCategoryDialog = () => {
+    setCategoryDialog({
+      open: true,
+      category: null,
+      name: "",
+      description: "",
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const openEditCategoryDialog = (category: Category) => {
+    setCategoryDialog({
+      open: true,
+      category,
+      name: category.name,
+      description: category.description || "",
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const closeCategoryDialog = () => {
+    if (savingCategory) {
+      return;
+    }
+
+    setCategoryDialog(emptyCategoryDialog);
+  };
+
+  const handleSaveCategory = async () => {
+    const name = categoryDialog.name.trim();
+    const description = categoryDialog.description.trim();
+
+    if (!name) {
+      setErrorMessage("El nombre de la categoría es obligatorio.");
+      return;
+    }
+
+    try {
+      setSavingCategory(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      if (categoryDialog.category) {
+        await updateCategory(categoryDialog.category.id, {
+          name,
+          description,
+        });
+
+        setSuccessMessage(`Categoría "${name}" actualizada correctamente.`);
+      } else {
+        await createCategory({
+          name,
+          description,
+        });
+
+        setSuccessMessage(`Categoría "${name}" creada correctamente.`);
+      }
+
+      const updatedCategories = await fetchCategories();
+
+      setCategorias(updatedCategories);
+      setCategoryDialog(emptyCategoryDialog);
+
+      await loadProducts(searchTerm);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingCategory(false);
+    }
   };
 
   const handleSaveProduct = async () => {
@@ -1164,6 +1257,27 @@ export function ProductsPage() {
       width: 190,
       renderCell: (params) => formatDateTime(String(params.value || "")),
     },
+    {
+      field: "actions",
+      headerName: "Acciones",
+      width: 135,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => {
+        const category = params.row as Category;
+
+        return (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<EditIcon />}
+            onClick={() => openEditCategoryDialog(category)}
+          >
+            Editar
+          </Button>
+        );
+      },
+    },
   ];
 
   const kardexColumns: GridColDef[] = [
@@ -1460,7 +1574,7 @@ export function ProductsPage() {
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <PageHeader
         title="Inventario de Productos"
-        subtitle="Módulo central del sistema: productos, categorías, stock actual, stock crítico, unidades por recibir y movimientos Kardex."
+        subtitle="Módulo central del sistema: productos, categorías, stock actual, stock mínimo, unidades por recibir y movimientos Kardex."
         eyebrow="Inventario y Kardex"
         icon={<Inventory2Icon />}
         tone={colors.modules.inventory}
@@ -2437,13 +2551,40 @@ export function ProductsPage() {
         fullWidth
         maxWidth="lg"
       >
-        <DialogTitle>Gestión de categorías</DialogTitle>
+        <DialogTitle sx={{ pb: 1.5 }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.5}
+            sx={{
+              alignItems: { xs: "stretch", sm: "center" },
+              justifyContent: "space-between",
+            }}
+          >
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                Gestión de categorías
+              </Typography>
+
+              <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                Organiza el catálogo y mantiene categorías reutilizables.
+              </Typography>
+            </Box>
+
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={openCreateCategoryDialog}
+            >
+              Nueva categoría
+            </Button>
+          </Stack>
+        </DialogTitle>
 
         <DialogContent>
           <Stack spacing={2.2} sx={{ mt: 1 }}>
             <Alert severity="info" variant="outlined">
-              Las categorías organizan el catálogo de productos. Una categoría
-              inactiva o archivada no puede recibir productos nuevos.
+              Puedes crear y editar categorías. Cambiar su nombre no altera el
+              stock, los movimientos Kardex ni los productos ya asociados.
             </Alert>
 
             <SmartDataGrid
@@ -2457,6 +2598,73 @@ export function ProductsPage() {
 
         <DialogActions>
           <Button onClick={() => setCategoryManagerOpen(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={categoryDialog.open}
+        onClose={closeCategoryDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {categoryDialog.category ? "Editar categoría" : "Nueva categoría"}
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              La categoría se reutilizará al crear o editar productos. El
+              sistema no permite duplicados equivalentes.
+            </Alert>
+
+            <TextField
+              label="Nombre de la categoría"
+              value={categoryDialog.name}
+              onChange={(event) =>
+                setCategoryDialog((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
+              fullWidth
+              required
+              autoFocus
+            />
+
+            <TextField
+              label="Descripción"
+              value={categoryDialog.description}
+              onChange={(event) =>
+                setCategoryDialog((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+              fullWidth
+              multiline
+              minRows={3}
+              placeholder="Opcional"
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closeCategoryDialog} disabled={savingCategory}>
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={() => void handleSaveCategory()}
+            disabled={savingCategory || !categoryDialog.name.trim()}
+          >
+            {savingCategory
+              ? "Guardando..."
+              : categoryDialog.category
+                ? "Guardar cambios"
+                : "Crear categoría"}
+          </Button>
         </DialogActions>
       </Dialog>
 

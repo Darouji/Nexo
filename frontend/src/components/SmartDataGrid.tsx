@@ -1,6 +1,10 @@
 import { memo, useMemo } from "react";
 import { DataGrid, GridToolbar } from "@mui/x-data-grid";
-import type { GridColDef, GridValidRowModel } from "@mui/x-data-grid";
+import type {
+  GridColDef,
+  GridPaginationModel,
+  GridValidRowModel,
+} from "@mui/x-data-grid";
 import { esES } from "@mui/x-data-grid/locales";
 import { Box } from "@mui/material";
 import { EmptyState } from "./StateFeedback";
@@ -13,6 +17,11 @@ interface SmartDataGridProps {
   height?: number | string;
   minHeight?: number | string;
   hideToolbar?: boolean;
+  paginationMode?: "client" | "server";
+  paginationModel?: GridPaginationModel;
+  onPaginationModelChange?: (model: GridPaginationModel) => void;
+  rowCount?: number;
+  rowNumberOffset?: number;
 }
 
 const defaultGridInitialState = {
@@ -30,6 +39,11 @@ export const SmartDataGrid = memo(function SmartDataGrid({
   height = 650,
   minHeight = 360,
   hideToolbar = false,
+  paginationMode = "client",
+  paginationModel,
+  onPaginationModelChange,
+  rowCount,
+  rowNumberOffset = 0,
 }: SmartDataGridProps) {
   const baseColumns = useMemo<GridColDef[]>(
     () => [
@@ -43,12 +57,14 @@ export const SmartDataGrid = memo(function SmartDataGrid({
         align: "center",
         headerAlign: "center",
         renderCell: (params) =>
-          params.api.getAllRowIds().indexOf(params.id) + 1,
+          rowNumberOffset + params.api.getAllRowIds().indexOf(params.id) + 1,
       },
       ...columns,
     ],
-    [columns],
+    [columns, rowNumberOffset],
   );
+
+  const usesServerPagination = paginationMode === "server";
 
   return (
     <Box
@@ -74,8 +90,17 @@ export const SmartDataGrid = memo(function SmartDataGrid({
           noResultsOverlay: EmptyState,
         }}
         disableRowSelectionOnClick
+        disableColumnSorting={usesServerPagination}
+        paginationMode={paginationMode}
+        paginationModel={usesServerPagination ? paginationModel : undefined}
+        onPaginationModelChange={
+          usesServerPagination ? onPaginationModelChange : undefined
+        }
+        rowCount={usesServerPagination ? rowCount : undefined}
         pageSizeOptions={[10, 25, 50, 100]}
-        initialState={defaultGridInitialState}
+        initialState={
+          usesServerPagination ? undefined : defaultGridInitialState
+        }
         sx={{
           border: "none",
           color: colors.text.primary,

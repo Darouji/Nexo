@@ -119,7 +119,7 @@ def parse_id_values(value, param_name):
 
 class InventoryPermissionMixin:
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
+        if self.action in ["list", "retrieve", "resumen"]:
             permission_classes = [IsAuthenticated, IsConsultaOrOperativoGlobal]
         else:
             permission_classes = [IsAuthenticated, IsOperativoGlobal]
@@ -221,6 +221,43 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         "updated_at",
     ]
     ordering = ["categoria__name", "modelo"]
+
+    @action(detail=False, methods=["get"], url_path="resumen")
+    def resumen(self, request):
+        productos_activos = Producto.objects.filter(
+            status=BaseStatus.ACTIVO,
+            descontinuado=False,
+        )
+
+        bajo_minimo = productos_activos.filter(
+            controla_stock=True,
+            stock_actual__gt=0,
+            stock_actual__lte=F("stock_critico"),
+        ).count()
+
+        pendiente_expression = ExpressionWrapper(
+            F("cantidad_original") - F("cantidad_recibida") - F("cantidad_cancelada"),
+            output_field=IntegerField(),
+        )
+
+        por_recibir = PendientePorRecibir.objects.filter(
+            estado__in=ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
+        ).aggregate(
+            total=Coalesce(
+                Sum(pendiente_expression),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+        )["total"]
+
+        return Response(
+            {
+                "productos_activos": productos_activos.count(),
+                "bajo_minimo": bajo_minimo,
+                "por_recibir": por_recibir or 0,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     def get_queryset(self):
         pending_quantity_expression = ExpressionWrapper(

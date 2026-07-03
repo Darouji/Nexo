@@ -45,7 +45,7 @@ import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import BlockIcon from "@mui/icons-material/Block";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import type { GridColDef } from "@mui/x-data-grid";
+import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import { MetricCard } from "../components/MetricCard";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
@@ -58,8 +58,10 @@ import {
   createCategory,
   ensureCategoryByName,
   fetchCategories,
+  fetchInventorySummary,
   fetchKardexMovements,
   fetchProducts,
+  fetchProductsPage,
   fetchPendingReceipts,
   changeProductLifecycle,
   receivePendingReceipt,
@@ -70,6 +72,7 @@ import {
 } from "../services/inventoryService";
 import type {
   Category,
+  InventorySummary,
   KardexMovement,
   PendingReceipt,
   PendingReceiptStatus,
@@ -204,6 +207,17 @@ const emptyCategoryDialog: CategoryDialogState = {
   description: "",
 };
 
+const defaultProductPaginationModel: GridPaginationModel = {
+  page: 0,
+  pageSize: 25,
+};
+
+const emptyInventorySummary: InventorySummary = {
+  productos_activos: 0,
+  bajo_minimo: 0,
+  por_recibir: 0,
+};
+
 function getStockStatusColor(status: ProductStockStatus) {
   if (status === "STOCK_CORRECTO") {
     return colors.status.success;
@@ -327,6 +341,14 @@ function categoryExistsVisually(categories: Category[], name: string) {
 
 export function ProductsPage() {
   const [productos, setProductos] = useState<Product[]>([]);
+  const [productRowCount, setProductRowCount] = useState(0);
+
+  const [productPaginationModel, setProductPaginationModel] =
+    useState<GridPaginationModel>(defaultProductPaginationModel);
+
+  const [inventorySummary, setInventorySummary] = useState<InventorySummary>(
+    emptyInventorySummary,
+  );
   const [categorias, setCategorias] = useState<Category[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -390,6 +412,8 @@ export function ProductsPage() {
   type ProductFilterOverrides = {
     search?: string;
     category?: string;
+    page?: number;
+    pageSize?: number;
     status?: string;
     stockControl?: string;
     stockStatus?: ProductStockStatus | "";
@@ -408,6 +432,9 @@ export function ProductsPage() {
     const resolvedStatus = filters.status ?? statusFilter;
     const resolvedStockControl = filters.stockControl ?? stockControlFilter;
     const resolvedStockStatus = filters.stockStatus ?? stockStatusFilter;
+    const resolvedPage = filters.page ?? productPaginationModel.page;
+    const resolvedPageSize =
+      filters.pageSize ?? productPaginationModel.pageSize;
 
     const params: ProductListParams = {
       search: resolvedSearch,
@@ -422,14 +449,54 @@ export function ProductsPage() {
       setLoading(true);
       setErrorMessage("");
 
-      const data = await fetchProducts(params);
+      const data = await fetchProductsPage({
+        ...params,
+        page: resolvedPage + 1,
+        page_size: resolvedPageSize,
+      });
 
-      setProductos(data);
+      setProductos(data.results);
+      setProductRowCount(data.count);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadInventorySummary = async () => {
+    try {
+      const summary = await fetchInventorySummary();
+      setInventorySummary(summary);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  };
+
+  const loadFirstProductPage = (filters: ProductFilterOverrides = {}) => {
+    const nextPaginationModel = {
+      ...productPaginationModel,
+      page: 0,
+    };
+
+    setProductPaginationModel(nextPaginationModel);
+
+    void loadProducts({
+      ...filters,
+      page: 0,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handleProductPaginationModelChange = (
+    nextPaginationModel: GridPaginationModel,
+  ) => {
+    setProductPaginationModel(nextPaginationModel);
+
+    void loadProducts({
+      page: nextPaginationModel.page,
+      pageSize: nextPaginationModel.pageSize,
+    });
   };
 
   const loadGlobalKardex = async (
@@ -492,26 +559,33 @@ export function ProductsPage() {
     let isMounted = true;
 
     Promise.all([
-      fetchProducts({
+      fetchProductsPage({
         search: "",
         ordering: "categoria__name,modelo",
         status: "ACTIVO",
+        page: 1,
+        page_size: defaultProductPaginationModel.pageSize,
       }),
       fetchCategories(),
       fetchPendingReceipts({
         ordering: "-created_at",
       }),
+      fetchInventorySummary(),
     ])
-      .then(([productsData, categoriesData, pendingReceiptsData]) => {
-        if (!isMounted) {
-          return;
-        }
+      .then(
+        ([productsPage, categoriesData, pendingReceiptsData, summaryData]) => {
+          if (!isMounted) {
+            return;
+          }
 
-        setProductos(productsData);
-        setCategorias(categoriesData);
-        setPendingReceipts(pendingReceiptsData);
-        setErrorMessage("");
-      })
+          setProductos(productsPage.results);
+          setProductRowCount(productsPage.count);
+          setCategorias(categoriesData);
+          setPendingReceipts(pendingReceiptsData);
+          setInventorySummary(summaryData);
+          setErrorMessage("");
+        },
+      )
       .catch((error: unknown) => {
         if (!isMounted) {
           return;
@@ -533,19 +607,11 @@ export function ProductsPage() {
     };
   }, []);
 
-  const activeProductsCount = productos.filter(
-    (producto) => producto.status === "ACTIVO" && !producto.descontinuado,
-  ).length;
+  const activeProductsCount = inventorySummary.productos_activos;
 
-  const lowMinimumCount = productos.filter(
-    (producto) => producto.stock_status === "BAJO_MINIMO",
-  ).length;
+  const lowMinimumCount = inventorySummary.bajo_minimo;
 
-  const incomingStockTotal = pendingReceipts.reduce(
-    (sum, pendingReceipt) =>
-      sum + Number(pendingReceipt.cantidad_pendiente || 0),
-    0,
-  );
+  const incomingStockTotal = inventorySummary.por_recibir;
 
   const activeProductFiltersCount = [
     categoryFilter,
@@ -1054,6 +1120,7 @@ export function ProductsPage() {
         );
 
         await Promise.all([
+          loadInventorySummary(),
           loadProducts(searchTerm),
           loadPendingReceipts(),
           refreshGlobalKardexIfLoaded(),
@@ -1629,7 +1696,8 @@ export function ProductsPage() {
               variant="outlined"
               startIcon={<RefreshIcon />}
               onClick={() => {
-                void loadProducts();
+                loadFirstProductPage();
+                void loadInventorySummary();
                 void loadPendingReceipts();
                 void refreshGlobalKardexIfLoaded();
               }}
@@ -1701,7 +1769,7 @@ export function ProductsPage() {
               onChange={(event) => setSearchTerm(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
-                  void loadProducts();
+                  loadFirstProductPage();
                 }
               }}
               fullWidth
@@ -1765,7 +1833,7 @@ export function ProductsPage() {
                 setStockStatusFilter("");
                 setFiltersOpen(false);
 
-                void loadProducts({
+                loadFirstProductPage({
                   search: "",
                   category: "",
                   status: "ACTIVO",
@@ -1903,7 +1971,18 @@ export function ProductsPage() {
           </Button>
         }
       >
-        <SmartDataGrid rows={productos} columns={columns} loading={loading} />
+        <SmartDataGrid
+          rows={productos}
+          columns={columns}
+          loading={loading}
+          paginationMode="server"
+          paginationModel={productPaginationModel}
+          onPaginationModelChange={handleProductPaginationModelChange}
+          rowCount={productRowCount}
+          rowNumberOffset={
+            productPaginationModel.page * productPaginationModel.pageSize
+          }
+        />
       </SectionCard>
 
       <Box ref={pendingReceiptsSectionRef} sx={{ scrollMarginTop: 24 }}>

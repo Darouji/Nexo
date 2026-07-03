@@ -41,6 +41,12 @@ export type Product = {
   updated_at: string;
 };
 
+export type InventorySummary = {
+  productos_activos: number;
+  bajo_minimo: number;
+  por_recibir: number;
+};
+
 export type KardexMovement = {
   [key: string]: unknown;
   id: number;
@@ -138,7 +144,7 @@ export type ReceivePendingReceiptResponse = {
   movimiento_kardex: KardexMovement;
 };
 
-type PaginatedResponse<T> = {
+export type PaginatedResponse<T> = {
   count: number;
   next: string | null;
   previous: string | null;
@@ -168,6 +174,11 @@ export type ProductListParams = {
   controla_stock?: boolean;
   stock_status?: CsvParam<ProductStockStatus>;
   stock_critico?: boolean;
+};
+
+export type ProductPageParams = ProductListParams & {
+  page?: number;
+  page_size?: number;
 };
 
 type KardexListParams = {
@@ -219,6 +230,21 @@ function extractResults<T>(data: T[] | PaginatedResponse<T>) {
   }
 
   return data.results ?? [];
+}
+
+function toPaginatedResponse<T>(
+  data: T[] | PaginatedResponse<T>,
+): PaginatedResponse<T> {
+  if (Array.isArray(data)) {
+    return {
+      count: data.length,
+      next: null,
+      previous: null,
+      results: data,
+    };
+  }
+
+  return data;
 }
 
 function toCsv<T extends string | number>(value?: CsvParam<T>) {
@@ -389,6 +415,33 @@ export async function fetchProducts(params: ProductListParams = {}) {
   });
 
   return extractResults(response.data);
+}
+
+export async function fetchProductsPage(params: ProductPageParams = {}) {
+  const response = await api.get<ProductListResponse>("/inventory/productos/", {
+    params: {
+      search: params.search?.trim() || undefined,
+      ordering: params.ordering || "categoria__name,modelo",
+      categoria: toCsv(params.categoria),
+      category: toCsv(params.category),
+      status: toCsv(params.status),
+      controla_stock: toBooleanParam(params.controla_stock),
+      stock_status: toCsv(params.stock_status),
+      stock_critico: toBooleanParam(params.stock_critico),
+      page: params.page,
+      page_size: params.page_size,
+    },
+  });
+
+  return toPaginatedResponse(response.data);
+}
+
+export async function fetchInventorySummary() {
+  const response = await api.get<InventorySummary>(
+    "/inventory/productos/resumen/",
+  );
+
+  return response.data;
 }
 
 export async function fetchProduct(productId: number) {

@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { DataGrid, GridToolbar } from "@mui/x-data-grid";
 import type { GridColDef, GridValidRowModel } from "@mui/x-data-grid";
 import { esES } from "@mui/x-data-grid/locales";
@@ -14,7 +15,15 @@ interface SmartDataGridProps {
   hideToolbar?: boolean;
 }
 
-export function SmartDataGrid({
+const defaultGridInitialState = {
+  pagination: {
+    paginationModel: {
+      pageSize: 10,
+    },
+  },
+};
+
+export const SmartDataGrid = memo(function SmartDataGrid({
   rows,
   columns,
   loading = false,
@@ -22,20 +31,24 @@ export function SmartDataGrid({
   minHeight = 360,
   hideToolbar = false,
 }: SmartDataGridProps) {
-  const baseColumns: GridColDef[] = [
-    {
-      field: "numero_fila",
-      headerName: "N°",
-      width: 64,
-      filterable: false,
-      sortable: false,
-      disableColumnMenu: true,
-      align: "center",
-      headerAlign: "center",
-      renderCell: (params) => params.api.getAllRowIds().indexOf(params.id) + 1,
-    },
-    ...columns,
-  ];
+  const baseColumns = useMemo<GridColDef[]>(
+    () => [
+      {
+        field: "numero_fila",
+        headerName: "N°",
+        width: 64,
+        filterable: false,
+        sortable: false,
+        disableColumnMenu: true,
+        align: "center",
+        headerAlign: "center",
+        renderCell: (params) =>
+          params.api.getAllRowIds().indexOf(params.id) + 1,
+      },
+      ...columns,
+    ],
+    [columns],
+  );
 
   return (
     <Box
@@ -62,13 +75,7 @@ export function SmartDataGrid({
         }}
         disableRowSelectionOnClick
         pageSizeOptions={[10, 25, 50, 100]}
-        initialState={{
-          pagination: {
-            paginationModel: {
-              pageSize: 10,
-            },
-          },
-        }}
+        initialState={defaultGridInitialState}
         sx={{
           border: "none",
           color: colors.text.primary,
@@ -135,4 +142,4 @@ export function SmartDataGrid({
       />
     </Box>
   );
-}
+});

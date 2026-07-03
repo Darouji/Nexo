@@ -1,5 +1,7 @@
 import {
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
@@ -264,8 +266,15 @@ function getCategoryStatusLabel(status: string) {
   return labels[status] || "Sin estado";
 }
 
+const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
+
+const chileanDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
+  dateStyle: "short",
+  timeStyle: "short",
+});
+
 function formatNumber(value: number) {
-  return new Intl.NumberFormat("es-CL").format(value);
+  return chileanNumberFormatter.format(value);
 }
 
 function formatDateTime(value: string) {
@@ -279,10 +288,7 @@ function formatDateTime(value: string) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("es-CL", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
+  return chileanDateTimeFormatter.format(date);
 }
 
 function parseInteger(value: string, fallback = 0) {
@@ -585,7 +591,7 @@ export function ProductsPage() {
     setSuccessMessage("");
   };
 
-  const openEditCategoryDialog = (category: Category) => {
+  const openEditCategoryDialog = useCallback((category: Category) => {
     setCategoryDialog({
       open: true,
       category,
@@ -594,7 +600,7 @@ export function ProductsPage() {
     });
     setErrorMessage("");
     setSuccessMessage("");
-  };
+  }, []);
 
   const closeCategoryDialog = () => {
     if (savingCategory) {
@@ -875,27 +881,27 @@ export function ProductsPage() {
     setMoreActionMenu(emptyProductActionMenu);
   };
 
-  const openInventoryActionMenu = (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    product: Product,
-  ) => {
-    setMoreActionMenu(emptyProductActionMenu);
-    setInventoryActionMenu({
-      anchorEl: event.currentTarget,
-      product,
-    });
-  };
+  const openInventoryActionMenu = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>, product: Product) => {
+      setMoreActionMenu(emptyProductActionMenu);
+      setInventoryActionMenu({
+        anchorEl: event.currentTarget,
+        product,
+      });
+    },
+    [],
+  );
 
-  const openMoreActionMenu = (
-    event: ReactMouseEvent<HTMLButtonElement>,
-    product: Product,
-  ) => {
-    setInventoryActionMenu(emptyProductActionMenu);
-    setMoreActionMenu({
-      anchorEl: event.currentTarget,
-      product,
-    });
-  };
+  const openMoreActionMenu = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>, product: Product) => {
+      setInventoryActionMenu(emptyProductActionMenu);
+      setMoreActionMenu({
+        anchorEl: event.currentTarget,
+        product,
+      });
+    },
+    [],
+  );
 
   const focusPendingReceipts = () => {
     closeProductActionMenus();
@@ -928,21 +934,21 @@ export function ProductsPage() {
     setPendingReceiptCreateDialog(emptyPendingReceiptCreateDialog);
   };
 
-  const openPendingReceiptOperationDialog = (
-    pendingReceipt: PendingReceipt,
-    mode: PendingReceiptOperationMode,
-  ) => {
-    setPendingReceiptOperationDialog({
-      open: true,
-      mode,
-      pendingReceipt,
-      cantidad:
-        mode === "RECIBIR" ? String(pendingReceipt.cantidad_pendiente) : "",
-      motivo: "",
-    });
-    setErrorMessage("");
-    setSuccessMessage("");
-  };
+  const openPendingReceiptOperationDialog = useCallback(
+    (pendingReceipt: PendingReceipt, mode: PendingReceiptOperationMode) => {
+      setPendingReceiptOperationDialog({
+        open: true,
+        mode,
+        pendingReceipt,
+        cantidad:
+          mode === "RECIBIR" ? String(pendingReceipt.cantidad_pendiente) : "",
+        motivo: "",
+      });
+      setErrorMessage("");
+      setSuccessMessage("");
+    },
+    [],
+  );
 
   const closePendingReceiptOperationDialog = () => {
     if (savingPendingReceipt) {
@@ -1099,447 +1105,459 @@ export function ProductsPage() {
     }
   };
 
-  const columns: GridColDef[] = [
-    {
-      field: "modelo",
-      headerName: "Modelo",
-      minWidth: 220,
-      flex: 1.1,
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 850 }}>
-          {params.value || "Sin modelo"}
-        </Typography>
-      ),
-    },
-    {
-      field: "categoria_name",
-      headerName: "Categoría",
-      minWidth: 180,
-      flex: 0.8,
-    },
-    {
-      field: "codigo_sap",
-      headerName: "Código SAP",
-      minWidth: 145,
-      flex: 0.65,
-      renderCell: (params) => params.value || "Sin código",
-    },
-    {
-      field: "stock_actual",
-      headerName: "Stock actual",
-      width: 135,
-      type: "number",
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 900 }}>
-          {formatNumber(Number(params.value || 0))}
-        </Typography>
-      ),
-    },
-    {
-      field: "por_recibir",
-      headerName: "Por recibir",
-      width: 130,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
-    },
-    {
-      field: "stock_critico",
-      headerName: "Stock mínimo",
-      width: 135,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
-    },
-    {
-      field: "stock_status",
-      headerName: "Estado de stock",
-      width: 180,
-      renderCell: (params) => {
-        const status = String(params.value || "") as ProductStockStatus;
-        const color = getStockStatusColor(status);
+  const columns = useMemo<GridColDef[]>(
+    () => [
+      {
+        field: "modelo",
+        headerName: "Modelo",
+        minWidth: 220,
+        flex: 1.1,
+        renderCell: (params) => (
+          <Typography sx={{ fontWeight: 850 }}>
+            {params.value || "Sin modelo"}
+          </Typography>
+        ),
+      },
+      {
+        field: "categoria_name",
+        headerName: "Categoría",
+        minWidth: 180,
+        flex: 0.8,
+      },
+      {
+        field: "codigo_sap",
+        headerName: "Código SAP",
+        minWidth: 145,
+        flex: 0.65,
+        renderCell: (params) => params.value || "Sin código",
+      },
+      {
+        field: "stock_actual",
+        headerName: "Stock actual",
+        width: 135,
+        type: "number",
+        renderCell: (params) => (
+          <Typography sx={{ fontWeight: 900 }}>
+            {formatNumber(Number(params.value || 0))}
+          </Typography>
+        ),
+      },
+      {
+        field: "por_recibir",
+        headerName: "Por recibir",
+        width: 130,
+        type: "number",
+        renderCell: (params) => formatNumber(Number(params.value || 0)),
+      },
+      {
+        field: "stock_critico",
+        headerName: "Stock mínimo",
+        width: 135,
+        type: "number",
+        renderCell: (params) => formatNumber(Number(params.value || 0)),
+      },
+      {
+        field: "stock_status",
+        headerName: "Estado de stock",
+        width: 180,
+        renderCell: (params) => {
+          const status = String(params.value || "") as ProductStockStatus;
+          const color = getStockStatusColor(status);
 
-        return (
+          return (
+            <Chip
+              label={getStockStatusLabel(status)}
+              size="small"
+              sx={{
+                color,
+                bgcolor: colors.surface.soft,
+                borderColor: color,
+                border: "1px solid",
+                fontWeight: 800,
+              }}
+            />
+          );
+        },
+      },
+      {
+        field: "estado_producto_display",
+        headerName: "Estado del producto",
+        width: 175,
+        renderCell: (params) => (
           <Chip
-            label={getStockStatusLabel(status)}
-            size="small"
-            sx={{
-              color,
-              bgcolor: colors.surface.soft,
-              borderColor: color,
-              border: "1px solid",
-              fontWeight: 800,
-            }}
-          />
-        );
-      },
-    },
-    {
-      field: "estado_producto_display",
-      headerName: "Estado del producto",
-      width: 175,
-      renderCell: (params) => (
-        <Chip
-          label={String(params.value || "Sin estado")}
-          size="small"
-          variant="outlined"
-          sx={{ fontWeight: 800 }}
-        />
-      ),
-    },
-    {
-      field: "detalle",
-      headerName: "Detalle",
-      minWidth: 250,
-      flex: 1.2,
-      renderCell: (params) => params.value || "Sin detalle",
-    },
-    {
-      field: "actions",
-      headerName: "Acciones",
-      width: 430,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => {
-        const product = params.row as Product;
-
-        return (
-          <Stack direction="row" spacing={1}>
-            <Button
-              size="small"
-              variant="contained"
-              startIcon={<Inventory2Icon />}
-              endIcon={<KeyboardArrowDownIcon />}
-              onClick={(event) => openInventoryActionMenu(event, product)}
-            >
-              Gestionar inventario
-            </Button>
-
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<MoreHorizIcon />}
-              endIcon={<KeyboardArrowDownIcon />}
-              onClick={(event) => openMoreActionMenu(event, product)}
-            >
-              Más acciones
-            </Button>
-          </Stack>
-        );
-      },
-    },
-  ];
-
-  const categoryColumns: GridColDef[] = [
-    {
-      field: "name",
-      headerName: "Categoría",
-      minWidth: 220,
-      flex: 0.8,
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 850 }}>
-          {String(params.value || "Sin nombre")}
-        </Typography>
-      ),
-    },
-    {
-      field: "description",
-      headerName: "Descripción",
-      minWidth: 320,
-      flex: 1.4,
-      renderCell: (params) =>
-        params.value ? String(params.value) : "Sin descripción",
-    },
-    {
-      field: "status",
-      headerName: "Estado",
-      width: 150,
-      renderCell: (params) => (
-        <Chip
-          label={getCategoryStatusLabel(String(params.value || ""))}
-          size="small"
-          variant="outlined"
-          sx={{ fontWeight: 800 }}
-        />
-      ),
-    },
-    {
-      field: "updated_at",
-      headerName: "Última actualización",
-      width: 190,
-      renderCell: (params) => formatDateTime(String(params.value || "")),
-    },
-    {
-      field: "actions",
-      headerName: "Acciones",
-      width: 135,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => {
-        const category = params.row as Category;
-
-        return (
-          <Button
+            label={String(params.value || "Sin estado")}
             size="small"
             variant="outlined"
-            startIcon={<EditIcon />}
-            onClick={() => openEditCategoryDialog(category)}
-          >
-            Editar
-          </Button>
-        );
+            sx={{ fontWeight: 800 }}
+          />
+        ),
       },
-    },
-  ];
+      {
+        field: "detalle",
+        headerName: "Detalle",
+        minWidth: 250,
+        flex: 1.2,
+        renderCell: (params) => params.value || "Sin detalle",
+      },
+      {
+        field: "actions",
+        headerName: "Acciones",
+        width: 430,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => {
+          const product = params.row as Product;
 
-  const kardexColumns: GridColDef[] = [
-    {
-      field: "created_at",
-      headerName: "Fecha",
-      width: 160,
-      renderCell: (params) => formatDateTime(String(params.value || "")),
-    },
-    {
-      field: "producto_modelo",
-      headerName: "Modelo",
-      minWidth: 190,
-      flex: 0.8,
-    },
-    {
-      field: "producto_categoria",
-      headerName: "Categoría",
-      minWidth: 160,
-      flex: 0.7,
-    },
-    {
-      field: "producto_codigo_sap",
-      headerName: "Código SAP",
-      minWidth: 145,
-      flex: 0.6,
-      renderCell: (params) => params.value || "Sin código",
-    },
-    {
-      field: "movement_type_display",
-      headerName: "Movimiento",
-      minWidth: 190,
-      flex: 0.9,
-      renderCell: (params) => (
-        <Chip
-          label={String(params.value || "Movimiento")}
-          size="small"
-          sx={{
-            color: colors.primary.main,
-            bgcolor: colors.primary.soft,
-            borderColor: colors.primary.border,
-            border: "1px solid",
-            fontWeight: 800,
-          }}
-        />
-      ),
-    },
-    {
-      field: "origin_display",
-      headerName: "Origen",
-      width: 135,
-    },
-    {
-      field: "cantidad",
-      headerName: "Cantidad",
-      width: 120,
-      type: "number",
-      renderCell: (params) => {
-        const value = Number(params.value || 0);
+          return (
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<Inventory2Icon />}
+                endIcon={<KeyboardArrowDownIcon />}
+                onClick={(event) => openInventoryActionMenu(event, product)}
+              >
+                Gestionar inventario
+              </Button>
 
-        return (
-          <Typography
-            sx={{
-              color: value >= 0 ? colors.status.success : colors.status.error,
-              fontWeight: 900,
-            }}
-          >
-            {value > 0 ? `+${formatNumber(value)}` : formatNumber(value)}
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<MoreHorizIcon />}
+                endIcon={<KeyboardArrowDownIcon />}
+                onClick={(event) => openMoreActionMenu(event, product)}
+              >
+                Más acciones
+              </Button>
+            </Stack>
+          );
+        },
+      },
+    ],
+    [openInventoryActionMenu, openMoreActionMenu],
+  );
+
+  const categoryColumns = useMemo<GridColDef[]>(
+    () => [
+      {
+        field: "name",
+        headerName: "Categoría",
+        minWidth: 220,
+        flex: 0.8,
+        renderCell: (params) => (
+          <Typography sx={{ fontWeight: 850 }}>
+            {String(params.value || "Sin nombre")}
           </Typography>
-        );
+        ),
       },
-    },
-    {
-      field: "stock_antes",
-      headerName: "Stock antes",
-      width: 130,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
-    },
-    {
-      field: "stock_despues",
-      headerName: "Stock después",
-      width: 145,
-      type: "number",
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 900 }}>
-          {formatNumber(Number(params.value || 0))}
-        </Typography>
-      ),
-    },
-    {
-      field: "operador_nombre",
-      headerName: "Operador",
-      minWidth: 160,
-      flex: 0.8,
-      renderCell: (params) => params.value || "Sin operador",
-    },
-    {
-      field: "motivo",
-      headerName: "Motivo",
-      minWidth: 260,
-      flex: 1.2,
-    },
-  ];
-
-  const pendingReceiptColumns: GridColDef[] = [
-    {
-      field: "created_at",
-      headerName: "Registrado",
-      width: 160,
-      renderCell: (params) => formatDateTime(String(params.value || "")),
-    },
-    {
-      field: "producto_categoria",
-      headerName: "Categoría",
-      minWidth: 150,
-      flex: 0.7,
-    },
-    {
-      field: "producto_modelo",
-      headerName: "Producto",
-      minWidth: 210,
-      flex: 1,
-    },
-    {
-      field: "producto_codigo_sap",
-      headerName: "Código SAP",
-      minWidth: 145,
-      flex: 0.6,
-      renderCell: (params) => params.value || "Sin código",
-    },
-    {
-      field: "cantidad_original",
-      headerName: "Original",
-      width: 105,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
-    },
-    {
-      field: "cantidad_recibida",
-      headerName: "Recibida",
-      width: 110,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
-    },
-    {
-      field: "cantidad_cancelada",
-      headerName: "Cancelada",
-      width: 115,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
-    },
-    {
-      field: "cantidad_pendiente",
-      headerName: "Pendiente",
-      width: 115,
-      type: "number",
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 900 }}>
-          {formatNumber(Number(params.value || 0))}
-        </Typography>
-      ),
-    },
-    {
-      field: "estado",
-      headerName: "Estado",
-      width: 155,
-      renderCell: (params) => {
-        const pendingReceipt = params.row as PendingReceipt;
-        const color = getPendingReceiptStatusColor(pendingReceipt.estado);
-
-        return (
+      {
+        field: "description",
+        headerName: "Descripción",
+        minWidth: 320,
+        flex: 1.4,
+        renderCell: (params) =>
+          params.value ? String(params.value) : "Sin descripción",
+      },
+      {
+        field: "status",
+        headerName: "Estado",
+        width: 150,
+        renderCell: (params) => (
           <Chip
-            label={pendingReceipt.estado_display}
+            label={getCategoryStatusLabel(String(params.value || ""))}
+            size="small"
+            variant="outlined"
+            sx={{ fontWeight: 800 }}
+          />
+        ),
+      },
+      {
+        field: "updated_at",
+        headerName: "Última actualización",
+        width: 190,
+        renderCell: (params) => formatDateTime(String(params.value || "")),
+      },
+      {
+        field: "actions",
+        headerName: "Acciones",
+        width: 135,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => {
+          const category = params.row as Category;
+
+          return (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<EditIcon />}
+              onClick={() => openEditCategoryDialog(category)}
+            >
+              Editar
+            </Button>
+          );
+        },
+      },
+    ],
+    [openEditCategoryDialog],
+  );
+
+  const kardexColumns = useMemo<GridColDef[]>(
+    () => [
+      {
+        field: "created_at",
+        headerName: "Fecha",
+        width: 160,
+        renderCell: (params) => formatDateTime(String(params.value || "")),
+      },
+      {
+        field: "producto_modelo",
+        headerName: "Modelo",
+        minWidth: 190,
+        flex: 0.8,
+      },
+      {
+        field: "producto_categoria",
+        headerName: "Categoría",
+        minWidth: 160,
+        flex: 0.7,
+      },
+      {
+        field: "producto_codigo_sap",
+        headerName: "Código SAP",
+        minWidth: 145,
+        flex: 0.6,
+        renderCell: (params) => params.value || "Sin código",
+      },
+      {
+        field: "movement_type_display",
+        headerName: "Movimiento",
+        minWidth: 190,
+        flex: 0.9,
+        renderCell: (params) => (
+          <Chip
+            label={String(params.value || "Movimiento")}
             size="small"
             sx={{
-              color,
-              bgcolor: colors.surface.soft,
-              borderColor: color,
+              color: colors.primary.main,
+              bgcolor: colors.primary.soft,
+              borderColor: colors.primary.border,
               border: "1px solid",
               fontWeight: 800,
             }}
           />
-        );
+        ),
       },
-    },
-    {
-      field: "referencia",
-      headerName: "OC / referencia",
-      minWidth: 170,
-      flex: 0.8,
-      renderCell: (params) => params.value || "Sin referencia",
-    },
-    {
-      field: "motivo",
-      headerName: "Motivo",
-      minWidth: 250,
-      flex: 1.2,
-      renderCell: (params) => params.value || "Sin motivo",
-    },
-    {
-      field: "actions",
-      headerName: "Acciones",
-      width: 240,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => {
-        const pendingReceipt = params.row as PendingReceipt;
+      {
+        field: "origin_display",
+        headerName: "Origen",
+        width: 135,
+      },
+      {
+        field: "cantidad",
+        headerName: "Cantidad",
+        width: 120,
+        type: "number",
+        renderCell: (params) => {
+          const value = Number(params.value || 0);
 
-        const canOperate =
-          pendingReceipt.cantidad_pendiente > 0 &&
-          (pendingReceipt.estado === "PENDIENTE" ||
-            pendingReceipt.estado === "PARCIAL");
-
-        return (
-          <Stack direction="row" spacing={1}>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<AddBoxIcon />}
-              disabled={!canOperate}
-              onClick={() =>
-                openPendingReceiptOperationDialog(pendingReceipt, "RECIBIR")
-              }
-            >
-              Recibir
-            </Button>
-
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<DeleteIcon />}
-              disabled={!canOperate}
-              onClick={() =>
-                openPendingReceiptOperationDialog(pendingReceipt, "CANCELAR")
-              }
+          return (
+            <Typography
               sx={{
-                color: colors.status.error,
-                borderColor: colors.status.error,
-                "&:hover": {
-                  bgcolor: colors.status.errorSoft,
-                  borderColor: colors.status.error,
-                },
+                color: value >= 0 ? colors.status.success : colors.status.error,
+                fontWeight: 900,
               }}
             >
-              Cancelar
-            </Button>
-          </Stack>
-        );
+              {value > 0 ? `+${formatNumber(value)}` : formatNumber(value)}
+            </Typography>
+          );
+        },
       },
-    },
-  ];
+      {
+        field: "stock_antes",
+        headerName: "Stock antes",
+        width: 130,
+        type: "number",
+        renderCell: (params) => formatNumber(Number(params.value || 0)),
+      },
+      {
+        field: "stock_despues",
+        headerName: "Stock después",
+        width: 145,
+        type: "number",
+        renderCell: (params) => (
+          <Typography sx={{ fontWeight: 900 }}>
+            {formatNumber(Number(params.value || 0))}
+          </Typography>
+        ),
+      },
+      {
+        field: "operador_nombre",
+        headerName: "Operador",
+        minWidth: 160,
+        flex: 0.8,
+        renderCell: (params) => params.value || "Sin operador",
+      },
+      {
+        field: "motivo",
+        headerName: "Motivo",
+        minWidth: 260,
+        flex: 1.2,
+      },
+    ],
+    [],
+  );
+
+  const pendingReceiptColumns = useMemo<GridColDef[]>(
+    () => [
+      {
+        field: "created_at",
+        headerName: "Registrado",
+        width: 160,
+        renderCell: (params) => formatDateTime(String(params.value || "")),
+      },
+      {
+        field: "producto_categoria",
+        headerName: "Categoría",
+        minWidth: 150,
+        flex: 0.7,
+      },
+      {
+        field: "producto_modelo",
+        headerName: "Producto",
+        minWidth: 210,
+        flex: 1,
+      },
+      {
+        field: "producto_codigo_sap",
+        headerName: "Código SAP",
+        minWidth: 145,
+        flex: 0.6,
+        renderCell: (params) => params.value || "Sin código",
+      },
+      {
+        field: "cantidad_original",
+        headerName: "Original",
+        width: 105,
+        type: "number",
+        renderCell: (params) => formatNumber(Number(params.value || 0)),
+      },
+      {
+        field: "cantidad_recibida",
+        headerName: "Recibida",
+        width: 110,
+        type: "number",
+        renderCell: (params) => formatNumber(Number(params.value || 0)),
+      },
+      {
+        field: "cantidad_cancelada",
+        headerName: "Cancelada",
+        width: 115,
+        type: "number",
+        renderCell: (params) => formatNumber(Number(params.value || 0)),
+      },
+      {
+        field: "cantidad_pendiente",
+        headerName: "Pendiente",
+        width: 115,
+        type: "number",
+        renderCell: (params) => (
+          <Typography sx={{ fontWeight: 900 }}>
+            {formatNumber(Number(params.value || 0))}
+          </Typography>
+        ),
+      },
+      {
+        field: "estado",
+        headerName: "Estado",
+        width: 155,
+        renderCell: (params) => {
+          const pendingReceipt = params.row as PendingReceipt;
+          const color = getPendingReceiptStatusColor(pendingReceipt.estado);
+
+          return (
+            <Chip
+              label={pendingReceipt.estado_display}
+              size="small"
+              sx={{
+                color,
+                bgcolor: colors.surface.soft,
+                borderColor: color,
+                border: "1px solid",
+                fontWeight: 800,
+              }}
+            />
+          );
+        },
+      },
+      {
+        field: "referencia",
+        headerName: "OC / referencia",
+        minWidth: 170,
+        flex: 0.8,
+        renderCell: (params) => params.value || "Sin referencia",
+      },
+      {
+        field: "motivo",
+        headerName: "Motivo",
+        minWidth: 250,
+        flex: 1.2,
+        renderCell: (params) => params.value || "Sin motivo",
+      },
+      {
+        field: "actions",
+        headerName: "Acciones",
+        width: 240,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => {
+          const pendingReceipt = params.row as PendingReceipt;
+
+          const canOperate =
+            pendingReceipt.cantidad_pendiente > 0 &&
+            (pendingReceipt.estado === "PENDIENTE" ||
+              pendingReceipt.estado === "PARCIAL");
+
+          return (
+            <Stack direction="row" spacing={1}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<AddBoxIcon />}
+                disabled={!canOperate}
+                onClick={() =>
+                  openPendingReceiptOperationDialog(pendingReceipt, "RECIBIR")
+                }
+              >
+                Recibir
+              </Button>
+
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<DeleteIcon />}
+                disabled={!canOperate}
+                onClick={() =>
+                  openPendingReceiptOperationDialog(pendingReceipt, "CANCELAR")
+                }
+                sx={{
+                  color: colors.status.error,
+                  borderColor: colors.status.error,
+                  "&:hover": {
+                    bgcolor: colors.status.errorSoft,
+                    borderColor: colors.status.error,
+                  },
+                }}
+              >
+                Cancelar
+              </Button>
+            </Stack>
+          );
+        },
+      },
+    ],
+    [openPendingReceiptOperationDialog],
+  );
 
   const inventoryMenuProduct = inventoryActionMenu.product;
 

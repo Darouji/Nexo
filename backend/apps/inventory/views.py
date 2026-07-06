@@ -27,6 +27,7 @@ from .models import (
     PendientePorRecibir,
     PendientePorRecibirStatus,
     Producto,
+    ProductOrigin,
     ProductStockStatus,
 )
 from .serializers import (
@@ -41,11 +42,13 @@ from .serializers import (
     OperacionPendientePorRecibirSerializer,
     PendientePorRecibirSerializer,
     ProductoLifecycleActionSerializer,
+    ProductoOrigenChangeSerializer,
     ProductoSerializer,
 )
 from .services import (
     cancel_pending_receipt,
     change_product_lifecycle,
+    change_product_origin,
     create_pending_receipt,
     delete_category_safely,
     merge_categories,
@@ -297,6 +300,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         "por_recibir_total",
         "controla_stock",
         "descontinuado",
+        "origen",
         "status",
         "created_at",
         "updated_at",
@@ -385,6 +389,15 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
             },
             "status",
         )
+
+        product_origins = validate_choice_values(
+            split_csv_param(params.get("origen")),
+            set(ProductOrigin.values),
+            "origen",
+        )
+
+        if product_origins:
+            queryset = queryset.filter(origen__in=product_origins)
 
         if product_status_values:
             product_status_query = None
@@ -507,6 +520,39 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         django_request.audit_metadata = {
             "lifecycle_action": serializer.validated_data["accion"],
         }
+
+        return Response(
+            ProductoSerializer(
+                updated_product,
+                context={"request": request},
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="cambiar-origen")
+    def cambiar_origen(self, request, pk=None):
+        producto = self.get_object()
+
+        serializer = ProductoOrigenChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_product = change_product_origin(
+                producto=producto,
+                origen=serializer.validated_data["origen"],
+                origen_observacion=serializer.validated_data.get(
+                    "origen_observacion",
+                    "",
+                ),
+                motivo=serializer.validated_data["motivo"],
+                user=request.user,
+                request=getattr(request, "_request", request),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        django_request = getattr(request, "_request", request)
+        django_request.skip_activity_audit = True
 
         return Response(
             ProductoSerializer(

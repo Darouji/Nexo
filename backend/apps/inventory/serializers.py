@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
@@ -9,8 +10,13 @@ from .models import (
     MovimientoKardex,
     PendientePorRecibir,
     Producto,
+    ProductOrigin,
 )
-from .services import register_manual_entry
+from .services import (
+    create_product_with_category,
+    register_manual_entry,
+    resolve_or_create_product_category,
+)
 
 
 class CategoriaSerializer(serializers.ModelSerializer):
@@ -100,13 +106,45 @@ class CategoriaSerializer(serializers.ModelSerializer):
         return obj.merged_into.name
 
 
+def raise_serializer_validation_error(error):
+    if hasattr(error, "message_dict"):
+        raise serializers.ValidationError(error.message_dict)
+
+    if hasattr(error, "messages"):
+        raise serializers.ValidationError(error.messages)
+
+    raise serializers.ValidationError(str(error))
+
+
 class ProductoSerializer(serializers.ModelSerializer):
+    categoria = serializers.PrimaryKeyRelatedField(
+        queryset=Categoria.objects.all(),
+        required=False,
+    )
+    categoria_nombre = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=False,
+        max_length=150,
+    )
     categoria_name = serializers.CharField(
         source="categoria.name",
         read_only=True,
     )
+
+    origen = serializers.ChoiceField(
+        choices=ProductOrigin.choices,
+        required=False,
+    )
+    origen_observacion = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+    )
+
     stock = serializers.SerializerMethodField()
     por_recibir = serializers.SerializerMethodField()
+
     stock_inicial = serializers.IntegerField(
         write_only=True,
         required=False,
@@ -119,6 +157,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         allow_blank=True,
         max_length=255,
     )
+
     stock_status = serializers.SerializerMethodField()
     estado_producto = serializers.SerializerMethodField()
     estado_producto_display = serializers.SerializerMethodField()
@@ -128,12 +167,15 @@ class ProductoSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "categoria",
+            "categoria_nombre",
             "categoria_name",
             "modelo",
             "modelo_normalized",
             "detalle",
             "codigo_sap",
             "codigo_sap_normalized",
+            "origen",
+            "origen_observacion",
             "stock",
             "stock_actual",
             "stock_critico",
@@ -167,27 +209,84 @@ class ProductoSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, attrs):
-        protected_lifecycle_fields = {"status", "descontinuado"}
-        attempted_lifecycle_fields = protected_lifecycle_fields.intersection(
+        is_create = self.instance is None
+        validation_errors = {}
+
+        protected_fields = {
+            "status",
+            "descontinuado",
+        }
+
+        if not is_create:
+            protected_fields.update(
+                {
+                    "origen",
+                    "origen_observacion",
+                }
+            )
+
+        attempted_protected_fields = protected_fields.intersection(
             self.initial_data.keys()
         )
 
-        if attempted_lifecycle_fields:
-            raise serializers.ValidationError(
+        if attempted_protected_fields:
+            validation_errors.update(
                 {
                     field_name: (
-                        "Este campo solo puede modificarse mediante la acción "
-                        "controlada de ciclo de vida del producto."
+                        "Este campo solo puede modificarse mediante una acción "
+                        "controlada del producto."
                     )
-                    for field_name in attempted_lifecycle_fields
+                    for field_name in attempted_protected_fields
                 }
             )
 
         if self.instance and self.instance.status != BaseStatus.ACTIVO:
-            raise serializers.ValidationError(
-                {"status": ("Debe reactivar el producto antes de modificar su ficha.")}
+            validation_errors["status"] = (
+                "Debe reactivar el producto antes de modificar su ficha."
             )
+
+        category = attrs.get("categoria")
+        category_name = str(attrs.get("categoria_nombre", "") or "").strip()
+
+        if is_create:
+            if "origen" not in self.initial_data:
+                validation_errors["origen"] = (
+                    "El origen es obligatorio al crear un producto."
+                )
+
+            if bool(category) == bool(category_name):
+                validation_errors["categoria"] = (
+                    "Debe indicar una categoría existente o un nombre para "
+                    "crear una categoría nueva."
+                )
+        elif category is not None and category_name:
+            validation_errors["categoria"] = (
+                "No puede enviar una categoría existente y un nombre de "
+                "categoría al mismo tiempo."
+            )
+
+        origin = attrs.get(
+            "origen",
+            self.instance.origen if self.instance else None,
+        )
+
+        origin_observation = str(attrs.get("origen_observacion", "") or "").strip()
+
+        if is_create and origin == ProductOrigin.OTRO and not origin_observation:
+            validation_errors["origen_observacion"] = (
+                "Debe explicar el origen cuando selecciona OTRO."
+            )
+
         initial_stock = attrs.get("stock_inicial", 0)
+
+        if is_create and origin == ProductOrigin.SERVICIO:
+            attrs["controla_stock"] = False
+            attrs["stock_critico"] = 0
+
+            if initial_stock > 0:
+                validation_errors["stock_inicial"] = (
+                    "Un producto de tipo SERVICIO no puede tener stock inicial."
+                )
 
         controla_stock = attrs.get(
             "controla_stock",
@@ -195,59 +294,94 @@ class ProductoSerializer(serializers.ModelSerializer):
         )
 
         if self.instance and "stock_inicial" in self.initial_data:
-            raise serializers.ValidationError(
-                {
-                    "stock_inicial": (
-                        "El stock inicial solo se puede registrar al crear un producto. "
-                        "Para cambios posteriores use Gestionar inventario."
-                    )
-                }
+            validation_errors["stock_inicial"] = (
+                "El stock inicial solo se puede registrar al crear un producto. "
+                "Para cambios posteriores use Gestionar inventario."
             )
 
         if initial_stock > 0 and not controla_stock:
-            raise serializers.ValidationError(
-                {
-                    "stock_inicial": (
-                        "Un producto que no maneja inventario no puede tener stock inicial."
-                    )
-                }
+            validation_errors["stock_inicial"] = (
+                "Un producto que no maneja inventario no puede tener stock inicial."
             )
 
-        if initial_stock > 0 and not attrs.get("motivo_stock_inicial", "").strip():
-            raise serializers.ValidationError(
-                {
-                    "motivo_stock_inicial": (
-                        "El motivo del stock inicial es obligatorio cuando la cantidad "
-                        "es mayor a cero."
-                    )
-                }
+        if (
+            initial_stock > 0
+            and not str(attrs.get("motivo_stock_inicial", "") or "").strip()
+        ):
+            validation_errors["motivo_stock_inicial"] = (
+                "El motivo del stock inicial es obligatorio cuando la cantidad "
+                "es mayor a cero."
             )
+
+        if validation_errors:
+            raise serializers.ValidationError(validation_errors)
 
         return attrs
 
     def create(self, validated_data):
         initial_stock = validated_data.pop("stock_inicial", 0)
 
-        initial_stock_reason = validated_data.pop(
-            "motivo_stock_inicial",
-            "",
+        initial_stock_reason = str(
+            validated_data.pop("motivo_stock_inicial", "") or ""
         ).strip()
+
+        categoria = validated_data.pop("categoria", None)
+        categoria_nombre = validated_data.pop("categoria_nombre", "")
 
         request = self.context.get("request")
         user = request.user if request and request.user.is_authenticated else None
 
-        with transaction.atomic():
-            product = Producto.objects.create(**validated_data)
+        try:
+            product = create_product_with_category(
+                product_data=validated_data,
+                categoria=categoria,
+                categoria_nombre=categoria_nombre,
+                initial_stock=initial_stock,
+                initial_stock_reason=initial_stock_reason,
+                user=user,
+                request=getattr(request, "_request", request),
+            )
+        except DjangoValidationError as error:
+            raise_serializer_validation_error(error)
 
-            if initial_stock > 0:
-                register_manual_entry(
-                    producto=product,
-                    cantidad=initial_stock,
-                    motivo=initial_stock_reason,
-                    user=user,
-                )
+        if request:
+            django_request = getattr(request, "_request", request)
+            django_request.skip_activity_audit = True
 
         return product
+
+    def update(self, instance, validated_data):
+        category_supplied = "categoria" in validated_data
+        category_name_supplied = "categoria_nombre" in validated_data
+
+        categoria = validated_data.pop("categoria", None)
+        categoria_nombre = validated_data.pop("categoria_nombre", "")
+
+        request = self.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+
+        try:
+            with transaction.atomic():
+                if category_supplied or category_name_supplied:
+                    resolved_category, _ = resolve_or_create_product_category(
+                        categoria=categoria if category_supplied else None,
+                        categoria_nombre=(
+                            categoria_nombre if category_name_supplied else ""
+                        ),
+                        user=user,
+                        request=getattr(request, "_request", request),
+                    )
+
+                    validated_data["categoria"] = resolved_category
+
+                for attribute, value in validated_data.items():
+                    setattr(instance, attribute, value)
+
+                instance.save()
+        except DjangoValidationError as error:
+            raise_serializer_validation_error(error)
+
+        return instance
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_stock(self, obj):
@@ -404,6 +538,42 @@ class ProductoLifecycleActionSerializer(serializers.Serializer):
             )
 
         return value
+
+
+class ProductoOrigenChangeSerializer(serializers.Serializer):
+    origen = serializers.ChoiceField(
+        choices=ProductOrigin.choices,
+    )
+    origen_observacion = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+    )
+    motivo = serializers.CharField(max_length=255)
+
+    def validate(self, attrs):
+        origen = attrs["origen"]
+        observacion = str(attrs.get("origen_observacion", "") or "").strip()
+        motivo = str(attrs.get("motivo", "") or "").strip()
+
+        if origen == ProductOrigin.OTRO and not observacion:
+            raise serializers.ValidationError(
+                {
+                    "origen_observacion": (
+                        "Debe explicar el origen cuando selecciona OTRO."
+                    )
+                }
+            )
+
+        if not motivo:
+            raise serializers.ValidationError(
+                {"motivo": ("El motivo del cambio de origen es obligatorio.")}
+            )
+
+        attrs["origen_observacion"] = observacion
+        attrs["motivo"] = motivo
+
+        return attrs
 
 
 class CategoriaRenameSerializer(serializers.Serializer):

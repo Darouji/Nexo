@@ -888,3 +888,219 @@ class ProductOriginAndCategoryHistoryTests(TestCase):
         self.assertEqual(product.origen, ProductOrigin.COMPRADO)
         self.assertTrue(product.controla_stock)
         self.assertEqual(product.stock_actual, 5)
+
+
+class ProductCreationAndOriginApiTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(
+            username="product-contract-admin",
+            email="product-contract-admin@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.ADMINISTRADOR,
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+
+        self.category = Categoria.objects.create(
+            name="Categoría base de productos",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+    def test_product_can_create_category_atomically_by_name(self):
+        response = self.client.post(
+            "/api/inventory/productos/",
+            {
+                "categoria_nombre": "Accesorios especiales",
+                "modelo": "Adaptador industrial X",
+                "codigo_sap": "ACC-API-001",
+                "origen": ProductOrigin.COMPRADO,
+                "controla_stock": True,
+                "stock_critico": 1,
+                "stock_inicial": 2,
+                "motivo_stock_inicial": ("Stock inicial validado durante la creación."),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        created_category = Categoria.objects.get(name="Accesorios especiales")
+
+        product = Producto.objects.get(pk=response.data["id"])
+
+        self.assertEqual(product.categoria_id, created_category.pk)
+        self.assertEqual(product.stock_actual, 2)
+
+        created_category.refresh_from_db()
+
+        self.assertTrue(created_category.has_historical_usage)
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_id=str(created_category.pk),
+                action=AuditAction.CREAR,
+            ).exists()
+        )
+
+    def test_invalid_product_rolls_back_new_category(self):
+        Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto SAP existente",
+            codigo_sap="SAP-DUPLICADO",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        response = self.client.post(
+            "/api/inventory/productos/",
+            {
+                "categoria_nombre": "Categoría que debe revertirse",
+                "modelo": "Producto inválido",
+                "codigo_sap": "SAP-DUPLICADO",
+                "origen": ProductOrigin.COMPRADO,
+                "controla_stock": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertFalse(
+            Categoria.objects.filter(name="Categoría que debe revertirse").exists()
+        )
+
+    def test_product_creation_requires_origin(self):
+        response = self.client.post(
+            "/api/inventory/productos/",
+            {
+                "categoria": self.category.pk,
+                "modelo": "Producto sin origen",
+                "controla_stock": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn("origen", response.data)
+
+    def test_direct_origin_patch_is_rejected_and_controlled_change_is_audited(self):
+        product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto modificable",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        direct_patch = self.client.patch(
+            f"/api/inventory/productos/{product.pk}/",
+            {
+                "origen": ProductOrigin.OTRO,
+                "origen_observacion": "Cambio directo inválido.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            direct_patch.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        controlled_change = self.client.post(
+            f"/api/inventory/productos/{product.pk}/cambiar-origen/",
+            {
+                "origen": ProductOrigin.OTRO,
+                "origen_observacion": "Producto adquirido por canal especial.",
+                "motivo": "Se corrigió el registro de adquisición.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            controlled_change.status_code,
+            status.HTTP_200_OK,
+        )
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.origen, ProductOrigin.OTRO)
+        self.assertEqual(
+            product.origen_observacion,
+            "Producto adquirido por canal especial.",
+        )
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_id=str(product.pk),
+                action=AuditAction.CAMBIAR_ORIGEN,
+            ).exists()
+        )
+
+    def test_product_without_stock_can_change_to_service(self):
+        product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto convertido a servicio",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        response = self.client.post(
+            f"/api/inventory/productos/{product.pk}/cambiar-origen/",
+            {
+                "origen": ProductOrigin.SERVICIO,
+                "motivo": "Se determinó que corresponde a una prestación.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.origen, ProductOrigin.SERVICIO)
+        self.assertFalse(product.controla_stock)
+        self.assertEqual(product.stock_critico, 0)
+
+    def test_product_with_stock_cannot_change_to_service(self):
+        product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto con inventario físico",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            stock_actual=3,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        response = self.client.post(
+            f"/api/inventory/productos/{product.pk}/cambiar-origen/",
+            {
+                "origen": ProductOrigin.SERVICIO,
+                "motivo": "Intento inválido para validar protección.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.origen, ProductOrigin.COMPRADO)
+        self.assertTrue(product.controla_stock)

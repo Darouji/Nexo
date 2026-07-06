@@ -18,6 +18,7 @@ from .models import (
     MovimientoKardex,
     PendientePorRecibir,
     Producto,
+    ProductOrigin,
 )
 
 PENDING_RECEIPT_AUDIT_FIELDS = [
@@ -71,6 +72,14 @@ CATEGORY_MERGE_AUDIT_FIELDS = [
 
 CATEGORY_PRODUCT_MERGE_AUDIT_FIELDS = [
     "categoria",
+    "updated_by",
+]
+
+PRODUCT_ORIGIN_AUDIT_FIELDS = [
+    "origen",
+    "origen_observacion",
+    "controla_stock",
+    "stock_critico",
     "updated_by",
 ]
 
@@ -521,6 +530,267 @@ def delete_category_safely(
         return None
 
     return user
+
+
+def resolve_or_create_product_category(
+    *,
+    categoria=None,
+    categoria_nombre="",
+    user=None,
+    request=None,
+):
+    """
+    Resuelve una categoría existente o crea una nueva dentro de la
+    transacción del producto.
+
+    Nunca deja una categoría huérfana si la creación del producto falla.
+    """
+
+    categoria_nombre = str(categoria_nombre or "").strip()
+    has_category_id = categoria is not None
+    has_category_name = bool(categoria_nombre)
+
+    if has_category_id == has_category_name:
+        raise ValidationError(
+            {
+                "categoria": (
+                    "Debe indicar exactamente una categoría existente o un "
+                    "nombre para crear una categoría nueva."
+                )
+            }
+        )
+
+    operator = get_operator(user)
+
+    with transaction.atomic():
+        if has_category_id:
+            try:
+                locked_category = Categoria.objects.select_for_update().get(
+                    pk=categoria.pk
+                )
+            except Categoria.DoesNotExist as error:
+                raise ValidationError(
+                    {"categoria": "La categoría indicada ya no existe."}
+                ) from error
+
+            _require_available_category(
+                locked_category,
+                "categoria",
+            )
+
+            return locked_category, False
+
+        category_normalized = normalize_text(categoria_nombre)
+
+        if not category_normalized:
+            raise ValidationError(
+                {
+                    "categoria_nombre": (
+                        "El nombre de la nueva categoría es obligatorio."
+                    )
+                }
+            )
+
+        existing_category = (
+            Categoria.objects.select_for_update()
+            .filter(name_normalized=category_normalized)
+            .first()
+        )
+
+        if existing_category:
+            _require_available_category(
+                existing_category,
+                "categoria_nombre",
+            )
+
+            return existing_category, False
+
+        try:
+            with transaction.atomic():
+                created_category = Categoria.objects.create(
+                    name=categoria_nombre,
+                    created_by=operator,
+                    updated_by=operator,
+                )
+        except (IntegrityError, ValidationError):
+            existing_category = (
+                Categoria.objects.select_for_update()
+                .filter(name_normalized=category_normalized)
+                .first()
+            )
+
+            if not existing_category:
+                raise
+
+            _require_available_category(
+                existing_category,
+                "categoria_nombre",
+            )
+
+            return existing_category, False
+
+        create_business_audit_log(
+            instance=created_category,
+            action=AuditAction.CREAR,
+            user=user,
+            origin=AuditOrigin.API,
+            reason="Categoría creada junto con un producto.",
+            metadata={
+                "operation": "category_create_from_product",
+                "category_name": created_category.name,
+            },
+            request=request,
+        )
+
+        return created_category, True
+
+
+def create_product_with_category(
+    *,
+    product_data,
+    categoria=None,
+    categoria_nombre="",
+    initial_stock=0,
+    initial_stock_reason="",
+    user=None,
+    request=None,
+):
+    """
+    Crea Producto y, cuando corresponde, una Categoría nueva como una
+    única operación atómica.
+    """
+
+    with transaction.atomic():
+        resolved_category, category_created = resolve_or_create_product_category(
+            categoria=categoria,
+            categoria_nombre=categoria_nombre,
+            user=user,
+            request=request,
+        )
+
+        product = Producto.objects.create(
+            categoria=resolved_category,
+            **dict(product_data),
+        )
+
+        if initial_stock > 0:
+            register_manual_entry(
+                producto=product,
+                cantidad=initial_stock,
+                motivo=initial_stock_reason,
+                user=user,
+            )
+
+        create_business_audit_log(
+            instance=product,
+            action=AuditAction.CREAR,
+            user=user,
+            origin=AuditOrigin.API,
+            reason="Producto creado.",
+            metadata={
+                "operation": "product_create",
+                "category_id": resolved_category.pk,
+                "category_name": resolved_category.name,
+                "category_created_in_request": category_created,
+                "product_origin": product.origen,
+                "initial_stock": initial_stock,
+            },
+            request=request,
+        )
+
+    return product
+
+
+def change_product_origin(
+    *,
+    producto,
+    origen,
+    origen_observacion="",
+    motivo="",
+    user=None,
+    request=None,
+):
+    if producto is None:
+        raise ValidationError({"producto": "El producto es obligatorio."})
+
+    origen = str(origen or "").strip().upper()
+    origen_observacion = str(origen_observacion or "").strip()
+    motivo = _require_category_reason(motivo)
+
+    if origen not in ProductOrigin.values:
+        raise ValidationError({"origen": "El origen del producto no es válido."})
+
+    if origen == ProductOrigin.OTRO and not origen_observacion:
+        raise ValidationError(
+            {"origen_observacion": ("Debe explicar el origen cuando selecciona OTRO.")}
+        )
+
+    if origen != ProductOrigin.OTRO:
+        origen_observacion = ""
+
+    with transaction.atomic():
+        locked_product = Producto.objects.select_for_update().get(pk=producto.pk)
+
+        if locked_product.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {"status": ("Debe reactivar el producto antes de cambiar su origen.")}
+            )
+
+        if (
+            locked_product.origen == origen
+            and locked_product.origen_observacion == origen_observacion
+        ):
+            raise ValidationError(
+                {"origen": ("El producto ya tiene el origen y observación indicados.")}
+            )
+
+        old_values = capture_field_values(
+            locked_product,
+            PRODUCT_ORIGIN_AUDIT_FIELDS,
+        )
+
+        previous_origin = locked_product.origen
+
+        locked_product.origen = origen
+        locked_product.origen_observacion = origen_observacion
+        locked_product.updated_by = get_operator(user)
+
+        locked_product.save(
+            update_fields=[
+                "origen",
+                "origen_observacion",
+                "controla_stock",
+                "stock_critico",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_product,
+            old_values=old_values,
+            fields=PRODUCT_ORIGIN_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            action=AuditAction.CAMBIAR_ORIGEN,
+        )
+
+        create_business_audit_log(
+            instance=locked_product,
+            action=AuditAction.CAMBIAR_ORIGEN,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "product_origin_change",
+                "previous_origin": previous_origin,
+                "new_origin": locked_product.origen,
+            },
+            request=request,
+        )
+
+    return locked_product
 
 
 def build_reference_data(reference):

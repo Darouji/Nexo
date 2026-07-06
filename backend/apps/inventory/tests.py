@@ -992,7 +992,10 @@ class ProductCreationAndOriginApiTests(TestCase):
             status.HTTP_400_BAD_REQUEST,
         )
 
-        self.assertIn("origen", response.data)
+        self.assertEqual(
+            str(response.data["error"]["details"]["origen"][0]),
+            "El origen es obligatorio al crear un producto.",
+        )
 
     def test_direct_origin_patch_is_rejected_and_controlled_change_is_audited(self):
         product = Producto.objects.create(

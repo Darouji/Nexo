@@ -13,6 +13,7 @@ from .models import (
     PendientePorRecibir,
     PendientePorRecibirStatus,
     Producto,
+    ProductOrigin,
 )
 from .serializers import MovimientoKardexSerializer
 from .services import (
@@ -708,3 +709,86 @@ class PendientePorRecibirApiTests(TestCase):
                 reason="La categoría quedó sin uso operativo.",
             ).exists()
         )
+
+
+class ProductOriginAndCategoryHistoryTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="inventory-origin-admin",
+            email="inventory-origin-admin@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.ADMINISTRADOR,
+        )
+
+        self.category = Categoria.objects.create(
+            name="Categoría de origen",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_product_marks_category_as_historical_on_first_use(self):
+        self.assertFalse(self.category.has_historical_usage)
+
+        Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto con uso histórico",
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.category.refresh_from_db()
+
+        self.assertTrue(self.category.has_historical_usage)
+
+    def test_service_product_forces_non_stock_configuration(self):
+        product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Servicio de inspección",
+            origen=ProductOrigin.SERVICIO,
+            controla_stock=True,
+            stock_critico=10,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.origen, ProductOrigin.SERVICIO)
+        self.assertFalse(product.controla_stock)
+        self.assertEqual(product.stock_critico, 0)
+        self.assertEqual(product.stock_actual, 0)
+
+    def test_other_origin_requires_observation(self):
+        with self.assertRaises(ValidationError):
+            Producto.objects.create(
+                categoria=self.category,
+                modelo="Producto de origen especial",
+                origen=ProductOrigin.OTRO,
+                origen_observacion="",
+                controla_stock=True,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+
+    def test_product_with_stock_cannot_be_converted_to_service(self):
+        product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto con stock",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            stock_actual=5,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        product.origen = ProductOrigin.SERVICIO
+
+        with self.assertRaises(ValidationError):
+            product.save()
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.origen, ProductOrigin.COMPRADO)
+        self.assertTrue(product.controla_stock)
+        self.assertEqual(product.stock_actual, 5)

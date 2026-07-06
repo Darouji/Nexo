@@ -15,6 +15,9 @@ class BaseStatus(models.TextChoices):
 class AuditAction(models.TextChoices):
     CREAR = "CREAR", "Crear"
     EDITAR = "EDITAR", "Editar"
+    RENOMBRAR = "RENOMBRAR", "Renombrar"
+    FUSIONAR = "FUSIONAR", "Fusionar"
+    CAMBIAR_ORIGEN = "CAMBIAR_ORIGEN", "Cambiar origen"
     ANULAR = "ANULAR", "Anular"
     INACTIVAR = "INACTIVAR", "Inactivar"
     ARCHIVAR = "ARCHIVAR", "Archivar"
@@ -359,7 +362,9 @@ class RecordAlert(BaseModel):
         self.is_active = False
         self.resolved_by = user
         self.resolved_at = timezone.now()
-        self.save(update_fields=["is_active", "resolved_by", "resolved_at", "updated_at"])
+        self.save(
+            update_fields=["is_active", "resolved_by", "resolved_at", "updated_at"]
+        )
 
 
 class ColumnDisplayName(BaseModel):

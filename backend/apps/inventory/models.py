@@ -17,6 +17,13 @@ class KardexMovementType(models.TextChoices):
     AJUSTE_INVENTARIO = "AJUSTE_INVENTARIO", "Ajuste de inventario"
 
 
+class ProductOrigin(models.TextChoices):
+    COMPRADO = "COMPRADO", "Comprado"
+    FABRICADO = "FABRICADO", "Fabricado"
+    SERVICIO = "SERVICIO", "Servicio"
+    OTRO = "OTRO", "Otro"
+
+
 class ProductStockStatus(models.TextChoices):
     STOCK_CORRECTO = "STOCK_CORRECTO", "Stock correcto"
     BAJO_MINIMO = "BAJO_MINIMO", "Bajo mínimo"
@@ -48,6 +55,46 @@ class Categoria(BaseModel):
     )
     description = models.TextField(blank=True, verbose_name="Descripción")
 
+    has_historical_usage = models.BooleanField(
+        default=False,
+        editable=False,
+        verbose_name="Tiene uso histórico",
+        help_text=(
+            "Se activa de forma irreversible cuando la categoría es utilizada "
+            "por un producto o un proceso relevante."
+        ),
+    )
+
+    merged_into = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="merged_categories",
+        editable=False,
+        verbose_name="Fusionada en",
+    )
+    merged_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="Fecha de fusión",
+    )
+    merged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="categories_merged_by_user",
+        editable=False,
+        verbose_name="Fusionada por",
+    )
+    merge_reason = models.TextField(
+        blank=True,
+        editable=False,
+        verbose_name="Motivo de fusión",
+    )
+
     class Meta:
         verbose_name = "Categoría"
         verbose_name_plural = "Categorías"
@@ -63,33 +110,98 @@ class Categoria(BaseModel):
     def __str__(self):
         return self.name
 
-    def clean(self):
-        super().clean()
+    @property
+    def is_merged(self):
+        return self.merged_into_id is not None
 
-        if not self.name or not self.name.strip():
-            raise ValidationError({"name": "El nombre de la categoría es obligatorio."})
+    @property
+    def is_available_for_products(self):
+        return self.status == BaseStatus.ACTIVO and self.merged_into_id is None
 
-        if self.pk and self.status in [
-            BaseStatus.INACTIVO,
-            BaseStatus.ARCHIVADO,
-        ]:
-            has_operational_products = self.productos.filter(
-                status=BaseStatus.ACTIVO,
-            ).exists()
 
-            if has_operational_products:
-                raise ValidationError(
-                    {
-                        "status": (
-                            "No se puede inactivar ni archivar una categoría que "
-                            "contiene productos activos o descontinuados."
-                        )
-                    }
-                )
+def clean(self):
+    super().clean()
+
+    self.name = str(self.name or "").strip()
+    self.description = str(self.description or "").strip()
+    self.merge_reason = str(self.merge_reason or "").strip()
+
+    if not self.name:
+        raise ValidationError({"name": "El nombre de la categoría es obligatorio."})
+
+    # Regla defensiva: no se puede inactivar ni archivar manualmente
+    # una categoría que todavía contiene productos operativos.
+    #
+    # Durante una fusión correcta, primero se reasignan los productos
+    # a la categoría destino y recién después se archiva la origen.
+    if self.pk and self.status in [
+        BaseStatus.INACTIVO,
+        BaseStatus.ARCHIVADO,
+    ]:
+        has_operational_products = self.productos.filter(
+            status=BaseStatus.ACTIVO,
+        ).exists()
+
+        if has_operational_products:
+            raise ValidationError(
+                {
+                    "status": (
+                        "No se puede inactivar ni archivar una categoría que "
+                        "contiene productos activos o descontinuados."
+                    )
+                }
+            )
+
+    if self.merged_into_id:
+        if not self.pk:
+            raise ValidationError(
+                {
+                    "merged_into": (
+                        "Una categoría debe existir antes de poder fusionarse."
+                    )
+                }
+            )
+
+        if self.merged_into_id == self.pk:
+            raise ValidationError(
+                {"merged_into": ("Una categoría no puede fusionarse consigo misma.")}
+            )
+
+        if self.status != BaseStatus.ARCHIVADO:
+            raise ValidationError(
+                {
+                    "status": (
+                        "Una categoría fusionada debe quedar archivada internamente."
+                    )
+                }
+            )
+
+        if not self.merge_reason:
+            raise ValidationError(
+                {
+                    "merge_reason": (
+                        "El motivo de fusión es obligatorio para una categoría "
+                        "fusionada."
+                    )
+                }
+            )
 
     def save(self, *args, **kwargs):
+        self.name = str(self.name or "").strip()
         self.name_normalized = normalize_text(self.name)
+
         self.full_clean()
+
+        update_fields = kwargs.get("update_fields")
+
+        if update_fields is not None:
+            normalized_update_fields = set(update_fields)
+
+            if "name" in normalized_update_fields:
+                normalized_update_fields.add("name_normalized")
+
+            kwargs["update_fields"] = list(normalized_update_fields)
+
         super().save(*args, **kwargs)
 
 
@@ -120,6 +232,20 @@ class Producto(BaseModel):
         db_index=True,
         verbose_name="Código SAP normalizado",
     )
+
+    origen = models.CharField(
+        max_length=20,
+        choices=ProductOrigin.choices,
+        default=ProductOrigin.COMPRADO,
+        db_index=True,
+        verbose_name="Origen del producto",
+    )
+    origen_observacion = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Observación de origen",
+    )
+
     stock_actual = models.IntegerField(
         default=0,
         editable=False,
@@ -213,6 +339,18 @@ class Producto(BaseModel):
                 {"categoria": "El producto debe tener una categoría."}
             )
 
+        category_data = (
+            Categoria.objects.filter(pk=self.categoria_id)
+            .values(
+                "status",
+                "merged_into_id",
+            )
+            .first()
+        )
+
+        if not category_data:
+            raise ValidationError({"categoria": "La categoría indicada no existe."})
+
         current_category_id = None
 
         if self.pk:
@@ -226,19 +364,61 @@ class Producto(BaseModel):
         category_changed = current_category_id != self.categoria_id
 
         if (is_new_product or category_changed) and (
-            self.categoria.status != BaseStatus.ACTIVO
+            category_data["status"] != BaseStatus.ACTIVO
+            or category_data["merged_into_id"] is not None
         ):
             raise ValidationError(
                 {
                     "categoria": (
                         "Solo se puede crear o reasignar un producto a una "
-                        "categoría activa."
+                        "categoría activa y disponible."
                     )
                 }
             )
 
         if not self.modelo or not self.modelo.strip():
             raise ValidationError({"modelo": "El modelo del producto es obligatorio."})
+
+        if self.origen not in ProductOrigin.values:
+            raise ValidationError({"origen": "El origen del producto no es válido."})
+
+        if self.origen == ProductOrigin.OTRO and not self.origen_observacion.strip():
+            raise ValidationError(
+                {
+                    "origen_observacion": (
+                        "Debe explicar el origen cuando el producto tiene origen OTRO."
+                    )
+                }
+            )
+
+        if self.origen == ProductOrigin.SERVICIO:
+            if self.controla_stock:
+                raise ValidationError(
+                    {
+                        "controla_stock": (
+                            "Un producto de tipo SERVICIO no puede manejar "
+                            "inventario físico."
+                        )
+                    }
+                )
+
+            if self.stock_actual != 0:
+                raise ValidationError(
+                    {
+                        "stock_actual": (
+                            "Un producto de tipo SERVICIO no puede tener stock físico."
+                        )
+                    }
+                )
+
+            if self.stock_critico != 0:
+                raise ValidationError(
+                    {
+                        "stock_critico": (
+                            "Un producto de tipo SERVICIO no puede tener stock mínimo."
+                        )
+                    }
+                )
 
         if self.stock_actual < 0:
             raise ValidationError(
@@ -265,55 +445,128 @@ class Producto(BaseModel):
                 }
             )
 
-        if self.pk:
-            has_open_pending_receipts = PendientePorRecibir.objects.filter(
-                producto_id=self.pk,
-                estado__in=ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
-            ).exists()
+        if not self.pk:
+            return
 
-            if self.status in [BaseStatus.INACTIVO, BaseStatus.ARCHIVADO] and (
-                self.stock_actual != 0 or has_open_pending_receipts
-            ):
+        has_open_pending_receipts = PendientePorRecibir.objects.filter(
+            producto_id=self.pk,
+            estado__in=ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
+        ).exists()
+
+        if self.status in [BaseStatus.INACTIVO, BaseStatus.ARCHIVADO] and (
+            self.stock_actual != 0 or has_open_pending_receipts
+        ):
+            raise ValidationError(
+                {
+                    "status": (
+                        "No se puede inactivar ni archivar un producto que "
+                        "tiene stock físico o unidades pendientes por recibir."
+                    )
+                }
+            )
+
+        original = (
+            Producto.objects.filter(pk=self.pk)
+            .values(
+                "controla_stock",
+                "stock_actual",
+                "origen",
+            )
+            .first()
+        )
+
+        if not original:
+            return
+
+        has_kardex = MovimientoKardex.objects.filter(producto_id=self.pk).exists()
+
+        has_any_pending_receipts = PendientePorRecibir.objects.filter(
+            producto_id=self.pk
+        ).exists()
+
+        if original["controla_stock"] and not self.controla_stock:
+            if original["stock_actual"] != 0 or has_kardex or has_open_pending_receipts:
                 raise ValidationError(
                     {
-                        "status": (
-                            "No se puede inactivar ni archivar un producto que "
-                            "tiene stock físico o unidades pendientes por recibir."
+                        "controla_stock": (
+                            "No se puede desactivar el manejo de inventario si "
+                            "el producto tiene stock físico, movimientos Kardex "
+                            "o unidades pendientes por recibir."
                         )
                     }
                 )
 
-            original = (
+        if (
+            original["origen"] != ProductOrigin.SERVICIO
+            and self.origen == ProductOrigin.SERVICIO
+            and (
+                original["stock_actual"] != 0 or has_kardex or has_any_pending_receipts
+            )
+        ):
+            raise ValidationError(
+                {
+                    "origen": (
+                        "No se puede convertir a SERVICIO un producto que tiene "
+                        "stock físico, Kardex o pendientes por recibir."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        is_new_product = self._state.adding
+        previous_category_id = None
+
+        if self.pk:
+            previous_category_id = (
                 Producto.objects.filter(pk=self.pk)
-                .values("controla_stock", "stock_actual")
+                .values_list("categoria_id", flat=True)
                 .first()
             )
 
-            if original and original["controla_stock"] and not self.controla_stock:
-                has_kardex = MovimientoKardex.objects.filter(
-                    producto_id=self.pk
-                ).exists()
+        self.modelo = str(self.modelo or "").strip()
+        self.codigo_sap = str(self.codigo_sap or "").strip()
+        self.origen_observacion = str(self.origen_observacion or "").strip()
 
-                if (
-                    original["stock_actual"] != 0
-                    or has_kardex
-                    or has_open_pending_receipts
-                ):
-                    raise ValidationError(
-                        {
-                            "controla_stock": (
-                                "No se puede desactivar el manejo de inventario si "
-                                "el producto tiene stock físico, movimientos Kardex "
-                                "o unidades pendientes por recibir."
-                            )
-                        }
-                    )
+        if self.origen == ProductOrigin.SERVICIO:
+            self.controla_stock = False
+            self.stock_critico = 0
+        elif self.origen != ProductOrigin.OTRO:
+            self.origen_observacion = ""
 
-    def save(self, *args, **kwargs):
         self.modelo_normalized = normalize_text(self.modelo)
         self.codigo_sap_normalized = normalize_text(self.codigo_sap)
+
         self.full_clean()
+
+        update_fields = kwargs.get("update_fields")
+
+        if update_fields is not None:
+            normalized_update_fields = set(update_fields)
+
+            if "modelo" in normalized_update_fields:
+                normalized_update_fields.add("modelo_normalized")
+
+            if "codigo_sap" in normalized_update_fields:
+                normalized_update_fields.add("codigo_sap_normalized")
+
+            if "origen" in normalized_update_fields:
+                normalized_update_fields.update(
+                    {
+                        "origen_observacion",
+                        "controla_stock",
+                        "stock_critico",
+                    }
+                )
+
+            kwargs["update_fields"] = list(normalized_update_fields)
+
         super().save(*args, **kwargs)
+
+        if is_new_product or previous_category_id != self.categoria_id:
+            Categoria.objects.filter(
+                pk=self.categoria_id,
+                has_historical_usage=False,
+            ).update(has_historical_usage=True)
 
 
 class PendientePorRecibir(BaseModel):

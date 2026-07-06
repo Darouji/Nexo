@@ -14,7 +14,6 @@ from .models import (
 )
 from .services import (
     create_product_with_category,
-    register_manual_entry,
     resolve_or_create_product_category,
 )
 

@@ -523,14 +523,6 @@ def delete_category_safely(
         "name": category_name,
     }
 
-    if user is None:
-        return None
-
-    if not getattr(user, "is_authenticated", False):
-        return None
-
-    return user
-
 
 def resolve_or_create_product_category(
     *,

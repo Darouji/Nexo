@@ -128,6 +128,122 @@ class Categoria(BaseModel):
         if not self.name:
             raise ValidationError({"name": "El nombre de la categoría es obligatorio."})
 
+        previous = None
+
+        if self.pk:
+            previous = (
+                Categoria.objects.filter(pk=self.pk)
+                .values(
+                    "status",
+                    "has_historical_usage",
+                )
+                .first()
+            )
+
+            # El uso histórico es irreversible.
+            if (
+                previous
+                and previous["has_historical_usage"]
+                and not self.has_historical_usage
+            ):
+                self.has_historical_usage = True
+
+        # Las categorías nuevas deben nacer activas.
+        if not self.pk and self.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {
+                    "status": (
+                        "Las categorías nuevas deben crearse activas. "
+                        "No existe un ciclo de vida manual de categorías."
+                    )
+                }
+            )
+
+        # El único cambio de estado permitido es el archivado interno
+        # que ocurre al completar una fusión válida.
+        if previous and previous["status"] != self.status:
+            is_valid_merge_archive = (
+                previous["status"] == BaseStatus.ACTIVO
+                and self.status == BaseStatus.ARCHIVADO
+                and self.merged_into_id is not None
+                and bool(self.merge_reason)
+            )
+
+            if not is_valid_merge_archive:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "El estado de una categoría no puede modificarse "
+                            "manualmente. Use renombrado, fusión o eliminación "
+                            "segura según corresponda."
+                        )
+                    }
+                )
+
+        if self.merged_into_id:
+            if not self.pk:
+                raise ValidationError(
+                    {
+                        "merged_into": (
+                            "Una categoría debe existir antes de poder fusionarse."
+                        )
+                    }
+                )
+
+            if self.merged_into_id == self.pk:
+                raise ValidationError(
+                    {
+                        "merged_into": (
+                            "Una categoría no puede fusionarse consigo misma."
+                        )
+                    }
+                )
+
+            if self.status != BaseStatus.ARCHIVADO:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "Una categoría fusionada debe quedar archivada "
+                            "internamente."
+                        )
+                    }
+                )
+
+            if not self.merge_reason:
+                raise ValidationError(
+                    {
+                        "merge_reason": (
+                            "El motivo de fusión es obligatorio para una categoría "
+                            "fusionada."
+                        )
+                    }
+                )
+
+        # Defensa adicional: una categoría no puede archivarse mientras
+        # aún conserve productos operativos.
+        if self.pk and self.status == BaseStatus.ARCHIVADO:
+            has_operational_products = self.productos.filter(
+                status=BaseStatus.ACTIVO,
+            ).exists()
+
+            if has_operational_products:
+                raise ValidationError(
+                    {
+                        "status": (
+                            "No se puede archivar una categoría que todavía "
+                            "contiene productos activos o descontinuados."
+                        )
+                    }
+                )
+        super().clean()
+
+        self.name = str(self.name or "").strip()
+        self.description = str(self.description or "").strip()
+        self.merge_reason = str(self.merge_reason or "").strip()
+
+        if not self.name:
+            raise ValidationError({"name": "El nombre de la categoría es obligatorio."})
+
         # Una categoría no puede inactivarse o archivarse mientras
         # mantenga productos operativos. Durante una fusión correcta,
         # primero se reasignan los productos y después se archiva la origen.

@@ -1,12 +1,15 @@
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from apps.core.audit import (
     capture_field_values,
+    create_business_audit_log,
     create_record_change_logs_from_snapshot,
 )
 from apps.core.models import AuditAction, AuditOrigin, BaseStatus
+from apps.core.utils import normalize_text
 
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
@@ -39,19 +42,470 @@ PRODUCT_LIFECYCLE_AUDIT_ACTIONS = {
     "REANUDAR": AuditAction.RESTAURAR,
 }
 
-CATEGORY_LIFECYCLE_AUDIT_FIELDS = [
-    "status",
-    "updated_by",
-]
-
-CATEGORY_LIFECYCLE_AUDIT_ACTIONS = {
-    "INACTIVAR": AuditAction.INACTIVAR,
-    "ARCHIVAR": AuditAction.ARCHIVAR,
-    "REACTIVAR": AuditAction.RESTAURAR,
-}
-
 
 def get_operator(user):
+
+    CATEGORY_RENAME_AUDIT_FIELDS = [
+        "name",
+        "name_normalized",
+        "updated_by",
+    ]
+
+    CATEGORY_MERGE_AUDIT_FIELDS = [
+        "status",
+        "has_historical_usage",
+        "merged_into",
+        "merged_at",
+        "merged_by",
+        "merge_reason",
+        "updated_by",
+    ]
+
+    CATEGORY_PRODUCT_MERGE_AUDIT_FIELDS = [
+        "categoria",
+        "updated_by",
+    ]
+
+
+def _require_category_reason(motivo):
+    motivo = str(motivo or "").strip()
+
+    if not motivo:
+        raise ValidationError(
+            {"motivo": "El motivo es obligatorio para esta operación."}
+        )
+
+    return motivo
+
+
+def _require_available_category(categoria, field_name):
+    if categoria.status != BaseStatus.ACTIVO or categoria.merged_into_id is not None:
+        raise ValidationError(
+            {
+                field_name: (
+                    "La categoría debe estar activa y disponible para "
+                    "realizar esta operación."
+                )
+            }
+        )
+
+
+def rename_category(
+    *,
+    categoria,
+    nombre,
+    motivo,
+    user=None,
+    request=None,
+):
+    if categoria is None:
+        raise ValidationError({"categoria": "La categoría es obligatoria."})
+
+    nombre = str(nombre or "").strip()
+    motivo = _require_category_reason(motivo)
+    nombre_normalized = normalize_text(nombre)
+
+    if not nombre or not nombre_normalized:
+        raise ValidationError(
+            {"name": "El nuevo nombre de la categoría es obligatorio."}
+        )
+
+    with transaction.atomic():
+        locked_category = Categoria.objects.select_for_update().get(pk=categoria.pk)
+
+        _require_available_category(locked_category, "categoria")
+
+        if locked_category.name_normalized == nombre_normalized:
+            raise ValidationError(
+                {"name": ("El nuevo nombre debe ser diferente del nombre actual.")}
+            )
+
+        if (
+            Categoria.objects.exclude(pk=locked_category.pk)
+            .filter(name_normalized=nombre_normalized)
+            .exists()
+        ):
+            raise ValidationError(
+                {
+                    "name": (
+                        "Ya existe otra categoría con ese nombre o con una "
+                        "variante equivalente."
+                    )
+                }
+            )
+
+        old_values = capture_field_values(
+            locked_category,
+            CATEGORY_RENAME_AUDIT_FIELDS,
+        )
+
+        locked_category.name = nombre
+        locked_category.updated_by = get_operator(user)
+
+        try:
+            with transaction.atomic():
+                locked_category.save(
+                    update_fields=[
+                        "name",
+                        "name_normalized",
+                        "updated_by",
+                        "updated_at",
+                    ]
+                )
+        except IntegrityError as error:
+            raise ValidationError(
+                {
+                    "name": (
+                        "Ya existe otra categoría con ese nombre o con una "
+                        "variante equivalente."
+                    )
+                }
+            ) from error
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_category,
+            old_values=old_values,
+            fields=CATEGORY_RENAME_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            action=AuditAction.RENOMBRAR,
+        )
+
+        create_business_audit_log(
+            instance=locked_category,
+            action=AuditAction.RENOMBRAR,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "category_rename",
+                "previous_name": old_values["name"],
+                "new_name": locked_category.name,
+            },
+            request=request,
+        )
+
+    return locked_category
+
+
+def merge_categories(
+    *,
+    categoria_origen,
+    categoria_destino,
+    motivo,
+    user=None,
+    request=None,
+):
+    if categoria_origen is None:
+        raise ValidationError(
+            {"categoria_origen": "La categoría origen es obligatoria."}
+        )
+
+    if categoria_destino is None:
+        raise ValidationError(
+            {"categoria_destino": "La categoría destino es obligatoria."}
+        )
+
+    if categoria_origen.pk == categoria_destino.pk:
+        raise ValidationError(
+            {
+                "categoria_destino": (
+                    "La categoría destino debe ser diferente de la categoría origen."
+                )
+            }
+        )
+
+    motivo = _require_category_reason(motivo)
+    operator = get_operator(user)
+
+    with transaction.atomic():
+        category_ids = sorted([categoria_origen.pk, categoria_destino.pk])
+
+        locked_categories = list(
+            Categoria.objects.select_for_update()
+            .filter(pk__in=category_ids)
+            .order_by("pk")
+        )
+
+        if len(locked_categories) != 2:
+            raise ValidationError(
+                {"categoria": ("Una de las categorías indicadas ya no existe.")}
+            )
+
+        categories_by_id = {category.pk: category for category in locked_categories}
+
+        source = categories_by_id[categoria_origen.pk]
+        destination = categories_by_id[categoria_destino.pk]
+
+        # Permite reintentos seguros cuando el frontend no recibió
+        # la respuesta original por una caída de red.
+        if source.merged_into_id:
+            if source.merged_into_id == destination.pk:
+                return source, destination, 0, True
+
+            raise ValidationError(
+                {
+                    "categoria_origen": (
+                        "La categoría origen ya fue fusionada en otra categoría."
+                    )
+                }
+            )
+
+        _require_available_category(source, "categoria_origen")
+        _require_available_category(destination, "categoria_destino")
+
+        products_to_move = list(
+            Producto.objects.select_for_update()
+            .select_related("categoria")
+            .filter(categoria_id=source.pk)
+            .order_by("pk")
+        )
+
+        normalized_models_to_move = [
+            product.modelo_normalized
+            for product in products_to_move
+            if product.modelo_normalized
+        ]
+
+        if normalized_models_to_move:
+            conflicting_models = list(
+                Producto.objects.select_for_update()
+                .filter(
+                    categoria_id=destination.pk,
+                    modelo_normalized__in=normalized_models_to_move,
+                )
+                .values_list("modelo", flat=True)[:5]
+            )
+
+            if conflicting_models:
+                raise ValidationError(
+                    {
+                        "categoria_destino": (
+                            "No se puede fusionar porque existen productos con "
+                            "el mismo modelo en la categoría destino: "
+                            f"{', '.join(conflicting_models)}."
+                        )
+                    }
+                )
+
+        source_old_values = capture_field_values(
+            source,
+            CATEGORY_MERGE_AUDIT_FIELDS,
+        )
+        destination_old_values = capture_field_values(
+            destination,
+            CATEGORY_MERGE_AUDIT_FIELDS,
+        )
+
+        product_old_values = [
+            (
+                product,
+                capture_field_values(
+                    product,
+                    CATEGORY_PRODUCT_MERGE_AUDIT_FIELDS,
+                ),
+            )
+            for product in products_to_move
+        ]
+
+        now = timezone.now()
+
+        for product in products_to_move:
+            product.categoria = destination
+            product.updated_by = operator
+            product.updated_at = now
+
+        if products_to_move:
+            try:
+                with transaction.atomic():
+                    Producto.objects.bulk_update(
+                        products_to_move,
+                        [
+                            "categoria",
+                            "updated_by",
+                            "updated_at",
+                        ],
+                    )
+            except IntegrityError as error:
+                raise ValidationError(
+                    {
+                        "categoria_destino": (
+                            "No se pudo completar la fusión porque la categoría "
+                            "destino contiene productos incompatibles."
+                        )
+                    }
+                ) from error
+
+            for product, old_values in product_old_values:
+                create_record_change_logs_from_snapshot(
+                    instance=product,
+                    old_values=old_values,
+                    fields=CATEGORY_PRODUCT_MERGE_AUDIT_FIELDS,
+                    user=user,
+                    origin=AuditOrigin.MANUAL,
+                    reason=motivo,
+                    action=AuditAction.FUSIONAR,
+                )
+
+        destination.has_historical_usage = True
+        destination.updated_by = operator
+        destination.save(
+            update_fields=[
+                "has_historical_usage",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        create_record_change_logs_from_snapshot(
+            instance=destination,
+            old_values=destination_old_values,
+            fields=CATEGORY_MERGE_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            action=AuditAction.FUSIONAR,
+        )
+
+        source.status = BaseStatus.ARCHIVADO
+        source.has_historical_usage = True
+        source.merged_into = destination
+        source.merged_at = now
+        source.merged_by = operator
+        source.merge_reason = motivo
+        source.updated_by = operator
+        source.save(
+            update_fields=[
+                "status",
+                "has_historical_usage",
+                "merged_into",
+                "merged_at",
+                "merged_by",
+                "merge_reason",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        create_record_change_logs_from_snapshot(
+            instance=source,
+            old_values=source_old_values,
+            fields=CATEGORY_MERGE_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            action=AuditAction.FUSIONAR,
+        )
+
+        create_business_audit_log(
+            instance=source,
+            action=AuditAction.FUSIONAR,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "category_merge",
+                "source_category_id": source.pk,
+                "source_category_name": source.name,
+                "destination_category_id": destination.pk,
+                "destination_category_name": destination.name,
+                "reassigned_product_count": len(products_to_move),
+            },
+            request=request,
+        )
+
+    return source, destination, len(products_to_move), False
+
+
+def delete_category_safely(
+    *,
+    categoria,
+    motivo,
+    user=None,
+    request=None,
+):
+    if categoria is None:
+        raise ValidationError({"categoria": "La categoría es obligatoria."})
+
+    motivo = _require_category_reason(motivo)
+
+    with transaction.atomic():
+        locked_category = Categoria.objects.select_for_update().get(pk=categoria.pk)
+
+        if locked_category.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {
+                    "categoria": (
+                        "Solo se pueden eliminar categorías activas que nunca "
+                        "hayan tenido uso histórico."
+                    )
+                }
+            )
+
+        if locked_category.has_historical_usage:
+            raise ValidationError(
+                {
+                    "categoria": (
+                        "La categoría no puede eliminarse porque tiene uso "
+                        "histórico. Use renombrado o fusión."
+                    )
+                }
+            )
+
+        if locked_category.merged_into_id:
+            raise ValidationError(
+                {"categoria": ("Una categoría fusionada no puede eliminarse.")}
+            )
+
+        if locked_category.merged_categories.exists():
+            raise ValidationError(
+                {
+                    "categoria": (
+                        "La categoría no puede eliminarse porque es destino "
+                        "de una fusión histórica."
+                    )
+                }
+            )
+
+        if (
+            Producto.objects.select_for_update()
+            .filter(categoria_id=locked_category.pk)
+            .exists()
+        ):
+            raise ValidationError(
+                {
+                    "categoria": (
+                        "La categoría no puede eliminarse porque todavía "
+                        "tiene productos asociados."
+                    )
+                }
+            )
+
+        category_id = locked_category.pk
+        category_name = locked_category.name
+
+        create_business_audit_log(
+            instance=locked_category,
+            action=AuditAction.ELIMINAR,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "safe_category_delete",
+                "category_id": category_id,
+                "category_name": category_name,
+            },
+            request=request,
+        )
+
+        locked_category.delete()
+
+    return {
+        "id": category_id,
+        "name": category_name,
+    }
+
     if user is None:
         return None
 
@@ -59,126 +513,6 @@ def get_operator(user):
         return None
 
     return user
-
-
-def change_category_lifecycle(
-    *,
-    categoria,
-    accion,
-    motivo,
-    user=None,
-):
-    if categoria is None:
-        raise ValidationError({"categoria": "La categoría es obligatoria."})
-
-    accion = str(accion or "").strip().upper()
-    motivo = str(motivo or "").strip()
-
-    if accion not in CATEGORY_LIFECYCLE_AUDIT_ACTIONS:
-        raise ValidationError(
-            {"accion": "La acción de ciclo de vida indicada no es válida."}
-        )
-
-    if not motivo:
-        raise ValidationError(
-            {"motivo": "El motivo del cambio de estado es obligatorio."}
-        )
-
-    with transaction.atomic():
-        locked_category = Categoria.objects.select_for_update().get(pk=categoria.pk)
-
-        has_operational_products = Producto.objects.filter(
-            categoria_id=locked_category.pk,
-            status=BaseStatus.ACTIVO,
-        ).exists()
-
-        old_values = capture_field_values(
-            locked_category,
-            CATEGORY_LIFECYCLE_AUDIT_FIELDS,
-        )
-
-        audit_action = CATEGORY_LIFECYCLE_AUDIT_ACTIONS[accion]
-
-        if accion == "INACTIVAR":
-            if locked_category.status != BaseStatus.ACTIVO:
-                raise ValidationError(
-                    {
-                        "accion": (
-                            "Solo se puede inactivar una categoría que está activa."
-                        )
-                    }
-                )
-
-            if has_operational_products:
-                raise ValidationError(
-                    {
-                        "status": (
-                            "No se puede inactivar una categoría que contiene "
-                            "productos activos o descontinuados."
-                        )
-                    }
-                )
-
-            locked_category.status = BaseStatus.INACTIVO
-
-        elif accion == "ARCHIVAR":
-            if locked_category.status != BaseStatus.INACTIVO:
-                raise ValidationError(
-                    {
-                        "accion": (
-                            "Solo se puede archivar una categoría que ya está inactiva."
-                        )
-                    }
-                )
-
-            if has_operational_products:
-                raise ValidationError(
-                    {
-                        "status": (
-                            "No se puede archivar una categoría que contiene "
-                            "productos activos o descontinuados."
-                        )
-                    }
-                )
-
-            locked_category.status = BaseStatus.ARCHIVADO
-
-        elif accion == "REACTIVAR":
-            if locked_category.status not in [
-                BaseStatus.INACTIVO,
-                BaseStatus.ARCHIVADO,
-            ]:
-                raise ValidationError(
-                    {
-                        "accion": (
-                            "Solo se pueden reactivar categorías inactivas o "
-                            "archivadas."
-                        )
-                    }
-                )
-
-            locked_category.status = BaseStatus.ACTIVO
-
-        locked_category.updated_by = get_operator(user)
-        locked_category.save(
-            update_fields=[
-                "status",
-                "updated_by",
-                "updated_at",
-            ]
-        )
-
-        create_record_change_logs_from_snapshot(
-            instance=locked_category,
-            old_values=old_values,
-            fields=CATEGORY_LIFECYCLE_AUDIT_FIELDS,
-            user=user,
-            origin=AuditOrigin.MANUAL,
-            reason=motivo,
-            action=audit_action,
-        )
-
-    return locked_category, audit_action
 
 
 def build_reference_data(reference):

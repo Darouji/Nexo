@@ -18,14 +18,16 @@ from .models import (
 from .serializers import MovimientoKardexSerializer
 from .services import (
     cancel_pending_receipt,
-    change_category_lifecycle,
     change_product_lifecycle,
     create_pending_receipt,
+    delete_category_safely,
+    merge_categories,
     receive_pending_receipt,
+    rename_category,
 )
 
 
-class CategoriaIntegrityTests(TestCase):
+class CategoriaManagementServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="category-admin",
@@ -34,135 +36,186 @@ class CategoriaIntegrityTests(TestCase):
             role=UserRole.ADMINISTRADOR,
         )
 
-        self.active_category = Categoria.objects.create(
-            name="Categoría operativa",
+        self.source_category = Categoria.objects.create(
+            name="Categoría origen",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.destination_category = Categoria.objects.create(
+            name="Categoría destino",
             created_by=self.user,
             updated_by=self.user,
         )
 
         self.product = Producto.objects.create(
-            categoria=self.active_category,
+            categoria=self.source_category,
             modelo="Producto asociado a categoría",
             controla_stock=True,
             created_by=self.user,
             updated_by=self.user,
         )
 
-        self.inactive_category = Categoria.objects.create(
-            name="Categoría inactiva",
-            status=BaseStatus.INACTIVO,
-            created_by=self.user,
-            updated_by=self.user,
-        )
-
-    def test_category_with_operational_products_cannot_be_inactivated(self):
-        self.active_category.status = BaseStatus.INACTIVO
+    def test_category_cannot_change_status_manually(self):
+        self.source_category.status = BaseStatus.INACTIVO
 
         with self.assertRaises(ValidationError):
-            self.active_category.save()
+            self.source_category.save()
 
-        self.active_category.refresh_from_db()
+        self.source_category.refresh_from_db()
 
         self.assertEqual(
-            self.active_category.status,
+            self.source_category.status,
             BaseStatus.ACTIVO,
         )
 
-    def test_product_cannot_be_created_or_reassigned_to_inactive_category(self):
-        with self.assertRaises(ValidationError):
-            Producto.objects.create(
-                categoria=self.inactive_category,
-                modelo="Producto inválido en categoría inactiva",
-                controla_stock=True,
-                created_by=self.user,
-                updated_by=self.user,
-            )
-
-        self.product.categoria = self.inactive_category
-
-        with self.assertRaises(ValidationError):
-            self.product.save()
-
-        self.product.refresh_from_db()
-
-        self.assertEqual(
-            self.product.categoria_id,
-            self.active_category.pk,
-        )
-
-    def test_category_lifecycle_changes_status_and_creates_audit(self):
-        empty_category = Categoria.objects.create(
-            name="Categoría sin productos",
-            created_by=self.user,
-            updated_by=self.user,
-        )
-
-        change_category_lifecycle(
-            categoria=empty_category,
-            accion="INACTIVAR",
-            motivo="La categoría ya no se utilizará operativamente.",
+    def test_rename_category_creates_field_and_business_audit(self):
+        updated_category = rename_category(
+            categoria=self.source_category,
+            nombre="Categoría origen corregida",
+            motivo="Se corrigió el nombre para mejorar la búsqueda.",
             user=self.user,
         )
 
-        empty_category.refresh_from_db()
-
         self.assertEqual(
-            empty_category.status,
-            BaseStatus.INACTIVO,
+            updated_category.name,
+            "Categoría origen corregida",
         )
-
-        change_category_lifecycle(
-            categoria=empty_category,
-            accion="ARCHIVAR",
-            motivo="La categoría quedó solo como referencia histórica.",
-            user=self.user,
-        )
-
-        empty_category.refresh_from_db()
-
-        self.assertEqual(
-            empty_category.status,
-            BaseStatus.ARCHIVADO,
-        )
-
-        change_category_lifecycle(
-            categoria=empty_category,
-            accion="REACTIVAR",
-            motivo="La categoría vuelve a estar disponible.",
-            user=self.user,
-        )
-
-        empty_category.refresh_from_db()
-
-        self.assertEqual(
-            empty_category.status,
-            BaseStatus.ACTIVO,
-        )
-
         self.assertTrue(
             RecordChangeLog.objects.filter(
-                object_id=str(empty_category.pk),
-                action=AuditAction.INACTIVAR,
-                field_name="status",
-                reason="La categoría ya no se utilizará operativamente.",
+                object_id=str(updated_category.pk),
+                action=AuditAction.RENOMBRAR,
+                field_name="name",
+                reason="Se corrigió el nombre para mejorar la búsqueda.",
+            ).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_id=str(updated_category.pk),
+                action=AuditAction.RENOMBRAR,
             ).exists()
         )
 
-    def test_category_lifecycle_cannot_inactivate_with_operational_products(self):
+    def test_merge_reassigns_products_and_preserves_pending_receipts(self):
+        pending_receipt = create_pending_receipt(
+            producto=self.product,
+            cantidad=4,
+            motivo="Orden de compra pendiente.",
+            referencia="OC-CATEGORY-MERGE",
+            user=self.user,
+        )
+
+        source, destination, reassigned_count, is_idempotent = merge_categories(
+            categoria_origen=self.source_category,
+            categoria_destino=self.destination_category,
+            motivo="Se consolidaron categorías duplicadas.",
+            user=self.user,
+        )
+
+        self.product.refresh_from_db()
+        pending_receipt.refresh_from_db()
+        source.refresh_from_db()
+        destination.refresh_from_db()
+
+        self.assertFalse(is_idempotent)
+        self.assertEqual(reassigned_count, 1)
+        self.assertEqual(self.product.categoria_id, destination.pk)
+        self.assertEqual(pending_receipt.producto_id, self.product.pk)
+        self.assertEqual(source.status, BaseStatus.ARCHIVADO)
+        self.assertEqual(source.merged_into_id, destination.pk)
+        self.assertTrue(source.has_historical_usage)
+        self.assertTrue(destination.has_historical_usage)
+
+        self.assertTrue(
+            RecordChangeLog.objects.filter(
+                object_id=str(self.product.pk),
+                action=AuditAction.FUSIONAR,
+                field_name="categoria",
+            ).exists()
+        )
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_id=str(source.pk),
+                action=AuditAction.FUSIONAR,
+                reason="Se consolidaron categorías duplicadas.",
+            ).exists()
+        )
+
+    def test_merge_is_idempotent_for_same_source_and_destination(self):
+        merge_categories(
+            categoria_origen=self.source_category,
+            categoria_destino=self.destination_category,
+            motivo="Primera fusión.",
+            user=self.user,
+        )
+
+        source, destination, reassigned_count, is_idempotent = merge_categories(
+            categoria_origen=self.source_category,
+            categoria_destino=self.destination_category,
+            motivo="Reintento por pérdida de respuesta.",
+            user=self.user,
+        )
+
+        self.assertTrue(is_idempotent)
+        self.assertEqual(reassigned_count, 0)
+        self.assertEqual(source.merged_into_id, destination.pk)
+
+    def test_merge_rejects_duplicate_product_models_in_destination(self):
+        Producto.objects.create(
+            categoria=self.destination_category,
+            modelo=self.product.modelo,
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
         with self.assertRaises(ValidationError):
-            change_category_lifecycle(
-                categoria=self.active_category,
-                accion="INACTIVAR",
-                motivo="Intento inválido con productos operativos.",
+            merge_categories(
+                categoria_origen=self.source_category,
+                categoria_destino=self.destination_category,
+                motivo="Intento inválido con modelos duplicados.",
                 user=self.user,
             )
 
-        self.active_category.refresh_from_db()
+        self.product.refresh_from_db()
+        self.source_category.refresh_from_db()
 
-        self.assertEqual(
-            self.active_category.status,
-            BaseStatus.ACTIVO,
+        self.assertEqual(self.product.categoria_id, self.source_category.pk)
+        self.assertEqual(self.source_category.status, BaseStatus.ACTIVO)
+
+    def test_unused_category_can_be_deleted_safely(self):
+        unused_category = Categoria.objects.create(
+            name="Categoría temporal sin uso",
+            created_by=self.user,
+            updated_by=self.user,
         )
+
+        result = delete_category_safely(
+            categoria=unused_category,
+            motivo="Categoría creada por error y nunca utilizada.",
+            user=self.user,
+        )
+
+        self.assertEqual(result["id"], unused_category.pk)
+        self.assertFalse(Categoria.objects.filter(pk=unused_category.pk).exists())
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_id=str(unused_category.pk),
+                action=AuditAction.ELIMINAR,
+            ).exists()
+        )
+
+    def test_category_with_historical_use_cannot_be_deleted(self):
+        with self.assertRaises(ValidationError):
+            delete_category_safely(
+                categoria=self.source_category,
+                motivo="Intento inválido de borrar una categoría usada.",
+                user=self.user,
+            )
+
+        self.assertTrue(Categoria.objects.filter(pk=self.source_category.pk).exists())
 
 
 class PendientePorRecibirServiceTests(TestCase):
@@ -649,7 +702,7 @@ class PendientePorRecibirApiTests(TestCase):
             ).exists()
         )
 
-    def test_category_rejects_direct_status_change_and_delete(self):
+    def test_category_rejects_direct_status_change_and_used_category_delete(self):
         client = APIClient()
         client.force_authenticate(user=self.admin)
 
@@ -666,49 +719,89 @@ class PendientePorRecibirApiTests(TestCase):
 
         delete_response = client.delete(
             f"/api/inventory/categorias/{self.categoria.pk}/",
-        )
-
-        self.assertEqual(
-            delete_response.status_code,
-            status.HTTP_405_METHOD_NOT_ALLOWED,
-        )
-
-        self.categoria.refresh_from_db()
-
-        self.assertEqual(
-            self.categoria.status,
-            BaseStatus.ACTIVO,
-        )
-
-    def test_category_lifecycle_endpoint_updates_status_and_audits_reason(self):
-        client = APIClient()
-        client.force_authenticate(user=self.admin)
-
-        empty_category = Categoria.objects.create(
-            name="Categoría API sin productos",
-            created_by=self.admin,
-            updated_by=self.admin,
-        )
-
-        response = client.post(
-            f"/api/inventory/categorias/{empty_category.pk}/ciclo-vida/",
             {
-                "accion": "INACTIVAR",
-                "motivo": "La categoría quedó sin uso operativo.",
+                "motivo": (
+                    "Intento inválido de eliminar una categoría que ya tiene productos."
+                )
             },
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["status"], BaseStatus.INACTIVO)
-
-        self.assertTrue(
-            AuditLog.objects.filter(
-                action=AuditAction.INACTIVAR,
-                object_id=str(empty_category.pk),
-                reason="La categoría quedó sin uso operativo.",
-            ).exists()
+        self.assertEqual(
+            delete_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
         )
+
+        self.assertTrue(Categoria.objects.filter(pk=self.categoria.pk).exists())
+
+    def test_category_rename_merge_and_safe_delete_actions(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        rename_response = client.post(
+            f"/api/inventory/categorias/{self.categoria.pk}/renombrar/",
+            {
+                "name": "Herramientas de torque",
+                "motivo": "Se precisó el nombre de la categoría.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(rename_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            rename_response.data["name"],
+            "Herramientas de torque",
+        )
+
+        destination_category = Categoria.objects.create(
+            name="Herramientas industriales",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        merge_response = client.post(
+            f"/api/inventory/categorias/{self.categoria.pk}/fusionar/",
+            {
+                "categoria_destino": destination_category.pk,
+                "motivo": "Se consolidaron categorías equivalentes.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(merge_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(merge_response.data["productos_reasignados"], 1)
+        self.assertFalse(merge_response.data["idempotente"])
+
+        self.categoria.refresh_from_db()
+        self.producto.refresh_from_db()
+
+        self.assertEqual(self.categoria.status, BaseStatus.ARCHIVADO)
+        self.assertEqual(
+            self.categoria.merged_into_id,
+            destination_category.pk,
+        )
+        self.assertEqual(
+            self.producto.categoria_id,
+            destination_category.pk,
+        )
+
+        empty_category = Categoria.objects.create(
+            name="Categoría temporal API",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        delete_response = client.delete(
+            f"/api/inventory/categorias/{empty_category.pk}/",
+            {"motivo": ("Categoría temporal creada durante una prueba funcional.")},
+            format="json",
+        )
+
+        self.assertEqual(
+            delete_response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+        self.assertFalse(Categoria.objects.filter(pk=empty_category.pk).exists())
 
 
 class ProductOriginAndCategoryHistoryTests(TestCase):

@@ -30,7 +30,9 @@ from .models import (
     ProductStockStatus,
 )
 from .serializers import (
-    CategoriaLifecycleActionSerializer,
+    CategoriaDeleteSerializer,
+    CategoriaMergeSerializer,
+    CategoriaRenameSerializer,
     CategoriaSerializer,
     CrearPendientePorRecibirSerializer,
     InventoryAdjustmentSerializer,
@@ -43,12 +45,14 @@ from .serializers import (
 )
 from .services import (
     cancel_pending_receipt,
-    change_category_lifecycle,
     change_product_lifecycle,
     create_pending_receipt,
+    delete_category_safely,
+    merge_categories,
     receive_pending_receipt,
     register_inventory_adjustment,
     register_manual_entry,
+    rename_category,
 )
 
 
@@ -126,70 +130,147 @@ class InventoryPermissionMixin:
 
         return [permission() for permission in permission_classes]
 
+    def set_audit_instance(self, instance):
+        django_request = getattr(self.request, "_request", self.request)
+        django_request.audit_instance = instance
+
     def perform_create(self, serializer):
-        serializer.save(
+        instance = serializer.save(
             created_by=self.request.user,
             updated_by=self.request.user,
         )
+        self.set_audit_instance(instance)
+        return instance
 
     def perform_update(self, serializer):
-        serializer.save(updated_by=self.request.user)
+        instance = serializer.save(updated_by=self.request.user)
+        self.set_audit_instance(instance)
+        return instance
 
     def perform_destroy(self, instance):
         instance.mark_inactive(user=self.request.user)
 
 
 class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
-    queryset = Categoria.objects.all()
+    queryset = Categoria.objects.select_related(
+        "merged_into",
+        "merged_by",
+    ).all()
+
     serializer_class = CategoriaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_normalized", "description"]
     ordering_fields = ["name", "status", "created_at", "updated_at"]
     ordering = ["name"]
 
-    def destroy(self, request, *args, **kwargs):
-        return Response(
-            {
-                "detail": (
-                    "Las categorías no se inactivan mediante DELETE. "
-                    "Use la acción controlada de ciclo de vida."
-                )
-            },
-            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        available = parse_bool_param(
+            self.request.query_params.get("available"),
+            "available",
         )
 
-    @action(detail=True, methods=["post"], url_path="ciclo-vida")
-    def ciclo_vida(self, request, pk=None):
+        if available is True:
+            queryset = queryset.filter(
+                status=BaseStatus.ACTIVO,
+                merged_into__isnull=True,
+            )
+        elif available is False:
+            queryset = queryset.exclude(
+                status=BaseStatus.ACTIVO,
+                merged_into__isnull=True,
+            )
+
+        return queryset
+
+    def _skip_activity_audit(self, request):
+        django_request = getattr(request, "_request", request)
+        django_request.skip_activity_audit = True
+
+    def destroy(self, request, *args, **kwargs):
         categoria = self.get_object()
 
-        serializer = CategoriaLifecycleActionSerializer(data=request.data)
+        serializer = CategoriaDeleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
-            updated_category, audit_action = change_category_lifecycle(
+            delete_category_safely(
                 categoria=categoria,
-                accion=serializer.validated_data["accion"],
                 motivo=serializer.validated_data["motivo"],
                 user=request.user,
+                request=getattr(request, "_request", request),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
 
-        django_request = getattr(request, "_request", request)
+        self._skip_activity_audit(request)
 
-        django_request.user = request.user
-        django_request.audit_action = audit_action
-        django_request.audit_reason = serializer.validated_data["motivo"]
-        django_request.audit_instance = updated_category
-        django_request.audit_metadata = {
-            "lifecycle_action": serializer.validated_data["accion"],
-        }
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"], url_path="renombrar")
+    def renombrar(self, request, pk=None):
+        categoria = self.get_object()
+
+        serializer = CategoriaRenameSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_category = rename_category(
+                categoria=categoria,
+                nombre=serializer.validated_data["name"],
+                motivo=serializer.validated_data["motivo"],
+                user=request.user,
+                request=getattr(request, "_request", request),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        self._skip_activity_audit(request)
 
         return Response(
             CategoriaSerializer(
                 updated_category,
                 context={"request": request},
             ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="fusionar")
+    def fusionar(self, request, pk=None):
+        categoria_origen = self.get_object()
+
+        serializer = CategoriaMergeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            source, destination, reassigned_product_count, is_idempotent = (
+                merge_categories(
+                    categoria_origen=categoria_origen,
+                    categoria_destino=serializer.validated_data["categoria_destino"],
+                    motivo=serializer.validated_data["motivo"],
+                    user=request.user,
+                    request=getattr(request, "_request", request),
+                )
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        self._skip_activity_audit(request)
+
+        return Response(
+            {
+                "categoria_origen": CategoriaSerializer(
+                    source,
+                    context={"request": request},
+                ).data,
+                "categoria_destino": CategoriaSerializer(
+                    destination,
+                    context={"request": request},
+                ).data,
+                "productos_reasignados": reassigned_product_count,
+                "idempotente": is_idempotent,
+            },
             status=status.HTTP_200_OK,
         )
 

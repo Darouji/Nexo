@@ -1,6 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 
-from .models import AuditAction, AuditOrigin, RecordChangeLog
+from .models import AuditAction, AuditLog, AuditOrigin, RecordChangeLog
 
 
 def normalize_audit_value(value):
@@ -91,3 +91,55 @@ def create_record_change_logs_from_snapshot(
         RecordChangeLog.objects.bulk_create(logs)
 
     return logs
+
+
+def create_business_audit_log(
+    *,
+    instance,
+    action,
+    user=None,
+    origin=AuditOrigin.API,
+    reason="",
+    metadata=None,
+    request=None,
+):
+    """
+    Registra una auditoría global dentro de la misma transacción de negocio.
+
+    A diferencia de la auditoría de middleware, esta función se ejecuta
+    dentro de transaction.atomic() cuando una operación es crítica.
+    """
+
+    content_type = ContentType.objects.get_for_model(
+        instance,
+        for_concrete_model=False,
+    )
+
+    audit_metadata = dict(metadata or {})
+    ip_address = None
+    user_agent = ""
+
+    if request is not None:
+        request_id = str(getattr(request, "request_id", "") or "").strip()
+
+        if request_id:
+            audit_metadata.setdefault("request_id", request_id[:100])
+
+        # REMOTE_ADDR evita confiar automáticamente en X-Forwarded-For.
+        ip_address = request.META.get("REMOTE_ADDR")
+        user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
+
+    return AuditLog.objects.create(
+        actor=user if getattr(user, "is_authenticated", False) else None,
+        action=action,
+        origin=origin,
+        module=instance._meta.app_label,
+        model_name=instance._meta.model_name,
+        content_type=content_type,
+        object_id=str(instance.pk),
+        object_repr=str(instance)[:255],
+        ip_address=ip_address,
+        user_agent=user_agent,
+        reason=str(reason or "").strip(),
+        metadata=audit_metadata,
+    )

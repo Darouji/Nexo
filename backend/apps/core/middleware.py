@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from django.contrib.contenttypes.models import ContentType
@@ -5,6 +6,8 @@ from django.utils.deprecation import MiddlewareMixin
 
 from apps.core.models import AuditAction, AuditLog, AuditOrigin
 from apps.core.request_context import reset_request_id, set_request_id
+
+logger = logging.getLogger(__name__)
 
 
 def get_client_ip(request):
@@ -123,6 +126,7 @@ class ActivityLogMiddleware(MiddlewareMixin):
             and request.user.is_authenticated
             and request.path.startswith("/api/")
             and request.path not in AUDIT_MIDDLEWARE_EXCLUDED_PATHS
+            and not getattr(request, "skip_activity_audit", False)
         )
 
         if not should_audit:
@@ -164,7 +168,14 @@ class ActivityLogMiddleware(MiddlewareMixin):
                 metadata=metadata,
             )
         except Exception:
-            pass
+            logger.exception(
+                "No se pudo registrar la auditoría global de la solicitud.",
+                extra={
+                    "request_id": request_id,
+                    "path": request.path,
+                    "method": request.method,
+                },
+            )
 
         context_token = getattr(request, "_request_id_context_token", None)
         reset_request_id(context_token)

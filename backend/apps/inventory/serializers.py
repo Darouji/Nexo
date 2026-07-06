@@ -14,6 +14,10 @@ from .services import register_manual_entry
 
 
 class CategoriaSerializer(serializers.ModelSerializer):
+    is_merged = serializers.BooleanField(read_only=True)
+    is_available_for_products = serializers.BooleanField(read_only=True)
+    merged_into_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Categoria
         fields = [
@@ -22,29 +26,78 @@ class CategoriaSerializer(serializers.ModelSerializer):
             "name_normalized",
             "description",
             "status",
+            "has_historical_usage",
+            "merged_into",
+            "merged_into_name",
+            "merged_at",
+            "merged_by",
+            "merge_reason",
+            "is_merged",
+            "is_available_for_products",
             "created_at",
             "updated_at",
         ]
         read_only_fields = [
             "id",
             "name_normalized",
-            "created_at",
             "status",
+            "has_historical_usage",
+            "merged_into",
+            "merged_at",
+            "merged_by",
+            "merge_reason",
+            "is_merged",
+            "is_available_for_products",
+            "created_at",
             "updated_at",
         ]
 
     def validate(self, attrs):
-        if "status" in self.initial_data:
+        protected_fields = {
+            "status",
+            "has_historical_usage",
+            "merged_into",
+            "merged_at",
+            "merged_by",
+            "merge_reason",
+        }
+
+        attempted_protected_fields = protected_fields.intersection(
+            self.initial_data.keys()
+        )
+
+        if attempted_protected_fields:
             raise serializers.ValidationError(
                 {
-                    "status": (
-                        "Este campo solo puede modificarse mediante el ciclo de "
-                        "vida controlado de la categoría."
+                    field_name: (
+                        "Este campo solo puede cambiarse mediante una operación "
+                        "controlada de categorías."
                     )
+                    for field_name in attempted_protected_fields
                 }
             )
 
+        if self.instance and "name" in attrs:
+            requested_name = str(attrs["name"] or "").strip()
+
+            if requested_name != self.instance.name:
+                raise serializers.ValidationError(
+                    {
+                        "name": (
+                            "El nombre solo puede modificarse mediante la acción "
+                            "controlada de renombrado."
+                        )
+                    }
+                )
+
         return attrs
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_merged_into_name(self, obj):
+        if not obj.merged_into:
+            return ""
+
+        return obj.merged_into.name
 
 
 class ProductoSerializer(serializers.ModelSerializer):
@@ -353,13 +406,34 @@ class ProductoLifecycleActionSerializer(serializers.Serializer):
         return value
 
 
-class CategoriaLifecycleActionSerializer(serializers.Serializer):
-    accion = serializers.ChoiceField(
-        choices=[
-            ("INACTIVAR", "Inactivar"),
-            ("ARCHIVAR", "Archivar"),
-            ("REACTIVAR", "Reactivar"),
-        ]
+class CategoriaRenameSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=150)
+    motivo = serializers.CharField(max_length=255)
+
+    def validate_name(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "El nuevo nombre de la categoría es obligatorio."
+            )
+
+        return value
+
+    def validate_motivo(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "El motivo del renombrado es obligatorio."
+            )
+
+        return value
+
+
+class CategoriaMergeSerializer(serializers.Serializer):
+    categoria_destino = serializers.PrimaryKeyRelatedField(
+        queryset=Categoria.objects.all()
     )
     motivo = serializers.CharField(max_length=255)
 
@@ -367,8 +441,20 @@ class CategoriaLifecycleActionSerializer(serializers.Serializer):
         value = value.strip()
 
         if not value:
+            raise serializers.ValidationError("El motivo de la fusión es obligatorio.")
+
+        return value
+
+
+class CategoriaDeleteSerializer(serializers.Serializer):
+    motivo = serializers.CharField(max_length=255)
+
+    def validate_motivo(self, value):
+        value = value.strip()
+
+        if not value:
             raise serializers.ValidationError(
-                "El motivo del cambio de estado es obligatorio."
+                "El motivo de la eliminación es obligatorio."
             )
 
         return value

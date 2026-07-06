@@ -184,28 +184,31 @@ class CategoriaManagementServiceTests(TestCase):
         self.assertEqual(self.product.categoria_id, self.source_category.pk)
         self.assertEqual(self.source_category.status, BaseStatus.ACTIVO)
 
-    def test_unused_category_can_be_deleted_safely(self):
-        unused_category = Categoria.objects.create(
-            name="Categoría temporal sin uso",
-            created_by=self.user,
-            updated_by=self.user,
-        )
 
-        result = delete_category_safely(
-            categoria=unused_category,
-            motivo="Categoría creada por error y nunca utilizada.",
-            user=self.user,
-        )
+def test_unused_category_can_be_deleted_safely(self):
+    unused_category = Categoria.objects.create(
+        name="Categoría temporal sin uso",
+        created_by=self.user,
+        updated_by=self.user,
+    )
 
-        self.assertEqual(result["id"], unused_category.pk)
-        self.assertFalse(Categoria.objects.filter(pk=unused_category.pk).exists())
+    unused_category_id = unused_category.pk
 
-        self.assertTrue(
-            AuditLog.objects.filter(
-                object_id=str(unused_category.pk),
-                action=AuditAction.ELIMINAR,
-            ).exists()
-        )
+    result = delete_category_safely(
+        categoria=unused_category,
+        motivo="Categoría creada por error y nunca utilizada.",
+        user=self.user,
+    )
+
+    self.assertEqual(result["id"], unused_category_id)
+    self.assertFalse(Categoria.objects.filter(pk=unused_category_id).exists())
+
+    self.assertTrue(
+        AuditLog.objects.filter(
+            object_id=str(unused_category_id),
+            action=AuditAction.ELIMINAR,
+        ).exists()
+    )
 
     def test_category_with_historical_use_cannot_be_deleted(self):
         with self.assertRaises(ValidationError):

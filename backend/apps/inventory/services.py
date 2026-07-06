@@ -44,27 +44,35 @@ PRODUCT_LIFECYCLE_AUDIT_ACTIONS = {
 
 
 def get_operator(user):
+    if user is None:
+        return None
 
-    CATEGORY_RENAME_AUDIT_FIELDS = [
-        "name",
-        "name_normalized",
-        "updated_by",
-    ]
+    if not getattr(user, "is_authenticated", False):
+        return None
 
-    CATEGORY_MERGE_AUDIT_FIELDS = [
-        "status",
-        "has_historical_usage",
-        "merged_into",
-        "merged_at",
-        "merged_by",
-        "merge_reason",
-        "updated_by",
-    ]
+    return user
 
-    CATEGORY_PRODUCT_MERGE_AUDIT_FIELDS = [
-        "categoria",
-        "updated_by",
-    ]
+
+CATEGORY_RENAME_AUDIT_FIELDS = [
+    "name",
+    "name_normalized",
+    "updated_by",
+]
+
+CATEGORY_MERGE_AUDIT_FIELDS = [
+    "status",
+    "has_historical_usage",
+    "merged_into",
+    "merged_at",
+    "merged_by",
+    "merge_reason",
+    "updated_by",
+]
+
+CATEGORY_PRODUCT_MERGE_AUDIT_FIELDS = [
+    "categoria",
+    "updated_by",
+]
 
 
 def _require_category_reason(motivo):

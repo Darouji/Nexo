@@ -1337,6 +1337,8 @@ class InventoryReadFilteringApiTests(TestCase):
             user=self.user,
         )
 
+        self.product.refresh_from_db()
+
         new_category = Categoria.objects.create(
             name="Categoría actual",
             created_by=self.user,

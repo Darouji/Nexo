@@ -27,6 +27,7 @@ from apps.core.models import AuditOrigin, BaseStatus
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
     Categoria,
+    KardexMovementType,
     MovimientoKardex,
     PendientePorRecibir,
     PendientePorRecibirStatus,

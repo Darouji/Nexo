@@ -11,6 +11,7 @@ from apps.core.audit import (
 from apps.core.models import AuditAction, AuditOrigin, BaseStatus
 from apps.core.utils import normalize_text
 
+from .kardex_context import allow_kardex_write
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
     Categoria,
@@ -924,7 +925,8 @@ def register_kardex_movement(
             updated_by=get_operator(user),
             **reference_data,
         )
-        movement.save()
+        with allow_kardex_write():
+            movement.save()
 
         return movement
 

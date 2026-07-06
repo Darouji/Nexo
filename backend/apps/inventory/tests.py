@@ -23,6 +23,7 @@ from .services import (
     delete_category_safely,
     merge_categories,
     receive_pending_receipt,
+    register_manual_entry,
     rename_category,
 )
 
@@ -1107,3 +1108,83 @@ class ProductCreationAndOriginApiTests(TestCase):
 
         self.assertEqual(product.origen, ProductOrigin.COMPRADO)
         self.assertTrue(product.controla_stock)
+
+
+class KardexImmutabilityTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="kardex-immutable-admin",
+            email="kardex-immutable-admin@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.ADMINISTRADOR,
+        )
+
+        self.category = Categoria.objects.create(
+            name="Categoría Kardex inmutable",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto Kardex inmutable",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.movement = register_manual_entry(
+            producto=self.product,
+            cantidad=5,
+            motivo="Stock inicial para validar inmutabilidad.",
+            user=self.user,
+        )
+
+    def test_service_creates_consistent_kardex_and_updates_stock(self):
+        self.product.refresh_from_db()
+
+        self.assertEqual(self.movement.stock_antes, 0)
+        self.assertEqual(self.movement.cantidad, 5)
+        self.assertEqual(self.movement.stock_despues, 5)
+        self.assertEqual(
+            self.movement.stock_despues,
+            self.movement.stock_antes + self.movement.cantidad,
+        )
+        self.assertEqual(self.product.stock_actual, 5)
+
+    def test_direct_kardex_creation_is_rejected(self):
+        with self.assertRaises(ValidationError):
+            MovimientoKardex.objects.create(
+                producto=self.product,
+                movement_type=KardexMovementType.ENTRADA_MANUAL,
+                cantidad=1,
+                stock_antes=5,
+                stock_despues=6,
+                motivo="Intento directo inválido.",
+            )
+
+        self.assertEqual(MovimientoKardex.objects.count(), 1)
+
+    def test_existing_kardex_cannot_be_edited(self):
+        original_reason = self.movement.motivo
+
+        self.movement.motivo = "Intento de modificar el motivo."
+
+        with self.assertRaises(ValidationError):
+            self.movement.save()
+
+        self.movement.refresh_from_db()
+
+        self.assertEqual(
+            self.movement.motivo,
+            original_reason,
+        )
+
+    def test_existing_kardex_cannot_be_deleted(self):
+        movement_id = self.movement.pk
+
+        with self.assertRaises(ValidationError):
+            self.movement.delete()
+
+        self.assertTrue(MovimientoKardex.objects.filter(pk=movement_id).exists())

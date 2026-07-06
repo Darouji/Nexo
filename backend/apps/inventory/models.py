@@ -7,6 +7,8 @@ from django.db import models
 from apps.core.models import AuditOrigin, BaseModel, BaseStatus
 from apps.core.utils import normalize_text
 
+from .kardex_context import is_kardex_write_authorized
+
 
 class KardexMovementType(models.TextChoices):
     ENTRADA_IMPORTACION = "ENTRADA_IMPORTACION", "Entrada por importación"
@@ -930,7 +932,20 @@ class MovimientoKardex(BaseModel):
         if self.producto and not self.producto.controla_stock:
             raise ValidationError(
                 {
-                    "producto": "No se puede crear movimiento Kardex para un producto que no controla stock."
+                    "producto": (
+                        "No se puede crear movimiento Kardex para un producto "
+                        "que no controla stock."
+                    )
+                }
+            )
+
+        if self.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {
+                    "status": (
+                        "Un movimiento Kardex debe crearse activo y no puede "
+                        "tener cambios de estado posteriores."
+                    )
                 }
             )
 
@@ -953,21 +968,46 @@ class MovimientoKardex(BaseModel):
 
         if self.movement_type in positive_types and self.cantidad <= 0:
             raise ValidationError(
-                {"cantidad": "Este tipo de movimiento debe tener cantidad positiva."}
+                {"cantidad": ("Este tipo de movimiento debe tener cantidad positiva.")}
             )
 
         if self.movement_type == KardexMovementType.SALIDA_VENTA and self.cantidad >= 0:
             raise ValidationError(
-                {"cantidad": "La salida por venta debe tener cantidad negativa."}
+                {"cantidad": ("La salida por venta debe tener cantidad negativa.")}
+            )
+
+        expected_stock_after = self.stock_antes + self.cantidad
+
+        if self.stock_despues != expected_stock_after:
+            raise ValidationError(
+                {
+                    "stock_despues": (
+                        "El stock posterior debe ser exactamente igual a "
+                        "stock_antes + cantidad."
+                    )
+                }
             )
 
         if self.stock_despues < 0:
             raise ValidationError(
-                {"stock_despues": "El movimiento no puede dejar stock negativo."}
+                {"stock_despues": ("El movimiento no puede dejar stock negativo.")}
             )
 
     def save(self, *args, **kwargs):
-        if self._state.adding and self.producto_id:
+        if not self._state.adding:
+            raise ValidationError(
+                "Los movimientos Kardex son inmutables y no pueden editarse."
+            )
+
+        if not is_kardex_write_authorized():
+            raise ValidationError(
+                (
+                    "Los movimientos Kardex solo pueden crearse mediante "
+                    "los servicios oficiales de inventario."
+                )
+            )
+
+        if self.producto_id:
             producto = self.producto
 
             if not self.producto_modelo_snapshot:
@@ -981,3 +1021,8 @@ class MovimientoKardex(BaseModel):
 
         self.full_clean()
         super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            "Los movimientos Kardex son inmutables y no pueden eliminarse."
+        )

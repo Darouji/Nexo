@@ -8,6 +8,7 @@ from apps.core.models import AuditOrigin, BaseModel, BaseStatus
 from apps.core.utils import normalize_text
 
 from .kardex_context import is_kardex_write_authorized
+from .stock_context import is_stock_write_authorized
 
 
 class KardexMovementType(models.TextChoices):
@@ -255,6 +256,25 @@ class Categoria(BaseModel):
             kwargs["update_fields"] = list(normalized_update_fields)
 
         super().save(*args, **kwargs)
+
+
+class ProductoQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        if "stock_actual" in kwargs and not is_stock_write_authorized():
+            raise ValidationError(
+                {
+                    "stock_actual": (
+                        "El stock físico solo puede modificarse mediante "
+                        "un movimiento Kardex."
+                    )
+                }
+            )
+
+        return super().update(**kwargs)
+
+
+class ProductoManager(models.Manager.from_queryset(ProductoQuerySet)):
+    pass
 
 
 class Producto(BaseModel):
@@ -566,13 +586,44 @@ class Producto(BaseModel):
 
     def save(self, *args, **kwargs):
         is_new_product = self._state.adding
+        previous_product = None
         previous_category_id = None
 
         if self.pk:
-            previous_category_id = (
+            previous_product = (
                 Producto.objects.filter(pk=self.pk)
-                .values_list("categoria_id", flat=True)
+                .values(
+                    "categoria_id",
+                    "stock_actual",
+                )
                 .first()
+            )
+
+            if previous_product:
+                previous_category_id = previous_product["categoria_id"]
+
+        if is_new_product:
+            if self.stock_actual != 0 and not is_stock_write_authorized():
+                raise ValidationError(
+                    {
+                        "stock_actual": (
+                            "Un producto debe crearse con stock físico cero. "
+                            "Use stock inicial o un movimiento Kardex."
+                        )
+                    }
+                )
+        elif (
+            previous_product
+            and previous_product["stock_actual"] != self.stock_actual
+            and not is_stock_write_authorized()
+        ):
+            raise ValidationError(
+                {
+                    "stock_actual": (
+                        "El stock físico solo puede modificarse mediante "
+                        "un movimiento Kardex."
+                    )
+                }
             )
 
         self.modelo = str(self.modelo or "").strip()

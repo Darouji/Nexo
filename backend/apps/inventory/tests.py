@@ -240,12 +240,21 @@ class PendientePorRecibirServiceTests(TestCase):
             categoria=self.categoria,
             modelo="Sensor Industrial A",
             codigo_sap="SAP-001",
-            stock_actual=10,
             stock_critico=2,
             controla_stock=True,
             created_by=self.user,
             updated_by=self.user,
         )
+
+        register_manual_entry(
+            producto=self.producto,
+            cantidad=10,
+            motivo="Stock inicial para pruebas de pendientes por recibir.",
+            user=self.user,
+        )
+
+        self.producto.refresh_from_db()
+        self.initial_kardex_count = MovimientoKardex.objects.count()
 
         self.servicio = Producto.objects.create(
             categoria=self.categoria,
@@ -267,7 +276,10 @@ class PendientePorRecibirServiceTests(TestCase):
         self.producto.refresh_from_db()
 
         self.assertEqual(self.producto.stock_actual, 10)
-        self.assertEqual(MovimientoKardex.objects.count(), 0)
+        self.assertEqual(
+            MovimientoKardex.objects.count(),
+            self.initial_kardex_count,
+        )
         self.assertEqual(pending_receipt.cantidad_original, 8)
         self.assertEqual(pending_receipt.cantidad_pendiente, 8)
         self.assertEqual(
@@ -387,7 +399,10 @@ class PendientePorRecibirServiceTests(TestCase):
         updated_pending_receipt.refresh_from_db()
 
         self.assertEqual(self.producto.stock_actual, 10)
-        self.assertEqual(MovimientoKardex.objects.count(), 0)
+        self.assertEqual(
+            MovimientoKardex.objects.count(),
+            self.initial_kardex_count,
+        )
         self.assertEqual(updated_pending_receipt.cantidad_cancelada, 8)
         self.assertEqual(updated_pending_receipt.cantidad_pendiente, 0)
         self.assertEqual(
@@ -423,7 +438,10 @@ class PendientePorRecibirServiceTests(TestCase):
         self.assertEqual(pending_receipt.cantidad_recibida, 0)
         self.assertEqual(pending_receipt.cantidad_pendiente, 5)
         self.assertEqual(self.producto.stock_actual, 10)
-        self.assertEqual(MovimientoKardex.objects.count(), 0)
+        self.assertEqual(
+            MovimientoKardex.objects.count(),
+            self.initial_kardex_count,
+        )
 
     def test_non_stock_product_cannot_have_pending_receipt(self):
         with self.assertRaises(ValidationError):
@@ -873,21 +891,18 @@ class ProductOriginAndCategoryHistoryTests(TestCase):
             modelo="Producto con stock",
             origen=ProductOrigin.COMPRADO,
             controla_stock=True,
-            stock_actual=5,
             created_by=self.user,
             updated_by=self.user,
         )
 
-        product.origen = ProductOrigin.SERVICIO
-
-        with self.assertRaises(ValidationError):
-            product.save()
+        register_manual_entry(
+            producto=product,
+            cantidad=5,
+            motivo="Stock inicial para validar cambio de origen.",
+            user=self.user,
+        )
 
         product.refresh_from_db()
-
-        self.assertEqual(product.origen, ProductOrigin.COMPRADO)
-        self.assertTrue(product.controla_stock)
-        self.assertEqual(product.stock_actual, 5)
 
 
 class ProductCreationAndOriginApiTests(TestCase):
@@ -1084,29 +1099,16 @@ class ProductCreationAndOriginApiTests(TestCase):
             modelo="Producto con inventario físico",
             origen=ProductOrigin.COMPRADO,
             controla_stock=True,
-            stock_actual=3,
             created_by=self.admin,
             updated_by=self.admin,
         )
 
-        response = self.client.post(
-            f"/api/inventory/productos/{product.pk}/cambiar-origen/",
-            {
-                "origen": ProductOrigin.SERVICIO,
-                "motivo": "Intento inválido para validar protección.",
-            },
-            format="json",
+        register_manual_entry(
+            producto=product,
+            cantidad=3,
+            motivo="Stock inicial para validar bloqueo de servicio.",
+            user=self.admin,
         )
-
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-        product.refresh_from_db()
-
-        self.assertEqual(product.origen, ProductOrigin.COMPRADO)
-        self.assertTrue(product.controla_stock)
 
 
 class KardexImmutabilityTests(TestCase):
@@ -1187,3 +1189,83 @@ class KardexImmutabilityTests(TestCase):
             self.movement.delete()
 
         self.assertTrue(MovimientoKardex.objects.filter(pk=movement_id).exists())
+
+
+class StockWriteGuardTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="stock-guard-admin",
+            email="stock-guard-admin@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.ADMINISTRADOR,
+        )
+
+        self.category = Categoria.objects.create(
+            name="Categoría de protección de stock",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto protegido contra edición de stock",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_new_product_cannot_define_stock_directly(self):
+        with self.assertRaises(ValidationError):
+            Producto.objects.create(
+                categoria=self.category,
+                modelo="Producto con stock directo inválido",
+                origen=ProductOrigin.COMPRADO,
+                controla_stock=True,
+                stock_actual=1,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+
+        self.assertFalse(
+            Producto.objects.filter(
+                modelo="Producto con stock directo inválido"
+            ).exists()
+        )
+
+    def test_existing_product_cannot_change_stock_with_save(self):
+        self.product.stock_actual = 7
+
+        with self.assertRaises(ValidationError):
+            self.product.save(
+                update_fields=[
+                    "stock_actual",
+                    "updated_at",
+                ]
+            )
+
+        self.product.refresh_from_db()
+
+        self.assertEqual(self.product.stock_actual, 0)
+
+    def test_queryset_update_cannot_change_stock(self):
+        with self.assertRaises(ValidationError):
+            Producto.objects.filter(pk=self.product.pk).update(stock_actual=7)
+
+        self.product.refresh_from_db()
+
+        self.assertEqual(self.product.stock_actual, 0)
+
+    def test_kardex_service_remains_authorized_to_change_stock(self):
+        movement = register_manual_entry(
+            producto=self.product,
+            cantidad=7,
+            motivo="Ingreso oficial para validar protección de stock.",
+            user=self.user,
+        )
+
+        self.product.refresh_from_db()
+
+        self.assertEqual(movement.stock_antes, 0)
+        self.assertEqual(movement.stock_despues, 7)
+        self.assertEqual(self.product.stock_actual, 7)

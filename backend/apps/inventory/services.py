@@ -21,6 +21,7 @@ from .models import (
     Producto,
     ProductOrigin,
 )
+from .stock_context import allow_stock_write
 
 PENDING_RECEIPT_AUDIT_FIELDS = [
     "cantidad_recibida",
@@ -902,13 +903,15 @@ def register_kardex_movement(
 
         locked_product.stock_actual = stock_despues
         locked_product.updated_by = get_operator(user)
-        locked_product.save(
-            update_fields=[
-                "stock_actual",
-                "updated_by",
-                "updated_at",
-            ]
-        )
+
+        with allow_stock_write():
+            locked_product.save(
+                update_fields=[
+                    "stock_actual",
+                    "updated_by",
+                    "updated_at",
+                ]
+            )
 
         reference_data = build_reference_data(reference)
 

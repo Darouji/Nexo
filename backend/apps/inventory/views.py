@@ -1,3 +1,5 @@
+from datetime import datetime, time, timedelta
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import (
     ExpressionWrapper,
@@ -8,6 +10,8 @@ from django.db.models import (
     Value,
 )
 from django.db.models.functions import Coalesce
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError as DRFValidationError
@@ -18,7 +22,7 @@ from apps.accounts.permissions import (
     IsConsultaOrOperativoGlobal,
     IsOperativoGlobal,
 )
-from apps.core.models import BaseStatus
+from apps.core.models import AuditOrigin, BaseStatus
 
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
@@ -122,6 +126,61 @@ def parse_id_values(value, param_name):
             )
 
     return ids
+
+
+def parse_date_param(value, param_name):
+    if value is None or value == "":
+        return None
+
+    parsed_value = parse_date(str(value).strip())
+
+    if parsed_value is None:
+        raise DRFValidationError(
+            {param_name: ("La fecha no es válida. Use el formato YYYY-MM-DD.")}
+        )
+
+    return parsed_value
+
+
+def apply_created_at_date_range(queryset, params):
+    fecha_desde = parse_date_param(
+        params.get("fecha_desde"),
+        "fecha_desde",
+    )
+    fecha_hasta = parse_date_param(
+        params.get("fecha_hasta"),
+        "fecha_hasta",
+    )
+
+    if fecha_desde and fecha_hasta and fecha_desde > fecha_hasta:
+        raise DRFValidationError(
+            {
+                "fecha_hasta": (
+                    "La fecha final debe ser igual o posterior a la fecha inicial."
+                )
+            }
+        )
+
+    current_timezone = timezone.get_current_timezone()
+
+    if fecha_desde:
+        start_datetime = timezone.make_aware(
+            datetime.combine(fecha_desde, time.min),
+            current_timezone,
+        )
+        queryset = queryset.filter(created_at__gte=start_datetime)
+
+    if fecha_hasta:
+        end_datetime_exclusive = timezone.make_aware(
+            datetime.combine(
+                fecha_hasta + timedelta(days=1),
+                time.min,
+            ),
+            current_timezone,
+        )
+        queryset = queryset.filter(created_at__lt=end_datetime_exclusive)
+
+    return queryset
 
 
 class InventoryPermissionMixin:
@@ -657,7 +716,7 @@ class PendientePorRecibirViewSet(
         if receipt_statuses:
             queryset = queryset.filter(estado__in=receipt_statuses)
 
-        return queryset
+        return apply_created_at_date_range(queryset, params)
 
     def create(self, request, *args, **kwargs):
         serializer = CrearPendientePorRecibirSerializer(data=request.data)
@@ -741,6 +800,9 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
     serializer_class = MovimientoKardexSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
+        "producto_modelo_snapshot",
+        "producto_categoria_snapshot",
+        "producto_codigo_sap_snapshot",
         "producto__modelo",
         "producto__modelo_normalized",
         "producto__codigo_sap",
@@ -764,25 +826,41 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        params = self.request.query_params
 
-        producto_id = self.request.query_params.get("producto")
-        movement_type = self.request.query_params.get("movement_type")
-        origin = self.request.query_params.get("origin")
-        status_param = self.request.query_params.get("status")
+        product_ids = parse_id_values(
+            params.get("producto"),
+            "producto",
+        )
 
-        if producto_id:
-            if producto_id.isdigit():
-                queryset = queryset.filter(producto_id=producto_id)
-            else:
-                return queryset.none()
+        if product_ids:
+            queryset = queryset.filter(producto_id__in=product_ids)
 
-        if movement_type:
-            queryset = queryset.filter(movement_type=movement_type)
+        movement_types = validate_choice_values(
+            split_csv_param(params.get("movement_type")),
+            {choice[0] for choice in KardexMovementType.choices},
+            "movement_type",
+        )
 
-        if origin:
-            queryset = queryset.filter(origin=origin)
+        if movement_types:
+            queryset = queryset.filter(movement_type__in=movement_types)
 
-        if status_param:
-            queryset = queryset.filter(status=status_param)
+        origins = validate_choice_values(
+            split_csv_param(params.get("origin")),
+            {choice[0] for choice in AuditOrigin.choices},
+            "origin",
+        )
 
-        return queryset
+        if origins:
+            queryset = queryset.filter(origin__in=origins)
+
+        statuses = validate_choice_values(
+            split_csv_param(params.get("status")),
+            {choice[0] for choice in BaseStatus.choices},
+            "status",
+        )
+
+        if statuses:
+            queryset = queryset.filter(status__in=statuses)
+
+        return apply_created_at_date_range(queryset, params)

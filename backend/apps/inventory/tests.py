@@ -1299,3 +1299,102 @@ class StockWriteGuardTests(TestCase):
         self.assertEqual(movement.stock_antes, 0)
         self.assertEqual(movement.stock_despues, 7)
         self.assertEqual(self.product.stock_actual, 7)
+
+
+class InventoryReadFilteringApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="inventory-read-filter-admin",
+            email="inventory-read-filter-admin@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.ADMINISTRADOR,
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        self.category = Categoria.objects.create(
+            name="Categoría histórica",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Modelo histórico original",
+            codigo_sap="HIST-001",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_kardex_search_uses_historical_snapshots(self):
+        movement = register_manual_entry(
+            producto=self.product,
+            cantidad=4,
+            motivo="Movimiento para validar búsqueda histórica.",
+            user=self.user,
+        )
+
+        new_category = Categoria.objects.create(
+            name="Categoría actual",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        self.product.modelo = "Modelo actual corregido"
+        self.product.codigo_sap = "ACTUAL-001"
+        self.product.categoria = new_category
+        self.product.save()
+
+        response = self.client.get(
+            "/api/inventory/kardex/",
+            {"search": "Modelo histórico original"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            movement.pk,
+        )
+        self.assertEqual(
+            response.data["results"][0]["producto_modelo"],
+            "Modelo histórico original",
+        )
+
+    def test_kardex_rejects_invalid_movement_type(self):
+        response = self.client.get(
+            "/api/inventory/kardex/",
+            {"movement_type": "TIPO_INEXISTENTE"},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "movement_type",
+            response.data["error"]["details"],
+        )
+
+    def test_ppr_rejects_invalid_date_range(self):
+        response = self.client.get(
+            "/api/inventory/pendientes-por-recibir/",
+            {
+                "fecha_desde": "2026-07-07",
+                "fecha_hasta": "2026-07-06",
+            },
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "fecha_hasta",
+            response.data["error"]["details"],
+        )

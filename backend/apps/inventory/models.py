@@ -278,6 +278,8 @@ class ProductoManager(models.Manager.from_queryset(ProductoQuerySet)):
 
 
 class Producto(BaseModel):
+    objects = ProductoManager()
+
     categoria = models.ForeignKey(
         Categoria,
         on_delete=models.PROTECT,

@@ -903,6 +903,16 @@ class ProductOriginAndCategoryHistoryTests(TestCase):
         )
 
         product.refresh_from_db()
+        product.origen = ProductOrigin.SERVICIO
+
+        with self.assertRaises(ValidationError):
+            product.save()
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.origen, ProductOrigin.COMPRADO)
+        self.assertTrue(product.controla_stock)
+        self.assertEqual(product.stock_actual, 5)
 
 
 class ProductCreationAndOriginApiTests(TestCase):
@@ -1109,6 +1119,26 @@ class ProductCreationAndOriginApiTests(TestCase):
             motivo="Stock inicial para validar bloqueo de servicio.",
             user=self.admin,
         )
+
+        response = self.client.post(
+            f"/api/inventory/productos/{product.pk}/cambiar-origen/",
+            {
+                "origen": ProductOrigin.SERVICIO,
+                "motivo": "Intento inválido para validar protección.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.origen, ProductOrigin.COMPRADO)
+        self.assertTrue(product.controla_stock)
+        self.assertEqual(product.stock_actual, 3)
 
 
 class KardexImmutabilityTests(TestCase):

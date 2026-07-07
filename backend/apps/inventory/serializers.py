@@ -12,10 +12,7 @@ from .models import (
     Producto,
     ProductOrigin,
 )
-from .services import (
-    create_product_with_category,
-    resolve_or_create_product_category,
-)
+from .services import create_product_with_category
 
 
 class CategoriaSerializer(serializers.ModelSerializer):
@@ -258,10 +255,13 @@ class ProductoSerializer(serializers.ModelSerializer):
                     "Debe indicar una categoría existente o un nombre para "
                     "crear una categoría nueva."
                 )
-        elif category is not None and category_name:
+        elif (
+            "categoria" in self.initial_data or "categoria_nombre" in self.initial_data
+        ):
             validation_errors["categoria"] = (
-                "No puede enviar una categoría existente y un nombre de "
-                "categoría al mismo tiempo."
+                "La categoría no puede modificarse desde la edición general del "
+                "producto. La reclasificación debe realizarse mediante una acción "
+                "controlada y auditada."
             )
 
         origin = attrs.get(
@@ -349,38 +349,18 @@ class ProductoSerializer(serializers.ModelSerializer):
 
         return product
 
-    def update(self, instance, validated_data):
-        category_supplied = "categoria" in validated_data
-        category_name_supplied = "categoria_nombre" in validated_data
 
-        categoria = validated_data.pop("categoria", None)
-        categoria_nombre = validated_data.pop("categoria_nombre", "")
+def update(self, instance, validated_data):
+    try:
+        with transaction.atomic():
+            for attribute, value in validated_data.items():
+                setattr(instance, attribute, value)
 
-        request = self.context.get("request")
-        user = request.user if request and request.user.is_authenticated else None
+            instance.save()
+    except DjangoValidationError as error:
+        raise_serializer_validation_error(error)
 
-        try:
-            with transaction.atomic():
-                if category_supplied or category_name_supplied:
-                    resolved_category, _ = resolve_or_create_product_category(
-                        categoria=categoria if category_supplied else None,
-                        categoria_nombre=(
-                            categoria_nombre if category_name_supplied else ""
-                        ),
-                        user=user,
-                        request=getattr(request, "_request", request),
-                    )
-
-                    validated_data["categoria"] = resolved_category
-
-                for attribute, value in validated_data.items():
-                    setattr(instance, attribute, value)
-
-                instance.save()
-        except DjangoValidationError as error:
-            raise_serializer_validation_error(error)
-
-        return instance
+    return instance
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_stock(self, obj):

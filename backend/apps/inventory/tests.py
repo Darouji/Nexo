@@ -1420,7 +1420,7 @@ class ProductCategoryAtomicApiTests(TestCase):
             updated_by=self.user,
         )
 
-        Producto.objects.create(
+        self.existing_product = Producto.objects.create(
             categoria=self.existing_category,
             modelo="Producto con código ya utilizado",
             codigo_sap="SAP-ATOMIC-001",
@@ -1481,5 +1481,46 @@ class ProductCategoryAtomicApiTests(TestCase):
         self.assertFalse(
             Producto.objects.filter(
                 modelo="Producto con código duplicado",
+            ).exists(),
+        )
+
+    def test_product_update_rejects_category_reassignment(self):
+        destination_category = Categoria.objects.create(
+            name="Categoría alternativa",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        for payload in [
+            {"categoria": destination_category.pk},
+            {"categoria_nombre": "Categoría creada desde edición"},
+        ]:
+            with self.subTest(payload=payload):
+                response = self.client.patch(
+                    f"/api/inventory/productos/{self.existing_product.pk}/",
+                    payload,
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+                self.assertIn(
+                    "categoria",
+                    response.data["error"]["details"],
+                )
+
+        self.existing_product.refresh_from_db()
+
+        self.assertEqual(
+            self.existing_product.categoria_id,
+            self.existing_category.pk,
+        )
+
+        self.assertFalse(
+            Categoria.objects.filter(
+                name="Categoría creada desde edición",
             ).exists(),
         )

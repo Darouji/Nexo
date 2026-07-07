@@ -657,7 +657,9 @@ export function ProductsPage() {
   );
 
   const productCategoryIsUnavailable = Boolean(
-    productCategoryMatch && !productCategoryMatch.is_available_for_products,
+    !editingProduct &&
+    productCategoryMatch &&
+    !productCategoryMatch.is_available_for_products,
   );
 
   const handleOpenCreateProduct = () => {
@@ -785,7 +787,11 @@ export function ProductsPage() {
       return;
     }
 
-    if (matchingCategory && !matchingCategory.is_available_for_products) {
+    if (
+      !editingProduct &&
+      matchingCategory &&
+      !matchingCategory.is_available_for_products
+    ) {
       setErrorMessage(
         "La categoría indicada está fusionada o archivada y no puede utilizarse. Selecciona una categoría disponible.",
       );
@@ -806,8 +812,7 @@ export function ProductsPage() {
       setErrorMessage("");
       setSuccessMessage("");
 
-      const productPayload = {
-        categoria_nombre: categoriaNombre,
+      const editableProductPayload = {
         modelo: productForm.modelo.trim(),
         detalle: productForm.detalle.trim(),
         codigo_sap: productForm.codigo_sap.trim(),
@@ -818,19 +823,20 @@ export function ProductsPage() {
       };
 
       if (editingProduct) {
-        await updateProduct(editingProduct.id, productPayload);
+        await updateProduct(editingProduct.id, editableProductPayload);
 
         setSuccessMessage(
-          `Producto "${productPayload.modelo}" actualizado correctamente.`,
+          `Producto "${editableProductPayload.modelo}" actualizado correctamente.`,
         );
       } else {
         const initialStock =
-          isServiceProduct || !productPayload.controla_stock
+          isServiceProduct || !editableProductPayload.controla_stock
             ? 0
             : Math.max(parseInteger(productForm.initial_stock), 0);
 
         const createdProduct = await createProduct({
-          ...productPayload,
+          categoria_nombre: categoriaNombre,
+          ...editableProductPayload,
           origen: productForm.origen,
           origen_observacion: origenObservacion,
           stock_inicial: initialStock,
@@ -2262,6 +2268,7 @@ export function ProductsPage() {
           <Stack spacing={2.2} sx={{ mt: 1 }}>
             <Autocomplete<Category, false, false, true>
               freeSolo
+              disabled={Boolean(editingProduct)}
               options={availableCategoriesForProducts}
               inputValue={productForm.categoria_name}
               onInputChange={(_event, newInputValue) =>
@@ -2445,12 +2452,19 @@ export function ProductsPage() {
                 }))
               }
               fullWidth
+              disabled={productForm.origen === "SERVICIO"}
+              helperText={
+                productForm.origen === "SERVICIO"
+                  ? "Los servicios no manejan stock mínimo."
+                  : undefined
+              }
             />
 
             <FormControlLabel
               control={
                 <Checkbox
                   checked={productForm.controla_stock}
+                  disabled={productForm.origen === "SERVICIO"}
                   onChange={(event) =>
                     setProductForm((current) => ({
                       ...current,

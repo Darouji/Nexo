@@ -15,7 +15,7 @@ import {
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CallMergeIcon from "@mui/icons-material/CallMerge";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteIcon from "@mui/icons-material/Delete";
 import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import type { GridColDef } from "@mui/x-data-grid";
@@ -633,7 +633,7 @@ export function CategoryManagerDialog({
               <Button
                 size="small"
                 variant="outlined"
-                startIcon={<DeleteOutlineIcon />}
+                startIcon={<DeleteIcon />}
                 disabled={saving || !canDeleteCategory(category)}
                 onClick={() => openDeleteDialog(category)}
                 sx={{

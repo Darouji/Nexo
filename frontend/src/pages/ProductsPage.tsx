@@ -70,6 +70,7 @@ import {
   updateProduct,
 } from "../services/inventoryService";
 import type {
+  AuditOrigin,
   Category,
   InventorySummary,
   KardexMovement,
@@ -386,7 +387,9 @@ export function ProductsPage() {
   const [hasLoadedGlobalKardex, setHasLoadedGlobalKardex] = useState(false);
   const [globalKardexSearchTerm, setGlobalKardexSearchTerm] = useState("");
   const [globalKardexMovementType, setGlobalKardexMovementType] = useState("");
-  const [globalKardexOrigin, setGlobalKardexOrigin] = useState("");
+  const [globalKardexOrigin, setGlobalKardexOrigin] = useState<
+    AuditOrigin | ""
+  >("");
   const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
   const [pendingReceiptsLoading, setPendingReceiptsLoading] = useState(true);
 
@@ -502,7 +505,7 @@ export function ProductsPage() {
     filters: {
       search?: string;
       movementType?: string;
-      origin?: string;
+      origin?: AuditOrigin | "";
     } = {},
   ) => {
     const search = filters.search ?? globalKardexSearchTerm;
@@ -516,7 +519,7 @@ export function ProductsPage() {
       const movements = await fetchKardexMovements({
         search,
         movement_type: movementType,
-        origin,
+        origin: origin || undefined,
         ordering: "-created_at",
       });
 
@@ -2109,7 +2112,20 @@ export function ProductsPage() {
                 select
                 label="Origen"
                 value={globalKardexOrigin}
-                onChange={(event) => setGlobalKardexOrigin(event.target.value)}
+                onChange={(event) => {
+                  const nextOrigin = event.target.value;
+
+                  if (
+                    nextOrigin === "" ||
+                    nextOrigin === "MANUAL" ||
+                    nextOrigin === "API" ||
+                    nextOrigin === "IMPORTACION_EXCEL" ||
+                    nextOrigin === "AUTOMATICO" ||
+                    nextOrigin === "SISTEMA"
+                  ) {
+                    setGlobalKardexOrigin(nextOrigin);
+                  }
+                }}
                 sx={{ minWidth: { xs: "100%", lg: 190 } }}
               >
                 <MenuItem value="">Todos</MenuItem>

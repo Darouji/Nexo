@@ -6,6 +6,15 @@ export type ProductStockStatus =
   | "SIN_STOCK"
   | "NO_CONTROLA_STOCK";
 
+export type ProductOrigin = "COMPRADO" | "FABRICADO" | "SERVICIO" | "OTRO";
+
+export type AuditOrigin =
+  | "MANUAL"
+  | "API"
+  | "IMPORTACION_EXCEL"
+  | "AUTOMATICO"
+  | "SISTEMA";
+
 export type Category = {
   [key: string]: unknown;
   id: number;
@@ -13,6 +22,14 @@ export type Category = {
   name_normalized: string;
   description: string;
   status: string;
+  has_historical_usage: boolean;
+  merged_into: number | null;
+  merged_into_name: string;
+  merged_at: string | null;
+  merged_by: number | null;
+  merge_reason: string;
+  is_merged: boolean;
+  is_available_for_products: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -27,6 +44,8 @@ export type Product = {
   detalle: string;
   codigo_sap: string;
   codigo_sap_normalized?: string;
+  origen: ProductOrigin;
+  origen_observacion: string;
   stock: number;
   stock_actual: number;
   stock_critico: number;
@@ -158,9 +177,10 @@ type PendingReceiptListResponse =
   | PendingReceipt[]
   | PaginatedResponse<PendingReceipt>;
 
-type CategoryListParams = {
+export type CategoryListParams = {
   search?: string;
   ordering?: string;
+  available?: boolean;
 };
 
 type CsvParam<T extends string | number> = T | T[];
@@ -181,13 +201,15 @@ export type ProductPageParams = ProductListParams & {
   page_size?: number;
 };
 
-type KardexListParams = {
-  producto?: number;
-  movement_type?: string;
-  origin?: string;
-  status?: string;
+export type KardexListParams = {
+  producto?: CsvParam<number>;
+  movement_type?: CsvParam<string>;
+  origin?: CsvParam<AuditOrigin>;
+  status?: CsvParam<string>;
   search?: string;
   ordering?: string;
+  fecha_desde?: string;
+  fecha_hasta?: string;
 };
 
 export type PendingReceiptListParams = {
@@ -195,6 +217,8 @@ export type PendingReceiptListParams = {
   estado?: CsvParam<PendingReceiptStatus>;
   search?: string;
   ordering?: string;
+  fecha_desde?: string;
+  fecha_hasta?: string;
 };
 
 export type CreateCategoryPayload = {
@@ -203,6 +227,33 @@ export type CreateCategoryPayload = {
 };
 
 export type UpdateCategoryPayload = Partial<CreateCategoryPayload>;
+
+export type RenameCategoryPayload = {
+  name: string;
+  motivo: string;
+};
+
+export type MergeCategoryPayload = {
+  categoria_destino: number;
+  motivo: string;
+};
+
+export type DeleteCategoryPayload = {
+  motivo: string;
+};
+
+export type CategoryMergeResponse = {
+  categoria_origen: Category;
+  categoria_destino: Category;
+  productos_reasignados: number;
+  idempotente: boolean;
+};
+
+export type ChangeProductOriginPayload = {
+  origen: ProductOrigin;
+  origen_observacion?: string;
+  motivo: string;
+};
 
 export type CreateProductPayload = {
   categoria: number;
@@ -302,6 +353,7 @@ export async function fetchCategories(params: CategoryListParams = {}) {
       params: {
         search: params.search?.trim() || undefined,
         ordering: params.ordering || "name",
+        available: toBooleanParam(params.available),
       },
     },
   );
@@ -350,6 +402,47 @@ export async function updateCategory(
   );
 
   return response.data;
+}
+
+export async function renameCategory(
+  categoryId: number,
+  payload: RenameCategoryPayload,
+) {
+  const response = await api.post<Category>(
+    `/inventory/categorias/${categoryId}/renombrar/`,
+    {
+      name: payload.name.trim(),
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
+}
+
+export async function mergeCategories(
+  sourceCategoryId: number,
+  payload: MergeCategoryPayload,
+) {
+  const response = await api.post<CategoryMergeResponse>(
+    `/inventory/categorias/${sourceCategoryId}/fusionar/`,
+    {
+      categoria_destino: payload.categoria_destino,
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
+}
+
+export async function deleteCategorySafely(
+  categoryId: number,
+  payload: DeleteCategoryPayload,
+) {
+  await api.delete(`/inventory/categorias/${categoryId}/`, {
+    data: {
+      motivo: payload.motivo.trim(),
+    },
+  });
 }
 
 export async function changeCategoryLifecycle(
@@ -481,6 +574,22 @@ export async function changeProductLifecycle(
   return response.data;
 }
 
+export async function changeProductOrigin(
+  productId: number,
+  payload: ChangeProductOriginPayload,
+) {
+  const response = await api.post<Product>(
+    `/inventory/productos/${productId}/cambiar-origen/`,
+    {
+      origen: payload.origen,
+      origen_observacion: payload.origen_observacion?.trim() || "",
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
+}
+
 export async function registerManualStockEntry(
   productId: number,
   payload: StockMovementPayload,
@@ -514,12 +623,14 @@ export async function registerInventoryAdjustment(
 export async function fetchKardexMovements(params: KardexListParams = {}) {
   const response = await api.get<KardexListResponse>("/inventory/kardex/", {
     params: {
-      producto: params.producto,
-      movement_type: params.movement_type || undefined,
-      origin: params.origin || undefined,
-      status: params.status || undefined,
+      producto: toCsv(params.producto),
+      movement_type: toCsv(params.movement_type),
+      origin: toCsv(params.origin),
+      status: toCsv(params.status),
       search: params.search?.trim() || undefined,
       ordering: params.ordering || "-created_at",
+      fecha_desde: params.fecha_desde || undefined,
+      fecha_hasta: params.fecha_hasta || undefined,
     },
   });
 
@@ -535,6 +646,8 @@ export async function fetchPendingReceipts(
       params: {
         producto: toCsv(params.producto),
         estado: toCsv(params.estado),
+        fecha_desde: params.fecha_desde || undefined,
+        fecha_hasta: params.fecha_hasta || undefined,
         search: params.search?.trim() || undefined,
         ordering: params.ordering || "-created_at",
       },

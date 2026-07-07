@@ -652,7 +652,14 @@ export function CategoryManagerDialog({
         },
       },
     ],
-    [availableCategories, saving],
+    [
+      availableCategories,
+      saving,
+      openDescriptionDialog,
+      openRenameDialog,
+      openMergeDialog,
+      openDeleteDialog,
+    ],
   );
 
   return (

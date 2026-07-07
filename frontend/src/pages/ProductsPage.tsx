@@ -2506,7 +2506,11 @@ export function ProductsPage() {
             disabled={
               savingProduct ||
               !productForm.categoria_name.trim() ||
-              !productForm.modelo.trim()
+              !productForm.modelo.trim() ||
+              productCategoryIsUnavailable ||
+              (!editingProduct &&
+                productForm.origen === "OTRO" &&
+                !productForm.origen_observacion.trim())
             }
           >
             {savingProduct

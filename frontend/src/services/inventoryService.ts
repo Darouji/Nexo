@@ -255,20 +255,36 @@ export type ChangeProductOriginPayload = {
   motivo: string;
 };
 
-export type CreateProductPayload = {
-  categoria: number;
+type ProductCategorySelection =
+  | {
+      categoria: number;
+      categoria_nombre?: never;
+    }
+  | {
+      categoria?: never;
+      categoria_nombre: string;
+    };
+
+type ProductEditableFields = {
   modelo: string;
   detalle?: string;
   codigo_sap?: string;
   stock_critico: number;
   controla_stock: boolean;
-  stock_inicial?: number;
-  motivo_stock_inicial?: string;
 };
 
-export type UpdateProductPayload = Partial<
-  Omit<CreateProductPayload, "stock_inicial" | "motivo_stock_inicial">
->;
+export type CreateProductPayload = ProductCategorySelection &
+  ProductEditableFields & {
+    origen: ProductOrigin;
+    origen_observacion?: string;
+    stock_inicial?: number;
+    motivo_stock_inicial?: string;
+  };
+
+export type UpdateProductPayload = Partial<ProductEditableFields> & {
+  categoria?: number;
+  categoria_nombre?: string;
+};
 
 export type StockMovementPayload = {
   cantidad: number;
@@ -319,7 +335,7 @@ function toBooleanParam(value?: boolean) {
   return value ? "true" : "false";
 }
 
-function normalizeComparableText(value: string) {
+export function normalizeCategoryNameForComparison(value: string) {
   return value
     .trim()
     .toLowerCase()
@@ -331,7 +347,7 @@ function normalizeComparableText(value: string) {
 }
 
 function findCategoryByName(categories: Category[], name: string) {
-  const normalizedName = normalizeComparableText(name);
+  const normalizedName = normalizeCategoryNameForComparison(name);
 
   return categories.find((category) => {
     const backendNormalizedName =
@@ -340,7 +356,7 @@ function findCategoryByName(categories: Category[], name: string) {
         : "";
 
     return (
-      normalizeComparableText(category.name) === normalizedName ||
+      normalizeCategoryNameForComparison(category.name) === normalizedName ||
       backendNormalizedName === normalizedName
     );
   });

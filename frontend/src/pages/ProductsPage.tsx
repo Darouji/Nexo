@@ -53,16 +53,16 @@ import { SmartDataGrid } from "../components/SmartDataGrid";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   cancelPendingReceipt,
+  changeProductLifecycle,
   createPendingReceipt,
   createProduct,
   createCategory,
-  ensureCategoryByName,
   fetchCategories,
   fetchInventorySummary,
   fetchKardexMovements,
   fetchProductsPage,
   fetchPendingReceipts,
-  changeProductLifecycle,
+  normalizeCategoryNameForComparison,
   receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
@@ -79,6 +79,7 @@ import type {
   Product,
   ProductLifecycleAction,
   ProductListParams,
+  ProductOrigin,
   ProductStockStatus,
 } from "../services/inventoryService";
 import { colors } from "../theme/colors";
@@ -88,6 +89,8 @@ type ProductFormState = {
   modelo: string;
   detalle: string;
   codigo_sap: string;
+  origen: ProductOrigin;
+  origen_observacion: string;
   stock_critico: string;
   controla_stock: boolean;
   initial_stock: string;
@@ -151,6 +154,8 @@ const emptyProductForm: ProductFormState = {
   modelo: "",
   detalle: "",
   codigo_sap: "",
+  origen: "COMPRADO",
+  origen_observacion: "",
   stock_critico: "0",
   controla_stock: true,
   initial_stock: "0",
@@ -327,16 +332,35 @@ function parseOptionalBoolean(value: string) {
   return undefined;
 }
 
-function categoryExistsVisually(categories: Category[], name: string) {
-  const normalizedName = name.trim().toLowerCase();
+function findCategoryByInputName(categories: Category[], name: string) {
+  const normalizedName = normalizeCategoryNameForComparison(name);
 
   if (!normalizedName) {
-    return false;
+    return undefined;
   }
 
-  return categories.some(
-    (category) => category.name.trim().toLowerCase() === normalizedName,
-  );
+  return categories.find((category) => {
+    const backendNormalizedName =
+      typeof category.name_normalized === "string"
+        ? category.name_normalized
+        : "";
+
+    return (
+      normalizeCategoryNameForComparison(category.name) === normalizedName ||
+      backendNormalizedName === normalizedName
+    );
+  });
+}
+
+const productOriginLabels: Record<ProductOrigin, string> = {
+  COMPRADO: "Comprado",
+  FABRICADO: "Fabricado",
+  SERVICIO: "Servicio",
+  OTRO: "Otro",
+};
+
+function getProductOriginLabel(origin: ProductOrigin) {
+  return productOriginLabels[origin];
 }
 
 export function ProductsPage() {
@@ -409,6 +433,11 @@ export function ProductsPage() {
 
   const [moreActionMenu, setMoreActionMenu] = useState<ProductActionMenuState>(
     emptyProductActionMenu,
+  );
+
+  const availableCategoriesForProducts = useMemo(
+    () => categorias.filter((category) => category.is_available_for_products),
+    [categorias],
   );
 
   type ProductFilterOverrides = {
@@ -622,6 +651,15 @@ export function ProductsPage() {
     stockStatusFilter,
   ].filter(Boolean).length;
 
+  const productCategoryMatch = findCategoryByInputName(
+    categorias,
+    productForm.categoria_name,
+  );
+
+  const productCategoryIsUnavailable = Boolean(
+    productCategoryMatch && !productCategoryMatch.is_available_for_products,
+  );
+
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
     setProductForm(emptyProductForm);
@@ -637,6 +675,8 @@ export function ProductsPage() {
       modelo: product.modelo || "",
       detalle: product.detalle || "",
       codigo_sap: product.codigo_sap || "",
+      origen: product.origen,
+      origen_observacion: product.origen_observacion || "",
       stock_critico: String(product.stock_critico ?? 0),
       controla_stock: product.controla_stock,
       initial_stock: "0",
@@ -731,23 +771,50 @@ export function ProductsPage() {
   };
 
   const handleSaveProduct = async () => {
+    const categoriaNombre = productForm.categoria_name.trim();
+    const origenObservacion = productForm.origen_observacion.trim();
+    const isServiceProduct = productForm.origen === "SERVICIO";
+
+    const matchingCategory = findCategoryByInputName(
+      categorias,
+      categoriaNombre,
+    );
+
+    if (!categoriaNombre) {
+      setErrorMessage("La categoría es obligatoria.");
+      return;
+    }
+
+    if (matchingCategory && !matchingCategory.is_available_for_products) {
+      setErrorMessage(
+        "La categoría indicada está fusionada o archivada y no puede utilizarse. Selecciona una categoría disponible.",
+      );
+      return;
+    }
+
+    if (
+      !editingProduct &&
+      productForm.origen === "OTRO" &&
+      !origenObservacion
+    ) {
+      setErrorMessage("Debe explicar el origen cuando selecciona OTRO.");
+      return;
+    }
+
     try {
       setSavingProduct(true);
       setErrorMessage("");
       setSuccessMessage("");
 
-      const category = await ensureCategoryByName(
-        productForm.categoria_name,
-        categorias,
-      );
-
       const productPayload = {
-        categoria: category.id,
+        categoria_nombre: categoriaNombre,
         modelo: productForm.modelo.trim(),
         detalle: productForm.detalle.trim(),
         codigo_sap: productForm.codigo_sap.trim(),
-        stock_critico: Math.max(parseInteger(productForm.stock_critico), 0),
-        controla_stock: productForm.controla_stock,
+        stock_critico: isServiceProduct
+          ? 0
+          : Math.max(parseInteger(productForm.stock_critico), 0),
+        controla_stock: isServiceProduct ? false : productForm.controla_stock,
       };
 
       if (editingProduct) {
@@ -757,12 +824,15 @@ export function ProductsPage() {
           `Producto "${productPayload.modelo}" actualizado correctamente.`,
         );
       } else {
-        const initialStock = productForm.controla_stock
-          ? Math.max(parseInteger(productForm.initial_stock), 0)
-          : 0;
+        const initialStock =
+          isServiceProduct || !productPayload.controla_stock
+            ? 0
+            : Math.max(parseInteger(productForm.initial_stock), 0);
 
-        await createProduct({
+        const createdProduct = await createProduct({
           ...productPayload,
+          origen: productForm.origen,
+          origen_observacion: origenObservacion,
           stock_inicial: initialStock,
           motivo_stock_inicial:
             initialStock > 0
@@ -771,7 +841,7 @@ export function ProductsPage() {
         });
 
         setSuccessMessage(
-          `Producto creado correctamente en la categoría "${category.name}".`,
+          `Producto "${createdProduct.modelo}" creado correctamente en la categoría "${createdProduct.categoria_name}".`,
         );
       }
 
@@ -2192,7 +2262,7 @@ export function ProductsPage() {
           <Stack spacing={2.2} sx={{ mt: 1 }}>
             <Autocomplete<Category, false, false, true>
               freeSolo
-              options={categorias}
+              options={availableCategoriesForProducts}
               inputValue={productForm.categoria_name}
               onInputChange={(_event, newInputValue) =>
                 setProductForm((current) => ({
@@ -2214,22 +2284,22 @@ export function ProductsPage() {
               }
               renderInput={(params) => {
                 const categoryName = productForm.categoria_name.trim();
-                const categoryExists = categoryExistsVisually(
-                  categorias,
-                  categoryName,
-                );
 
                 const helperText = !categoryName
                   ? "Escribe una categoría. Si ya existe, se reutilizará."
-                  : categoryExists
-                    ? "Se reutilizará una categoría existente."
-                    : `Se creará la nueva categoría "${categoryName}" al guardar.`;
+                  : !productCategoryMatch
+                    ? `Se creará la nueva categoría "${categoryName}" al guardar junto con el producto.`
+                    : productCategoryMatch.is_available_for_products
+                      ? `Se reutilizará la categoría existente "${productCategoryMatch.name}".`
+                      : `La categoría "${productCategoryMatch.name}" es histórica o fue fusionada y no puede utilizarse.`;
 
                 const helperColor = !categoryName
                   ? colors.text.muted
-                  : categoryExists
-                    ? colors.status.success
-                    : colors.status.warning;
+                  : !productCategoryMatch
+                    ? colors.status.warning
+                    : productCategoryMatch.is_available_for_products
+                      ? colors.status.success
+                      : colors.status.error;
 
                 return (
                   <TextField
@@ -2247,6 +2317,83 @@ export function ProductsPage() {
                 );
               }}
             />
+
+            {editingProduct ? (
+              <Stack spacing={1.5}>
+                <TextField
+                  label="Origen del producto"
+                  value={getProductOriginLabel(productForm.origen)}
+                  fullWidth
+                  disabled
+                  helperText="El origen se modifica únicamente mediante una acción controlada y auditada."
+                />
+
+                {productForm.origen === "OTRO" ? (
+                  <TextField
+                    label="Detalle del origen"
+                    value={productForm.origen_observacion}
+                    fullWidth
+                    disabled
+                  />
+                ) : null}
+              </Stack>
+            ) : (
+              <>
+                <TextField
+                  select
+                  label="Origen del producto"
+                  value={productForm.origen}
+                  onChange={(event) => {
+                    const nextOrigin = event.target.value as ProductOrigin;
+
+                    setProductForm((current) => ({
+                      ...current,
+                      origen: nextOrigin,
+                      origen_observacion:
+                        nextOrigin === "OTRO" ? current.origen_observacion : "",
+                      controla_stock:
+                        nextOrigin === "SERVICIO"
+                          ? false
+                          : current.controla_stock,
+                      stock_critico:
+                        nextOrigin === "SERVICIO" ? "0" : current.stock_critico,
+                      initial_stock:
+                        nextOrigin === "SERVICIO" ? "0" : current.initial_stock,
+                    }));
+                  }}
+                  fullWidth
+                  required
+                >
+                  <MenuItem value="COMPRADO">Comprado</MenuItem>
+                  <MenuItem value="FABRICADO">Fabricado</MenuItem>
+                  <MenuItem value="SERVICIO">Servicio</MenuItem>
+                  <MenuItem value="OTRO">Otro</MenuItem>
+                </TextField>
+
+                {productForm.origen === "OTRO" ? (
+                  <TextField
+                    label="Detalle del origen"
+                    value={productForm.origen_observacion}
+                    onChange={(event) =>
+                      setProductForm((current) => ({
+                        ...current,
+                        origen_observacion: event.target.value,
+                      }))
+                    }
+                    fullWidth
+                    required
+                    helperText="Explique por qué este producto no corresponde a Comprado, Fabricado o Servicio."
+                  />
+                ) : null}
+
+                {productForm.origen === "SERVICIO" ? (
+                  <Alert severity="info" variant="outlined">
+                    Un producto de tipo Servicio no puede manejar stock físico,
+                    stock mínimo ni unidades por recibir.
+                  </Alert>
+                ) : null}
+              </>
+            )}
 
             <TextField
               label="Modelo"

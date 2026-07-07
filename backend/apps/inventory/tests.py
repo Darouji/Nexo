@@ -1400,3 +1400,86 @@ class InventoryReadFilteringApiTests(TestCase):
             "fecha_hasta",
             response.data["error"]["details"],
         )
+
+
+class ProductCategoryAtomicApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="product-category-atomic-admin",
+            email="product-category-atomic-admin@serkan.cl",
+            password="test-pass-123",
+            role=UserRole.ADMINISTRADOR,
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        self.existing_category = Categoria.objects.create(
+            name="Repuestos de Motor",
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+        Producto.objects.create(
+            categoria=self.existing_category,
+            modelo="Producto con código ya utilizado",
+            codigo_sap="SAP-ATOMIC-001",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+
+    def test_product_creation_reuses_equivalent_category_name(self):
+        response = self.client.post(
+            "/api/inventory/productos/",
+            {
+                "categoria_nombre": "repuestos   de motor",
+                "modelo": "Filtro de aceite industrial",
+                "codigo_sap": "SAP-ATOMIC-002",
+                "origen": ProductOrigin.COMPRADO,
+                "stock_critico": 2,
+                "controla_stock": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Categoria.objects.count(), 1)
+
+        created_product = Producto.objects.get(
+            codigo_sap_normalized="sap atomic 002",
+        )
+
+        self.assertEqual(
+            created_product.categoria_id,
+            self.existing_category.pk,
+        )
+
+    def test_new_category_is_rolled_back_when_product_creation_fails(self):
+        category_name = "Categoría que no debe persistir"
+
+        response = self.client.post(
+            "/api/inventory/productos/",
+            {
+                "categoria_nombre": category_name,
+                "modelo": "Producto con código duplicado",
+                "codigo_sap": "SAP-ATOMIC-001",
+                "origen": ProductOrigin.COMPRADO,
+                "stock_critico": 0,
+                "controla_stock": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertFalse(
+            Categoria.objects.filter(name=category_name).exists(),
+        )
+
+        self.assertFalse(
+            Producto.objects.filter(
+                modelo="Producto con código duplicado",
+            ).exists(),
+        )

@@ -349,18 +349,17 @@ class ProductoSerializer(serializers.ModelSerializer):
 
         return product
 
+    def update(self, instance, validated_data):
+        try:
+            with transaction.atomic():
+                for attribute, value in validated_data.items():
+                    setattr(instance, attribute, value)
 
-def update(self, instance, validated_data):
-    try:
-        with transaction.atomic():
-            for attribute, value in validated_data.items():
-                setattr(instance, attribute, value)
+                instance.save()
+        except DjangoValidationError as error:
+            raise_serializer_validation_error(error)
 
-            instance.save()
-    except DjangoValidationError as error:
-        raise_serializer_validation_error(error)
-
-    return instance
+        return instance
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_stock(self, obj):

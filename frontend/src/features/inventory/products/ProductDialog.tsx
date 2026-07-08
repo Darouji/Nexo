@@ -254,12 +254,6 @@ export function ProductDialog({
     sapCode: productForm.codigo_sap,
   });
 
-  useEffect(() => {
-    if (open) {
-      setSubmitAttempted(false);
-    }
-  }, [open, editingProduct?.id]);
-
   const availableCategoriesForProducts = categories.filter(
     (category) => category.is_available_for_products,
   );

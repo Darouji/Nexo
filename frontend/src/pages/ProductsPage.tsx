@@ -357,10 +357,13 @@ export function ProductsPage() {
   >("");
   const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
   const [pendingReceiptsLoading, setPendingReceiptsLoading] = useState(true);
-
   const [pendingReceiptRowCount, setPendingReceiptRowCount] = useState(0);
   const [pendingReceiptPaginationModel, setPendingReceiptPaginationModel] =
     useState<GridPaginationModel>(defaultPendingReceiptPaginationModel);
+  const [pendingReceiptSearchTerm, setPendingReceiptSearchTerm] = useState("");
+  const [pendingReceiptStatusFilter, setPendingReceiptStatusFilter] = useState<
+    PendingReceiptStatus | ""
+  >("");
 
   const [pendingReceiptCreateDialog, setPendingReceiptCreateDialog] =
     useState<PendingReceiptCreateDialogState>(emptyPendingReceiptCreateDialog);
@@ -388,6 +391,13 @@ export function ProductsPage() {
     status?: string;
     stockControl?: string;
     stockStatus?: ProductStockStatus | "";
+  };
+
+  type PendingReceiptFilterOverrides = {
+    search?: string;
+    status?: PendingReceiptStatus | "";
+    page?: number;
+    pageSize?: number;
   };
 
   const loadProducts = async (
@@ -529,16 +539,24 @@ export function ProductsPage() {
   };
 
   const loadPendingReceipts = async (
-    paginationModel: GridPaginationModel = pendingReceiptPaginationModel,
+    filters: PendingReceiptFilterOverrides = {},
   ) => {
+    const resolvedSearch = filters.search ?? pendingReceiptSearchTerm;
+    const resolvedStatus = filters.status ?? pendingReceiptStatusFilter;
+    const resolvedPage = filters.page ?? pendingReceiptPaginationModel.page;
+    const resolvedPageSize =
+      filters.pageSize ?? pendingReceiptPaginationModel.pageSize;
+
     try {
       setPendingReceiptsLoading(true);
       setErrorMessage("");
 
       const pendingReceiptsPage = await fetchPendingReceiptsPage({
         ordering: "-created_at",
-        page: paginationModel.page + 1,
-        page_size: paginationModel.pageSize,
+        search: resolvedSearch,
+        estado: resolvedStatus || undefined,
+        page: resolvedPage + 1,
+        page_size: resolvedPageSize,
       });
 
       setPendingReceipts(pendingReceiptsPage.results);
@@ -555,7 +573,42 @@ export function ProductsPage() {
   ) => {
     setPendingReceiptPaginationModel(nextPaginationModel);
 
-    void loadPendingReceipts(nextPaginationModel);
+    void loadPendingReceipts({
+      page: nextPaginationModel.page,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handleSearchPendingReceipts = () => {
+    const nextPaginationModel = {
+      ...pendingReceiptPaginationModel,
+      page: 0,
+    };
+
+    setPendingReceiptPaginationModel(nextPaginationModel);
+
+    void loadPendingReceipts({
+      page: pendingReceiptPaginationModel.page,
+      pageSize: pendingReceiptPaginationModel.pageSize,
+    });
+  };
+
+  const handleClearPendingReceiptFilters = () => {
+    const nextPaginationModel = {
+      ...pendingReceiptPaginationModel,
+      page: 0,
+    };
+
+    setPendingReceiptSearchTerm("");
+    setPendingReceiptStatusFilter("");
+    setPendingReceiptPaginationModel(nextPaginationModel);
+
+    void loadPendingReceipts({
+      search: "",
+      status: "",
+      page: 0,
+      pageSize: nextPaginationModel.pageSize,
+    });
   };
 
   useEffect(() => {
@@ -1194,7 +1247,10 @@ export function ProductsPage() {
 
       await Promise.all([
         loadProducts(searchTerm),
-        loadPendingReceipts(pendingReceiptPaginationModel),
+        loadPendingReceipts({
+          page: pendingReceiptPaginationModel.page,
+          pageSize: pendingReceiptPaginationModel.pageSize,
+        }),
       ]);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
@@ -1249,7 +1305,10 @@ export function ProductsPage() {
         await Promise.all([
           loadInventorySummary(),
           loadProducts(searchTerm),
-          loadPendingReceipts(pendingReceiptPaginationModel),
+          loadPendingReceipts({
+            page: pendingReceiptPaginationModel.page,
+            pageSize: pendingReceiptPaginationModel.pageSize,
+          }),
           refreshGlobalKardexIfLoaded(),
         ]);
       } else {
@@ -1264,7 +1323,10 @@ export function ProductsPage() {
 
         await Promise.all([
           loadProducts(searchTerm),
-          loadPendingReceipts(pendingReceiptPaginationModel),
+          loadPendingReceipts({
+            page: pendingReceiptPaginationModel.page,
+            pageSize: pendingReceiptPaginationModel.pageSize,
+          }),
         ]);
       }
 
@@ -1709,7 +1771,10 @@ export function ProductsPage() {
               onClick={() => {
                 loadFirstProductPage();
                 void loadInventorySummary();
-                void loadPendingReceipts(pendingReceiptPaginationModel);
+                loadPendingReceipts({
+                  page: pendingReceiptPaginationModel.page,
+                  pageSize: pendingReceiptPaginationModel.pageSize,
+                });
                 void refreshGlobalKardexIfLoaded();
               }}
               disabled={loading}
@@ -1777,6 +1842,77 @@ export function ProductsPage() {
             cambia cuando se confirma la recepción física y se crea su
             movimiento Kardex.
           </Alert>
+
+          <Stack
+            direction={{ xs: "column", lg: "row" }}
+            spacing={1.5}
+            sx={{ mb: 2 }}
+          >
+            <TextField
+              label="Buscar pendiente"
+              value={pendingReceiptSearchTerm}
+              onChange={(event) =>
+                setPendingReceiptSearchTerm(event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleSearchPendingReceipts();
+                }
+              }}
+              fullWidth
+              placeholder="Producto, código SAP, categoría, referencia o motivo"
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: colors.text.muted }} />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+
+            <TextField
+              select
+              label="Estado"
+              value={pendingReceiptStatusFilter}
+              onChange={(event) =>
+                setPendingReceiptStatusFilter(
+                  event.target.value as PendingReceiptStatus | "",
+                )
+              }
+              sx={{ minWidth: { xs: "100%", lg: 220 } }}
+            >
+              <MenuItem value="">Todos</MenuItem>
+              <MenuItem value="PENDIENTE">Pendiente</MenuItem>
+              <MenuItem value="PARCIAL">Parcial</MenuItem>
+              <MenuItem value="RECIBIDA">Recibida</MenuItem>
+              <MenuItem value="CANCELADA">Cancelada</MenuItem>
+              <MenuItem value="CERRADA_PARCIAL">Cerrada parcial</MenuItem>
+            </TextField>
+
+            <Button
+              variant="contained"
+              onClick={handleSearchPendingReceipts}
+              disabled={pendingReceiptsLoading}
+              sx={{ minWidth: { xs: "100%", lg: 140 } }}
+            >
+              Buscar
+            </Button>
+
+            <Button
+              variant="outlined"
+              onClick={handleClearPendingReceiptFilters}
+              disabled={pendingReceiptsLoading}
+              sx={{
+                minWidth: { xs: "100%", lg: 120 },
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+            >
+              Limpiar
+            </Button>
+          </Stack>
 
           <SmartDataGrid
             rows={pendingReceipts}

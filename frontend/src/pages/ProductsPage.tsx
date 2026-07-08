@@ -16,7 +16,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  InputAdornment,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -28,7 +27,6 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import HistoryIcon from "@mui/icons-material/History";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
@@ -50,11 +48,11 @@ import {
   productOriginLabels,
   type ProductFormState,
 } from "../features/inventory/products/productFormModel";
-import { SectionCard } from "../components/SectionCard";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
 import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
+import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -1953,175 +1951,23 @@ export function ProductsPage() {
         rowCount={pendingReceiptRowCount}
       />
 
-      <SectionCard
-        title="Kardex de Inventario"
-        subtitle="Historial de movimientos de stock."
-        actions={
-          <Button
-            variant={hasLoadedGlobalKardex ? "outlined" : "contained"}
-            startIcon={<HistoryIcon />}
-            onClick={handleSearchGlobalKardex}
-            disabled={globalKardexLoading}
-            sx={
-              hasLoadedGlobalKardex
-                ? {
-                    color: colors.text.primary,
-                    borderColor: colors.border.medium,
-                  }
-                : undefined
-            }
-          >
-            {globalKardexLoading
-              ? "Cargando..."
-              : hasLoadedGlobalKardex
-                ? "Actualizar Kardex"
-                : "Cargar Kardex"}
-          </Button>
-        }
-      >
-        {!hasLoadedGlobalKardex ? (
-          <Stack spacing={2} sx={{ py: 2, alignItems: "flex-start" }}>
-            <Alert severity="info" variant="outlined" sx={{ width: "100%" }}>
-              El historial global se carga solo cuando se necesita. Esto
-              mantiene el acceso a Inventario más rápido sin alterar la
-              trazabilidad ni los movimientos registrados.
-            </Alert>
-
-            <Button
-              variant="contained"
-              startIcon={<HistoryIcon />}
-              onClick={handleSearchGlobalKardex}
-              disabled={globalKardexLoading}
-            >
-              {globalKardexLoading
-                ? "Cargando historial..."
-                : "Cargar historial Kardex"}
-            </Button>
-          </Stack>
-        ) : (
-          <>
-            <Stack
-              direction={{ xs: "column", lg: "row" }}
-              spacing={1.5}
-              sx={{ mb: 2 }}
-            >
-              <TextField
-                label="Buscar movimiento"
-                value={globalKardexSearchTerm}
-                onChange={(event) =>
-                  setGlobalKardexSearchTerm(event.target.value)
-                }
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    handleSearchGlobalKardex();
-                  }
-                }}
-                fullWidth
-                placeholder="Producto, código SAP, motivo, referencia u operador"
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon sx={{ color: colors.text.muted }} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-
-              <TextField
-                select
-                label="Movimiento"
-                value={globalKardexMovementType}
-                onChange={(event) =>
-                  setGlobalKardexMovementType(event.target.value)
-                }
-                sx={{ minWidth: { xs: "100%", lg: 230 } }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="ENTRADA_MANUAL">Entrada manual</MenuItem>
-                <MenuItem value="ENTRADA_RECEPCION">
-                  Entrada por recepción
-                </MenuItem>
-                <MenuItem value="AJUSTE_INVENTARIO">
-                  Ajuste de inventario
-                </MenuItem>
-                <MenuItem value="SALIDA_VENTA">Salida por venta</MenuItem>
-                <MenuItem value="REVERSA_ANULACION">
-                  Reversa por anulación
-                </MenuItem>
-                <MenuItem value="ENTRADA_IMPORTACION">
-                  Entrada por importación
-                </MenuItem>
-              </TextField>
-
-              <TextField
-                select
-                label="Origen"
-                value={globalKardexOrigin}
-                onChange={(event) => {
-                  const nextOrigin = event.target.value;
-
-                  if (
-                    nextOrigin === "" ||
-                    nextOrigin === "MANUAL" ||
-                    nextOrigin === "API" ||
-                    nextOrigin === "IMPORTACION_EXCEL" ||
-                    nextOrigin === "AUTOMATICO" ||
-                    nextOrigin === "SISTEMA"
-                  ) {
-                    setGlobalKardexOrigin(nextOrigin);
-                  }
-                }}
-                sx={{ minWidth: { xs: "100%", lg: 190 } }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="MANUAL">Manual</MenuItem>
-                <MenuItem value="AUTOMATICO">Automático</MenuItem>
-                <MenuItem value="API">API</MenuItem>
-                <MenuItem value="IMPORTACION_EXCEL">Importación Excel</MenuItem>
-                <MenuItem value="SISTEMA">Sistema</MenuItem>
-              </TextField>
-
-              <Button
-                variant="contained"
-                onClick={handleSearchGlobalKardex}
-                disabled={globalKardexLoading}
-                sx={{ minWidth: { xs: "100%", lg: 140 } }}
-              >
-                Buscar
-              </Button>
-
-              <Button
-                variant="outlined"
-                onClick={handleClearGlobalKardexFilters}
-                disabled={globalKardexLoading}
-                sx={{
-                  minWidth: { xs: "100%", lg: 120 },
-                  color: colors.text.primary,
-                  borderColor: colors.border.medium,
-                }}
-              >
-                Limpiar
-              </Button>
-            </Stack>
-
-            <SmartDataGrid
-              rows={globalKardexMovements}
-              columns={kardexColumns}
-              loading={globalKardexLoading}
-              paginationMode="server"
-              paginationModel={globalKardexPaginationModel}
-              onPaginationModelChange={handleGlobalKardexPaginationModelChange}
-              rowCount={globalKardexRowCount}
-              rowNumberOffset={
-                globalKardexPaginationModel.page *
-                globalKardexPaginationModel.pageSize
-              }
-            />
-          </>
-        )}
-      </SectionCard>
+      <GlobalKardexSection
+        hasLoaded={hasLoadedGlobalKardex}
+        movements={globalKardexMovements}
+        columns={kardexColumns}
+        loading={globalKardexLoading}
+        searchTerm={globalKardexSearchTerm}
+        onSearchTermChange={setGlobalKardexSearchTerm}
+        movementType={globalKardexMovementType}
+        onMovementTypeChange={setGlobalKardexMovementType}
+        origin={globalKardexOrigin}
+        onOriginChange={setGlobalKardexOrigin}
+        onSearch={handleSearchGlobalKardex}
+        onClearFilters={handleClearGlobalKardexFilters}
+        paginationModel={globalKardexPaginationModel}
+        onPaginationModelChange={handleGlobalKardexPaginationModelChange}
+        rowCount={globalKardexRowCount}
+      />
 
       <ProductDialog
         key={

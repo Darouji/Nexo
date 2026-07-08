@@ -1,4 +1,8 @@
-import { formatNumber, parseInteger } from "../utils/inventoryFormatters";
+import {
+  formatNumber,
+  isIntegerInput,
+  parseInteger,
+} from "../utils/inventoryFormatters";
 import {
   Alert,
   Button,
@@ -68,6 +72,56 @@ export function PendingReceiptDialogs({
 }: PendingReceiptDialogsProps) {
   const pendingAvailable = operationPendingReceipt?.cantidad_pendiente ?? 0;
 
+  const cleanCreateCantidad = createCantidad.trim();
+  const createCantidadHasValue = cleanCreateCantidad.length > 0;
+  const createCantidadHasIntegerFormat =
+    createCantidadHasValue && isIntegerInput(cleanCreateCantidad);
+  const parsedCreateCantidad = parseInteger(cleanCreateCantidad);
+  const createCantidadIsInvalid =
+    !createCantidadHasIntegerFormat || parsedCreateCantidad <= 0;
+  const createHasReferenceOrReason =
+    Boolean(createReferencia.trim()) || Boolean(createMotivo.trim());
+  const createConfirmIsDisabled =
+    saving ||
+    !createProduct ||
+    createCantidadIsInvalid ||
+    !createHasReferenceOrReason;
+
+  const cleanOperationCantidad = operationCantidad.trim();
+  const operationCantidadHasValue = cleanOperationCantidad.length > 0;
+  const operationCantidadHasIntegerFormat =
+    operationCantidadHasValue && isIntegerInput(cleanOperationCantidad);
+  const parsedOperationCantidad = parseInteger(cleanOperationCantidad);
+  const operationCantidadIsInvalid =
+    !operationCantidadHasIntegerFormat ||
+    parsedOperationCantidad <= 0 ||
+    parsedOperationCantidad > pendingAvailable;
+  const operationConfirmIsDisabled =
+    saving ||
+    !operationPendingReceipt ||
+    operationCantidadIsInvalid ||
+    !operationMotivo.trim();
+
+  const createCantidadHelperText = !createCantidadHasValue
+    ? "Debe ser un entero positivo."
+    : !createCantidadHasIntegerFormat
+      ? "Ingresa un número entero, sin decimales ni separadores."
+      : parsedCreateCantidad <= 0
+        ? "La cantidad por recibir debe ser mayor que cero."
+        : "Cantidad válida. El stock físico no cambiará hasta confirmar la recepción.";
+
+  const operationCantidadHelperText = !operationCantidadHasValue
+    ? "Debe ser un entero positivo."
+    : !operationCantidadHasIntegerFormat
+      ? "Ingresa un número entero, sin decimales ni separadores."
+      : parsedOperationCantidad <= 0
+        ? "La cantidad debe ser mayor que cero."
+        : parsedOperationCantidad > pendingAvailable
+          ? `No puede superar las ${formatNumber(pendingAvailable)} unidades pendientes.`
+          : operationMode === "RECIBIR"
+            ? "Cantidad válida para recibir stock físico."
+            : "Cantidad válida para cancelar unidades pendientes.";
+
   return (
     <>
       <Dialog open={createOpen} onClose={onCreateClose} fullWidth maxWidth="sm">
@@ -100,6 +154,8 @@ export function PendingReceiptDialogs({
                 onChange={(event) => onCreateCantidadChange(event.target.value)}
                 fullWidth
                 required
+                error={createCantidadHasValue && createCantidadIsInvalid}
+                helperText={createCantidadHelperText}
               />
 
               <TextField
@@ -121,6 +177,7 @@ export function PendingReceiptDialogs({
               fullWidth
               multiline
               minRows={2}
+              error={!createHasReferenceOrReason && createCantidadHasValue}
               helperText="Debe indicar una referencia o un motivo."
             />
           </Stack>
@@ -132,12 +189,7 @@ export function PendingReceiptDialogs({
           <Button
             variant="contained"
             onClick={onCreateConfirm}
-            disabled={
-              saving ||
-              !createProduct ||
-              parseInteger(createCantidad) <= 0 ||
-              (!createReferencia.trim() && !createMotivo.trim())
-            }
+            disabled={createConfirmIsDisabled}
           >
             {saving ? "Registrando..." : "Registrar pendiente"}
           </Button>
@@ -199,6 +251,8 @@ export function PendingReceiptDialogs({
                 }
                 fullWidth
                 required
+                error={operationCantidadHasValue && operationCantidadIsInvalid}
+                helperText={operationCantidadHelperText}
               />
             </Stack>
 
@@ -210,6 +264,8 @@ export function PendingReceiptDialogs({
               required
               multiline
               minRows={2}
+              error={!operationMotivo.trim() && operationCantidadHasValue}
+              helperText="Obligatorio para auditar la recepción o cancelación."
             />
           </Stack>
         </DialogContent>
@@ -220,13 +276,7 @@ export function PendingReceiptDialogs({
           <Button
             variant="contained"
             onClick={onOperationConfirm}
-            disabled={
-              saving ||
-              !operationPendingReceipt ||
-              parseInteger(operationCantidad) <= 0 ||
-              parseInteger(operationCantidad) > pendingAvailable ||
-              !operationMotivo.trim()
-            }
+            disabled={operationConfirmIsDisabled}
           >
             {saving
               ? "Procesando..."

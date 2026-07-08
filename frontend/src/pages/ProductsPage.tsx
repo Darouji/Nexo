@@ -48,11 +48,11 @@ import {
   productOriginLabels,
   type ProductFormState,
 } from "../features/inventory/products/productFormModel";
-import { SmartDataGrid } from "../components/SmartDataGrid";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
 import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
+import { ProductKardexDialog } from "../features/inventory/components/ProductKardexDialog";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -2272,45 +2272,17 @@ export function ProductsPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
+      <ProductKardexDialog
         open={kardexDialog.open}
+        product={kardexDialog.product}
+        movements={kardexDialog.movements}
+        columns={kardexColumns}
+        loading={kardexDialog.loading}
+        rowCount={kardexDialog.rowCount}
+        paginationModel={kardexDialog.paginationModel}
+        onPaginationModelChange={handleProductKardexPaginationModelChange}
         onClose={closeKardexDialog}
-        fullWidth
-        maxWidth="lg"
-      >
-        <DialogTitle>
-          Kardex del producto
-          {kardexDialog.product ? `: ${kardexDialog.product.modelo}` : ""}
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert severity="info" variant="outlined">
-              Historial real de movimientos de stock. Cada registro muestra
-              cantidad, stock anterior, stock posterior, motivo, operador y
-              fecha.
-            </Alert>
-
-            <SmartDataGrid
-              rows={kardexDialog.movements}
-              columns={kardexColumns}
-              loading={kardexDialog.loading}
-              paginationMode="server"
-              paginationModel={kardexDialog.paginationModel}
-              onPaginationModelChange={handleProductKardexPaginationModelChange}
-              rowCount={kardexDialog.rowCount}
-              rowNumberOffset={
-                kardexDialog.paginationModel.page *
-                kardexDialog.paginationModel.pageSize
-              }
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={closeKardexDialog}>Cerrar</Button>
-        </DialogActions>
-      </Dialog>
+      />
 
       <Dialog
         open={productLifecycleDialog.open}

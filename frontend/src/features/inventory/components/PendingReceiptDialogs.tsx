@@ -9,6 +9,7 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
+
 import type {
   PendingReceipt,
   Product,

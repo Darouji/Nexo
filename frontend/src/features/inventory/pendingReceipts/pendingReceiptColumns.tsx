@@ -1,13 +1,15 @@
-import { formatDateTime, formatNumber } from "../utils/inventoryFormatters";
-import { Button, Chip, Stack, Typography } from "@mui/material";
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import DeleteIcon from "@mui/icons-material/Delete";
+
+import { formatDateTime, formatNumber } from "../utils/inventoryFormatters";
+import { Button, Chip, Stack, Typography } from "@mui/material";
+import { colors } from "../../../theme/colors";
+
 import type { GridColDef } from "@mui/x-data-grid";
 import type {
   PendingReceipt,
   PendingReceiptStatus,
 } from "../../../services/inventoryService";
-import { colors } from "../../../theme/colors";
 
 type PendingReceiptOperationMode = "RECIBIR" | "CANCELAR";
 

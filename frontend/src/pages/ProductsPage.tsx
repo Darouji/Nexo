@@ -54,6 +54,7 @@ import { SectionCard } from "../components/SectionCard";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
+import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -1936,103 +1937,21 @@ export function ProductsPage() {
         }
       />
 
-      <Box ref={pendingReceiptsSectionRef} sx={{ scrollMarginTop: 24 }}>
-        <SectionCard
-          title="Pendientes por recibir"
-          subtitle="Unidades esperadas que todavía no modifican el stock físico."
-        >
-          <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
-            Registrar una unidad por recibir no aumenta el stock. El stock solo
-            cambia cuando se confirma la recepción física y se crea su
-            movimiento Kardex.
-          </Alert>
-
-          <Stack
-            direction={{ xs: "column", lg: "row" }}
-            spacing={1.5}
-            sx={{ mb: 2 }}
-          >
-            <TextField
-              label="Buscar pendiente"
-              value={pendingReceiptSearchTerm}
-              onChange={(event) =>
-                setPendingReceiptSearchTerm(event.target.value)
-              }
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  handleSearchPendingReceipts();
-                }
-              }}
-              fullWidth
-              placeholder="Producto, código SAP, categoría, referencia o motivo"
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: colors.text.muted }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <TextField
-              select
-              label="Estado"
-              value={pendingReceiptStatusFilter}
-              onChange={(event) =>
-                setPendingReceiptStatusFilter(
-                  event.target.value as PendingReceiptStatus | "",
-                )
-              }
-              sx={{ minWidth: { xs: "100%", lg: 220 } }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="PENDIENTE">Pendiente</MenuItem>
-              <MenuItem value="PARCIAL">Parcial</MenuItem>
-              <MenuItem value="RECIBIDA">Recibida</MenuItem>
-              <MenuItem value="CANCELADA">Cancelada</MenuItem>
-              <MenuItem value="CERRADA_PARCIAL">Cerrada parcial</MenuItem>
-            </TextField>
-
-            <Button
-              variant="contained"
-              onClick={handleSearchPendingReceipts}
-              disabled={pendingReceiptsLoading}
-              sx={{ minWidth: { xs: "100%", lg: 140 } }}
-            >
-              Buscar
-            </Button>
-
-            <Button
-              variant="outlined"
-              onClick={handleClearPendingReceiptFilters}
-              disabled={pendingReceiptsLoading}
-              sx={{
-                minWidth: { xs: "100%", lg: 120 },
-                color: colors.text.primary,
-                borderColor: colors.border.medium,
-              }}
-            >
-              Limpiar
-            </Button>
-          </Stack>
-
-          <SmartDataGrid
-            rows={pendingReceipts}
-            columns={pendingReceiptColumns}
-            loading={pendingReceiptsLoading}
-            paginationMode="server"
-            paginationModel={pendingReceiptPaginationModel}
-            onPaginationModelChange={handlePendingReceiptPaginationModelChange}
-            rowCount={pendingReceiptRowCount}
-            rowNumberOffset={
-              pendingReceiptPaginationModel.page *
-              pendingReceiptPaginationModel.pageSize
-            }
-          />
-        </SectionCard>
-      </Box>
+      <PendingReceiptsSection
+        sectionRef={pendingReceiptsSectionRef}
+        pendingReceipts={pendingReceipts}
+        columns={pendingReceiptColumns}
+        loading={pendingReceiptsLoading}
+        searchTerm={pendingReceiptSearchTerm}
+        onSearchTermChange={setPendingReceiptSearchTerm}
+        statusFilter={pendingReceiptStatusFilter}
+        onStatusFilterChange={setPendingReceiptStatusFilter}
+        onSearch={handleSearchPendingReceipts}
+        onClearFilters={handleClearPendingReceiptFilters}
+        paginationModel={pendingReceiptPaginationModel}
+        onPaginationModelChange={handlePendingReceiptPaginationModelChange}
+        rowCount={pendingReceiptRowCount}
+      />
 
       <SectionCard
         title="Kardex de Inventario"

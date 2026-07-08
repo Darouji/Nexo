@@ -27,17 +27,20 @@ import CallMergeIcon from "@mui/icons-material/CallMerge";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import type { GridColDef } from "@mui/x-data-grid";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../../../components/SmartDataGrid";
 import { getApiErrorMessage as getErrorMessage } from "../../../services/api";
 import {
   createCategory,
   deleteCategorySafely,
+  fetchProductsPage,
   mergeCategories,
   renameCategory,
   updateCategory,
 } from "../../../services/inventoryService";
-import type { Category } from "../../../services/inventoryService";
+import type { Category, Product } from "../../../services/inventoryService";
 import { colors } from "../../../theme/colors";
 
 type CategoryManagerDialogProps = {
@@ -47,6 +50,7 @@ type CategoryManagerDialogProps = {
   onCategoriesChanged: (message: string) => Promise<void>;
   onError: (message: string) => void;
   onClearFeedback: () => void;
+  onOpenProductInCatalog?: (product: Product, category: Category) => void;
 };
 
 type FeedbackState = {
@@ -85,6 +89,15 @@ type CategoryActionMenuState = {
   category: Category | null;
 };
 
+type CategoryProductsDialogState = {
+  open: boolean;
+  category: Category | null;
+  products: Product[];
+  rowCount: number;
+  paginationModel: GridPaginationModel;
+  loading: boolean;
+};
+
 const emptyCreateCategoryForm: CreateCategoryFormState = {
   name: "",
   description: "",
@@ -114,6 +127,20 @@ const emptyDeleteDialog: DeleteDialogState = {
 const emptyCategoryActionMenu: CategoryActionMenuState = {
   anchorEl: null,
   category: null,
+};
+
+const defaultCategoryProductsPaginationModel: GridPaginationModel = {
+  page: 0,
+  pageSize: 10,
+};
+
+const emptyCategoryProductsDialog: CategoryProductsDialogState = {
+  open: false,
+  category: null,
+  products: [],
+  rowCount: 0,
+  paginationModel: defaultCategoryProductsPaginationModel,
+  loading: false,
 };
 
 function getCategoryStatusLabel(status: string) {
@@ -167,6 +194,7 @@ export function CategoryManagerDialog({
   onCategoriesChanged,
   onError,
   onClearFeedback,
+  onOpenProductInCatalog,
 }: CategoryManagerDialogProps) {
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
@@ -187,6 +215,9 @@ export function CategoryManagerDialog({
 
   const [categoryActionMenu, setCategoryActionMenu] =
     useState<CategoryActionMenuState>(emptyCategoryActionMenu);
+
+  const [categoryProductsDialog, setCategoryProductsDialog] =
+    useState<CategoryProductsDialogState>(emptyCategoryProductsDialog);
 
   const availableCategories = useMemo(
     () => categories.filter((category) => category.is_available_for_products),
@@ -229,23 +260,87 @@ export function CategoryManagerDialog({
     setCategoryActionMenu(emptyCategoryActionMenu);
   }, []);
 
+  const closeCategoryProductsDialog = useCallback(() => {
+    setCategoryProductsDialog(emptyCategoryProductsDialog);
+  }, []);
+
+  const showRequestError = useCallback(
+    (error: unknown) => {
+      const message = getErrorMessage(error);
+
+      setFeedback({
+        severity: "error",
+        message,
+      });
+
+      onError(message);
+    },
+    [onError],
+  );
+
+  const loadCategoryProducts = useCallback(
+    async (
+      category: Category,
+      paginationModel: GridPaginationModel = defaultCategoryProductsPaginationModel,
+    ) => {
+      setCategoryProductsDialog((current) => ({
+        ...current,
+        open: true,
+        category,
+        loading: true,
+        paginationModel,
+        products: current.category?.id === category.id ? current.products : [],
+        rowCount: current.category?.id === category.id ? current.rowCount : 0,
+      }));
+
+      try {
+        const data = await fetchProductsPage({
+          categoria: category.id,
+          status: "ACTIVO",
+          ordering: "modelo",
+          page: paginationModel.page + 1,
+          page_size: paginationModel.pageSize,
+        });
+
+        setCategoryProductsDialog({
+          open: true,
+          category,
+          products: data.results,
+          rowCount: data.count,
+          paginationModel,
+          loading: false,
+        });
+      } catch (error: unknown) {
+        setCategoryProductsDialog((current) => ({
+          ...current,
+          loading: false,
+        }));
+
+        showRequestError(error);
+      }
+    },
+    [showRequestError],
+  );
+
+  const handleCategoryProductsPaginationModelChange = useCallback(
+    (nextPaginationModel: GridPaginationModel) => {
+      const category = categoryProductsDialog.category;
+
+      if (!category) {
+        return;
+      }
+
+      void loadCategoryProducts(category, nextPaginationModel);
+    },
+    [categoryProductsDialog.category, loadCategoryProducts],
+  );
+
   const clearFeedback = useCallback(() => {
     setFeedback(null);
     onClearFeedback();
   }, [onClearFeedback]);
 
   const showValidationError = (message: string) => {
-    setFeedback({
-      severity: "error",
-      message,
-    });
-
-    onError(message);
-  };
-
-  const showRequestError = (error: unknown) => {
-    const message = getErrorMessage(error);
-
     setFeedback({
       severity: "error",
       message,
@@ -518,6 +613,93 @@ export function CategoryManagerDialog({
     }
   };
 
+  const categoryProductColumns = useMemo<GridColDef[]>(
+    () => [
+      {
+        field: "modelo",
+        headerName: "Modelo",
+        minWidth: 220,
+        flex: 1,
+        renderCell: (params) => (
+          <Typography sx={{ fontWeight: 850 }}>
+            {String(params.value || "Sin modelo")}
+          </Typography>
+        ),
+      },
+      {
+        field: "codigo_sap",
+        headerName: "Código SAP",
+        minWidth: 145,
+        flex: 0.6,
+        renderCell: (params) => params.value || "Sin código",
+      },
+      {
+        field: "stock_actual",
+        headerName: "Stock",
+        width: 110,
+        type: "number",
+      },
+      {
+        field: "por_recibir",
+        headerName: "Por recibir",
+        width: 125,
+        type: "number",
+      },
+      {
+        field: "estado_producto_display",
+        headerName: "Estado",
+        width: 155,
+        renderCell: (params) => (
+          <Chip
+            label={String(params.value || "Sin estado")}
+            size="small"
+            variant="outlined"
+            sx={{ fontWeight: 800 }}
+          />
+        ),
+      },
+      {
+        field: "actions",
+        headerName: "Acciones",
+        width: 170,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => {
+          const product = params.row as Product;
+          const category = categoryProductsDialog.category;
+
+          return (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<OpenInNewIcon />}
+              disabled={!category || !onOpenProductInCatalog}
+              onClick={() => {
+                if (!category || !onOpenProductInCatalog) {
+                  return;
+                }
+
+                closeCategoryProductsDialog();
+                onOpenProductInCatalog(product, category);
+              }}
+              sx={{
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+            >
+              Ver en catálogo
+            </Button>
+          );
+        },
+      },
+    ],
+    [
+      categoryProductsDialog.category,
+      closeCategoryProductsDialog,
+      onOpenProductInCatalog,
+    ],
+  );
+
   const categoryColumns = useMemo<GridColDef[]>(
     () => [
       {
@@ -724,6 +906,22 @@ export function CategoryManagerDialog({
             </MenuItem>
 
             <MenuItem
+              disabled={saving}
+              onClick={() => {
+                closeCategoryActionMenu();
+                void loadCategoryProducts(selectedCategory);
+              }}
+            >
+              <ListItemIcon>
+                <Inventory2Icon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Ver productos"
+                secondary={`${selectedCategory.productos_count ?? 0} producto(s) actual(es)`}
+              />
+            </MenuItem>
+
+            <MenuItem
               disabled={saving || !selectedCategoryCanMerge}
               onClick={() => {
                 closeCategoryActionMenu();
@@ -757,6 +955,52 @@ export function CategoryManagerDialog({
           </>
         ) : null}
       </Menu>
+
+      <Dialog
+        open={categoryProductsDialog.open}
+        onClose={closeCategoryProductsDialog}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>
+          Productos de la categoría
+          {categoryProductsDialog.category
+            ? `: ${categoryProductsDialog.category.name}`
+            : ""}
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              Esta vista muestra los productos actuales asociados a la categoría
+              seleccionada. Puedes usar “Ver en catálogo” para ubicar el
+              producto en el inventario principal.
+            </Alert>
+
+            <SmartDataGrid
+              rows={categoryProductsDialog.products}
+              columns={categoryProductColumns}
+              loading={categoryProductsDialog.loading}
+              paginationMode="server"
+              paginationModel={categoryProductsDialog.paginationModel}
+              onPaginationModelChange={
+                handleCategoryProductsPaginationModelChange
+              }
+              rowCount={categoryProductsDialog.rowCount}
+              rowNumberOffset={
+                categoryProductsDialog.paginationModel.page *
+                categoryProductsDialog.paginationModel.pageSize
+              }
+              height={420}
+              minHeight={300}
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={closeCategoryProductsDialog}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={createDialogOpen}

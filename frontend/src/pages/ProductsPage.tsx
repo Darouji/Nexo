@@ -1401,6 +1401,32 @@ export function ProductsPage() {
     setCategoryManagerOpen(true);
   };
 
+  const handleOpenProductFromCategoryManager = (
+    product: Product,
+    category: Category,
+  ) => {
+    setCategoryManagerOpen(false);
+    setSearchTerm(product.modelo);
+    setCategoryFilter(String(category.id));
+    setStatusFilter("");
+    setStockControlFilter("");
+    setStockStatusFilter("");
+    setFiltersOpen(true);
+    setErrorMessage("");
+
+    setSuccessMessage(
+      `Mostrando "${product.modelo}" desde la categoría "${category.name}".`,
+    );
+
+    loadFirstProductPage({
+      search: product.modelo,
+      category: String(category.id),
+      status: "",
+      stockControl: "",
+      stockStatus: "",
+    });
+  };
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <PageHeader
@@ -2106,6 +2132,7 @@ export function ProductsPage() {
         onCategoriesChanged={handleCategoriesChanged}
         onError={setErrorMessage}
         onClearFeedback={handleClearCategoryManagerFeedback}
+        onOpenProductInCatalog={handleOpenProductFromCategoryManager}
       />
 
       <Menu

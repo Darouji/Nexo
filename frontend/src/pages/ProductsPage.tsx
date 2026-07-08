@@ -6,32 +6,12 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Alert, Box, Button, Chip, Stack, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import TuneIcon from "@mui/icons-material/Tune";
-import HistoryIcon from "@mui/icons-material/History";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import LocalShippingIcon from "@mui/icons-material/LocalShipping";
-import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
-import BlockIcon from "@mui/icons-material/Block";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
-import CategoryIcon from "@mui/icons-material/Category";
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import { PageHeader } from "../components/PageHeader";
 import { ProductDialog } from "../features/inventory/products/ProductDialog";
@@ -51,6 +31,7 @@ import { StockMovementDialog } from "../features/inventory/components/StockMovem
 import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
 import { ProductOriginChangeDialog } from "../features/inventory/components/ProductOriginChangeDialog";
 import { ProductCategoryChangeDialog } from "../features/inventory/components/ProductCategoryChangeDialog";
+import { ProductActionMenus } from "../features/inventory/components/ProductActionMenus";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -2126,202 +2107,28 @@ export function ProductsPage() {
         onOpenProductInCatalog={handleOpenProductFromCategoryManager}
       />
 
-      <Menu
-        anchorEl={inventoryActionMenu.anchorEl}
-        open={Boolean(inventoryActionMenu.anchorEl)}
+      <ProductActionMenus
+        inventoryAnchorEl={inventoryActionMenu.anchorEl}
+        inventoryProduct={inventoryMenuProduct}
+        inventoryCanRegisterManualEntry={inventoryMenuCanRegisterManualEntry}
+        inventoryCanAdjustStock={inventoryMenuCanAdjustStock}
+        inventoryCanRegisterPendingReceipt={
+          inventoryMenuCanRegisterPendingReceipt
+        }
+        moreAnchorEl={moreActionMenu.anchorEl}
+        moreProduct={moreActionProduct}
+        moreIsOperationallyActive={moreActionIsOperationallyActive}
+        moreCanInactivate={moreActionCanInactivate}
         onClose={closeProductActionMenus}
-      >
-        {inventoryMenuProduct ? (
-          <>
-            <MenuItem
-              disabled={!inventoryMenuCanRegisterManualEntry}
-              onClick={() => {
-                closeProductActionMenus();
-                openMovementDialog(inventoryMenuProduct, "ENTRADA_MANUAL");
-              }}
-            >
-              <ListItemIcon>
-                <AddBoxIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Registrar entrada física</ListItemText>
-            </MenuItem>
-
-            <MenuItem
-              disabled={!inventoryMenuCanAdjustStock}
-              onClick={() => {
-                closeProductActionMenus();
-                openMovementDialog(inventoryMenuProduct, "AJUSTE_INVENTARIO");
-              }}
-            >
-              <ListItemIcon>
-                <TuneIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Ajustar stock</ListItemText>
-            </MenuItem>
-
-            <MenuItem
-              disabled={!inventoryMenuCanRegisterPendingReceipt}
-              onClick={() => {
-                closeProductActionMenus();
-                openPendingReceiptCreateDialog(inventoryMenuProduct);
-              }}
-            >
-              <ListItemIcon>
-                <LocalShippingIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Registrar por recibir</ListItemText>
-            </MenuItem>
-
-            <MenuItem onClick={focusPendingReceipts}>
-              <ListItemIcon>
-                <LocalShippingIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Gestionar pendientes por recibir</ListItemText>
-            </MenuItem>
-          </>
-        ) : null}
-      </Menu>
-
-      <Menu
-        anchorEl={moreActionMenu.anchorEl}
-        open={Boolean(moreActionMenu.anchorEl)}
-        onClose={closeProductActionMenus}
-      >
-        {moreActionProduct ? (
-          <>
-            <MenuItem
-              onClick={() => {
-                closeProductActionMenus();
-                void openKardexDialog(moreActionProduct);
-              }}
-            >
-              <ListItemIcon>
-                <HistoryIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Ver Kardex</ListItemText>
-            </MenuItem>
-
-            <MenuItem
-              disabled={!moreActionIsOperationallyActive}
-              onClick={() => {
-                closeProductActionMenus();
-                handleOpenEditProduct(moreActionProduct);
-              }}
-            >
-              <ListItemIcon>
-                <EditIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Editar producto</ListItemText>
-            </MenuItem>
-
-            <MenuItem
-              disabled={!moreActionIsOperationallyActive}
-              onClick={() => {
-                closeProductActionMenus();
-                openProductOriginDialog(moreActionProduct);
-              }}
-            >
-              <ListItemIcon>
-                <SwapHorizIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Cambiar origen</ListItemText>
-            </MenuItem>
-
-            <MenuItem
-              disabled={!moreActionIsOperationallyActive}
-              onClick={() => {
-                closeProductActionMenus();
-                openProductCategoryDialog(moreActionProduct);
-              }}
-            >
-              <ListItemIcon>
-                <CategoryIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>Cambiar categoría</ListItemText>
-            </MenuItem>
-
-            {moreActionProduct.status === "ACTIVO" ? (
-              <>
-                <MenuItem
-                  onClick={() => {
-                    closeProductActionMenus();
-                    openProductLifecycleDialog(
-                      moreActionProduct,
-                      moreActionProduct.descontinuado
-                        ? "REANUDAR"
-                        : "DESCONTINUAR",
-                    );
-                  }}
-                >
-                  <ListItemIcon>
-                    <WarningAmberIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>
-                    {moreActionProduct.descontinuado
-                      ? "Reanudar producto"
-                      : "Descontinuar producto"}
-                  </ListItemText>
-                </MenuItem>
-
-                <MenuItem
-                  disabled={!moreActionCanInactivate}
-                  onClick={() => {
-                    closeProductActionMenus();
-                    openProductLifecycleDialog(moreActionProduct, "INACTIVAR");
-                  }}
-                >
-                  <ListItemIcon>
-                    <BlockIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>Inactivar producto</ListItemText>
-                </MenuItem>
-              </>
-            ) : null}
-
-            {moreActionProduct.status === "INACTIVO" ? (
-              <>
-                <MenuItem
-                  onClick={() => {
-                    closeProductActionMenus();
-                    openProductLifecycleDialog(moreActionProduct, "REACTIVAR");
-                  }}
-                >
-                  <ListItemIcon>
-                    <RefreshIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>Reactivar producto</ListItemText>
-                </MenuItem>
-
-                <MenuItem
-                  onClick={() => {
-                    closeProductActionMenus();
-                    openProductLifecycleDialog(moreActionProduct, "ARCHIVAR");
-                  }}
-                >
-                  <ListItemIcon>
-                    <ArchiveOutlinedIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText>Archivar producto</ListItemText>
-                </MenuItem>
-              </>
-            ) : null}
-
-            {moreActionProduct.status === "ARCHIVADO" ? (
-              <MenuItem
-                onClick={() => {
-                  closeProductActionMenus();
-                  openProductLifecycleDialog(moreActionProduct, "REACTIVAR");
-                }}
-              >
-                <ListItemIcon>
-                  <RefreshIcon fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>Reactivar producto</ListItemText>
-              </MenuItem>
-            ) : null}
-          </>
-        ) : null}
-      </Menu>
+        onOpenMovementDialog={openMovementDialog}
+        onOpenPendingReceiptCreateDialog={openPendingReceiptCreateDialog}
+        onFocusPendingReceipts={focusPendingReceipts}
+        onOpenKardexDialog={openKardexDialog}
+        onOpenEditProduct={handleOpenEditProduct}
+        onOpenProductOriginDialog={openProductOriginDialog}
+        onOpenProductCategoryDialog={openProductCategoryDialog}
+        onOpenProductLifecycleDialog={openProductLifecycleDialog}
+      />
     </Box>
   );
 }

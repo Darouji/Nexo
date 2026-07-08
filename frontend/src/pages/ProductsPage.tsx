@@ -37,12 +37,15 @@ import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import BlockIcon from "@mui/icons-material/Block";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import { PageHeader } from "../components/PageHeader";
 import { ProductDialog } from "../features/inventory/products/ProductDialog";
 import {
   emptyProductForm,
   findCategoryByInputName,
+  getProductOriginLabel,
+  productOriginLabels,
   type ProductFormState,
 } from "../features/inventory/products/productFormModel";
 import { SectionCard } from "../components/SectionCard";
@@ -54,6 +57,7 @@ import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   cancelPendingReceipt,
   changeProductLifecycle,
+  changeProductOrigin,
   createPendingReceipt,
   createProduct,
   fetchCategories,
@@ -76,6 +80,7 @@ import type {
   Product,
   ProductLifecycleAction,
   ProductListParams,
+  ProductOrigin,
   ProductStockStatus,
 } from "../services/inventoryService";
 import { colors } from "../theme/colors";
@@ -117,6 +122,14 @@ type ProductLifecycleDialogState = {
   open: boolean;
   product: Product | null;
   action: ProductLifecycleAction | null;
+  motivo: string;
+};
+
+type ProductOriginDialogState = {
+  open: boolean;
+  product: Product | null;
+  origen: ProductOrigin;
+  origen_observacion: string;
   motivo: string;
 };
 
@@ -162,6 +175,24 @@ const emptyProductLifecycleDialog: ProductLifecycleDialogState = {
   action: null,
   motivo: "",
 };
+
+const emptyProductOriginDialog: ProductOriginDialogState = {
+  open: false,
+  product: null,
+  origen: "COMPRADO",
+  origen_observacion: "",
+  motivo: "",
+};
+
+const productOriginOptions: Array<{
+  value: ProductOrigin;
+  label: string;
+}> = [
+  { value: "COMPRADO", label: productOriginLabels.COMPRADO },
+  { value: "FABRICADO", label: productOriginLabels.FABRICADO },
+  { value: "SERVICIO", label: productOriginLabels.SERVICIO },
+  { value: "OTRO", label: productOriginLabels.OTRO },
+];
 
 const emptyProductActionMenu: ProductActionMenuState = {
   anchorEl: null,
@@ -277,6 +308,10 @@ export function ProductsPage() {
   const [productLifecycleDialog, setProductLifecycleDialog] =
     useState<ProductLifecycleDialogState>(emptyProductLifecycleDialog);
   const [savingProductLifecycle, setSavingProductLifecycle] = useState(false);
+
+  const [productOriginDialog, setProductOriginDialog] =
+    useState<ProductOriginDialogState>(emptyProductOriginDialog);
+  const [savingProductOrigin, setSavingProductOrigin] = useState(false);
 
   const [productForm, setProductForm] =
     useState<ProductFormState>(emptyProductForm);
@@ -771,6 +806,81 @@ export function ProductsPage() {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setSavingProductLifecycle(false);
+    }
+  };
+
+  const openProductOriginDialog = (product: Product) => {
+    setProductOriginDialog({
+      open: true,
+      product,
+      origen: product.origen,
+      origen_observacion: product.origen_observacion || "",
+      motivo: "",
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const closeProductOriginDialog = () => {
+    if (savingProductOrigin) {
+      return;
+    }
+
+    setProductOriginDialog(emptyProductOriginDialog);
+  };
+
+  const handleProductOriginChange = async () => {
+    const product = productOriginDialog.product;
+    const motivo = productOriginDialog.motivo.trim();
+    const origenObservacion = productOriginDialog.origen_observacion.trim();
+
+    if (!product) {
+      return;
+    }
+
+    if (!motivo) {
+      setErrorMessage("El motivo del cambio de origen es obligatorio.");
+      return;
+    }
+
+    if (productOriginDialog.origen === "OTRO" && !origenObservacion) {
+      setErrorMessage("Debe explicar el origen cuando selecciona OTRO.");
+      return;
+    }
+
+    const normalizedNextObservation =
+      productOriginDialog.origen === "OTRO" ? origenObservacion : "";
+
+    if (
+      product.origen === productOriginDialog.origen &&
+      (product.origen_observacion || "").trim() === normalizedNextObservation
+    ) {
+      setErrorMessage("El producto ya tiene el origen indicado.");
+      return;
+    }
+
+    try {
+      setSavingProductOrigin(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const updatedProduct = await changeProductOrigin(product.id, {
+        origen: productOriginDialog.origen,
+        origen_observacion: normalizedNextObservation,
+        motivo,
+      });
+
+      setProductOriginDialog(emptyProductOriginDialog);
+
+      setSuccessMessage(
+        `Origen de "${updatedProduct.modelo}" cambiado a ${getProductOriginLabel(updatedProduct.origen)} correctamente.`,
+      );
+
+      await Promise.all([loadProducts(searchTerm), loadInventorySummary()]);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingProductOrigin(false);
     }
   };
 
@@ -2125,6 +2235,133 @@ export function ProductsPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={productOriginDialog.open}
+        onClose={closeProductOriginDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Cambiar origen del producto</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              Esta acción cambia el origen del producto y queda registrada en
+              auditoría. No modifica el Kardex histórico ni borra movimientos.
+            </Alert>
+
+            <TextField
+              label="Producto"
+              value={
+                productOriginDialog.product
+                  ? `${productOriginDialog.product.categoria_name} — ${productOriginDialog.product.modelo}`
+                  : ""
+              }
+              fullWidth
+              disabled
+            />
+
+            <TextField
+              label="Origen actual"
+              value={
+                productOriginDialog.product
+                  ? getProductOriginLabel(productOriginDialog.product.origen)
+                  : ""
+              }
+              fullWidth
+              disabled
+            />
+
+            <TextField
+              select
+              label="Nuevo origen"
+              value={productOriginDialog.origen}
+              onChange={(event) => {
+                const nextOrigin = event.target.value as ProductOrigin;
+
+                setProductOriginDialog((current) => ({
+                  ...current,
+                  origen: nextOrigin,
+                  origen_observacion:
+                    nextOrigin === "OTRO" ? current.origen_observacion : "",
+                }));
+              }}
+              fullWidth
+              required
+            >
+              {productOriginOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {productOriginDialog.origen === "SERVICIO" ? (
+              <Alert severity="warning" variant="outlined">
+                Un servicio no puede manejar stock físico, stock mínimo, Kardex
+                ni pendientes por recibir. El backend bloqueará el cambio si el
+                producto ya tiene historial incompatible.
+              </Alert>
+            ) : null}
+
+            {productOriginDialog.origen === "OTRO" ? (
+              <TextField
+                label="Detalle del origen"
+                value={productOriginDialog.origen_observacion}
+                onChange={(event) =>
+                  setProductOriginDialog((current) => ({
+                    ...current,
+                    origen_observacion: event.target.value,
+                  }))
+                }
+                fullWidth
+                required
+                helperText="Explique por qué este producto no corresponde a Comprado, Fabricado o Servicio."
+              />
+            ) : null}
+
+            <TextField
+              label="Motivo del cambio"
+              value={productOriginDialog.motivo}
+              onChange={(event) =>
+                setProductOriginDialog((current) => ({
+                  ...current,
+                  motivo: event.target.value,
+                }))
+              }
+              fullWidth
+              required
+              multiline
+              minRows={3}
+              helperText="Este motivo quedará asociado a la auditoría del producto."
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={closeProductOriginDialog}
+            disabled={savingProductOrigin}
+          >
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={() => void handleProductOriginChange()}
+            disabled={
+              savingProductOrigin ||
+              !productOriginDialog.product ||
+              !productOriginDialog.motivo.trim() ||
+              (productOriginDialog.origen === "OTRO" &&
+                !productOriginDialog.origen_observacion.trim())
+            }
+          >
+            {savingProductOrigin ? "Guardando..." : "Cambiar origen"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <CategoryManagerDialog
         open={categoryManagerOpen}
         categories={categorias}
@@ -2221,6 +2458,19 @@ export function ProductsPage() {
                 <EditIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText>Editar producto</ListItemText>
+            </MenuItem>
+
+            <MenuItem
+              disabled={!moreActionIsOperationallyActive}
+              onClick={() => {
+                closeProductActionMenus();
+                openProductOriginDialog(moreActionProduct);
+              }}
+            >
+              <ListItemIcon>
+                <SwapHorizIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Cambiar origen</ListItemText>
             </MenuItem>
 
             {moreActionProduct.status === "ACTIVO" ? (

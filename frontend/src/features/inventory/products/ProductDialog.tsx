@@ -1,4 +1,10 @@
-import type { Dispatch, SetStateAction } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   Alert,
   Autocomplete,
@@ -18,10 +24,13 @@ import type {
   Product,
   ProductOrigin,
 } from "../../../services/inventoryService";
+import { fetchProductsPage } from "../../../services/inventoryService";
 import { colors } from "../../../theme/colors";
 import {
   findCategoryByInputName,
   getProductOriginLabel,
+  normalizeProductComparisonValue,
+  normalizeSapComparisonValue,
   productOriginLabels,
   type ProductFormState,
 } from "./productFormModel";
@@ -37,6 +46,18 @@ type ProductDialogProps = {
   onSave: () => void | Promise<void>;
 };
 
+type DuplicateValidationState = {
+  loading: boolean;
+  duplicatedModelProduct: Product | null;
+  duplicatedSapProduct: Product | null;
+};
+
+const initialDuplicateValidationState: DuplicateValidationState = {
+  loading: false,
+  duplicatedModelProduct: null,
+  duplicatedSapProduct: null,
+};
+
 const productOriginOptions: Array<{
   value: ProductOrigin;
   label: string;
@@ -46,6 +67,137 @@ const productOriginOptions: Array<{
   { value: "SERVICIO", label: productOriginLabels.SERVICIO },
   { value: "OTRO", label: productOriginLabels.OTRO },
 ];
+
+function isSameModel(product: Product, model: string) {
+  const normalizedModel = normalizeProductComparisonValue(model);
+
+  if (!normalizedModel) {
+    return false;
+  }
+
+  const backendNormalizedModel =
+    typeof product.modelo_normalized === "string"
+      ? product.modelo_normalized
+      : "";
+
+  return (
+    normalizeProductComparisonValue(product.modelo) === normalizedModel ||
+    backendNormalizedModel === normalizedModel
+  );
+}
+
+function isSameSapCode(product: Product, sapCode: string) {
+  const normalizedSapCode = normalizeSapComparisonValue(sapCode);
+
+  if (!normalizedSapCode) {
+    return false;
+  }
+
+  const backendNormalizedSapCode =
+    typeof product.codigo_sap_normalized === "string"
+      ? product.codigo_sap_normalized
+      : "";
+
+  return (
+    normalizeSapComparisonValue(product.codigo_sap) === normalizedSapCode ||
+    backendNormalizedSapCode === normalizedSapCode
+  );
+}
+
+function useProductDuplicateValidation({
+  open,
+  editingProduct,
+  model,
+  sapCode,
+}: {
+  open: boolean;
+  editingProduct: Product | null;
+  model: string;
+  sapCode: string;
+}) {
+  const requestIdRef = useRef(0);
+  const [state, setState] = useState<DuplicateValidationState>(
+    initialDuplicateValidationState,
+  );
+
+  useEffect(() => {
+    const cleanModel = model.trim();
+    const cleanSapCode = sapCode.trim();
+
+    const shouldCheckModel = cleanModel.length >= 3;
+    const shouldCheckSapCode = cleanSapCode.length >= 2;
+
+    if (!open || (!shouldCheckModel && !shouldCheckSapCode)) {
+      setState(initialDuplicateValidationState);
+      return;
+    }
+
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+
+    setState((current) => ({
+      ...current,
+      loading: true,
+    }));
+
+    const timeoutId = window.setTimeout(() => {
+      Promise.all([
+        shouldCheckModel
+          ? fetchProductsPage({
+              search: cleanModel,
+              page: 1,
+              page_size: 10,
+            }).then((page) => page.results)
+          : Promise.resolve([]),
+        shouldCheckSapCode
+          ? fetchProductsPage({
+              search: cleanSapCode,
+              page: 1,
+              page_size: 10,
+            }).then((page) => page.results)
+          : Promise.resolve([]),
+      ])
+        .then(([modelResults, sapResults]) => {
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
+
+          const duplicatedModelProduct =
+            modelResults.find(
+              (product) =>
+                product.id !== editingProduct?.id &&
+                isSameModel(product, cleanModel),
+            ) ?? null;
+
+          const duplicatedSapProduct =
+            sapResults.find(
+              (product) =>
+                product.id !== editingProduct?.id &&
+                isSameSapCode(product, cleanSapCode),
+            ) ?? null;
+
+          setState({
+            loading: false,
+            duplicatedModelProduct,
+            duplicatedSapProduct,
+          });
+        })
+        .catch(() => {
+          if (requestIdRef.current !== requestId) {
+            return;
+          }
+
+          setState(initialDuplicateValidationState);
+        });
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [open, editingProduct?.id, model, sapCode]);
+
+  return state;
+}
 
 export function ProductDialog({
   open,
@@ -57,6 +209,21 @@ export function ProductDialog({
   onClose,
   onSave,
 }: ProductDialogProps) {
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const duplicateValidation = useProductDuplicateValidation({
+    open,
+    editingProduct,
+    model: productForm.modelo,
+    sapCode: productForm.codigo_sap,
+  });
+
+  useEffect(() => {
+    if (open) {
+      setSubmitAttempted(false);
+    }
+  }, [open, editingProduct?.id]);
+
   const availableCategoriesForProducts = categories.filter(
     (category) => category.is_available_for_products,
   );
@@ -71,6 +238,27 @@ export function ProductDialog({
     productCategoryMatch &&
     !productCategoryMatch.is_available_for_products,
   );
+
+  const categoryNameIsMissing = !productForm.categoria_name.trim();
+  const modelIsMissing = !productForm.modelo.trim();
+  const originObservationIsMissing =
+    !editingProduct &&
+    productForm.origen === "OTRO" &&
+    !productForm.origen_observacion.trim();
+
+  const hasRequiredFieldErrors =
+    categoryNameIsMissing || modelIsMissing || originObservationIsMissing;
+
+  const hasDuplicateErrors = Boolean(
+    duplicateValidation.duplicatedModelProduct ||
+    duplicateValidation.duplicatedSapProduct,
+  );
+
+  const hasBlockingErrors =
+    hasRequiredFieldErrors ||
+    productCategoryIsUnavailable ||
+    hasDuplicateErrors ||
+    duplicateValidation.loading;
 
   const updateFormField = <Field extends keyof ProductFormState>(
     field: Field,
@@ -95,6 +283,26 @@ export function ProductDialog({
     }));
   };
 
+  const handleSubmit = () => {
+    setSubmitAttempted(true);
+
+    if (hasBlockingErrors) {
+      return;
+    }
+
+    void onSave();
+  };
+
+  const modelHelperText = duplicateValidation.duplicatedModelProduct
+    ? `Ya existe un producto con este modelo: "${duplicateValidation.duplicatedModelProduct.modelo}".`
+    : submitAttempted && modelIsMissing
+      ? "El modelo es obligatorio para crear o editar un producto."
+      : "Usa un nombre claro y único para evitar duplicados.";
+
+  const sapHelperText = duplicateValidation.duplicatedSapProduct
+    ? `Ya existe un producto con este código SAP: "${duplicateValidation.duplicatedSapProduct.modelo}".`
+    : "Opcional. Si se informa, debe ser único.";
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
       <DialogTitle>
@@ -103,6 +311,20 @@ export function ProductDialog({
 
       <DialogContent>
         <Stack spacing={2.2} sx={{ mt: 1 }}>
+          {submitAttempted && hasRequiredFieldErrors ? (
+            <Alert severity="warning" variant="outlined">
+              Faltan campos obligatorios. Revisa los campos marcados antes de
+              guardar.
+            </Alert>
+          ) : null}
+
+          {hasDuplicateErrors ? (
+            <Alert severity="error" variant="outlined">
+              El modelo o código SAP ya existe en otro producto. Debes usar un
+              valor único.
+            </Alert>
+          ) : null}
+
           <Autocomplete<Category, false, false, true>
             freeSolo
             disabled={Boolean(editingProduct)}
@@ -125,32 +347,42 @@ export function ProductDialog({
             renderInput={(params) => {
               const categoryName = productForm.categoria_name.trim();
 
-              const helperText = !categoryName
-                ? "Escribe una categoría. Si ya existe, se reutilizará."
-                : !productCategoryMatch
-                  ? `Se creará la nueva categoría "${categoryName}" al guardar junto con el producto.`
-                  : productCategoryMatch.is_available_for_products
-                    ? `Se reutilizará la categoría existente "${productCategoryMatch.name}".`
-                    : `La categoría "${productCategoryMatch.name}" es histórica o fue fusionada y no puede utilizarse.`;
+              const helperText =
+                submitAttempted && categoryNameIsMissing
+                  ? "La categoría es obligatoria."
+                  : !categoryName
+                    ? "Escribe una categoría. Si ya existe, se reutilizará."
+                    : !productCategoryMatch
+                      ? `Se creará la nueva categoría "${categoryName}" al guardar junto con el producto.`
+                      : productCategoryMatch.is_available_for_products
+                        ? `Se reutilizará la categoría existente "${productCategoryMatch.name}".`
+                        : `La categoría "${productCategoryMatch.name}" es histórica o fue fusionada y no puede utilizarse.`;
 
-              const helperColor = !categoryName
-                ? colors.text.muted
-                : !productCategoryMatch
-                  ? colors.status.warning
-                  : productCategoryMatch.is_available_for_products
-                    ? colors.status.success
-                    : colors.status.error;
+              const helperColor =
+                submitAttempted && categoryNameIsMissing
+                  ? colors.status.error
+                  : !categoryName
+                    ? colors.text.muted
+                    : !productCategoryMatch
+                      ? colors.status.warning
+                      : productCategoryMatch.is_available_for_products
+                        ? colors.status.success
+                        : colors.status.error;
 
               return (
                 <TextField
                   {...params}
                   label="Categoría"
                   required
+                  error={
+                    (submitAttempted && categoryNameIsMissing) ||
+                    productCategoryIsUnavailable
+                  }
                   helperText={helperText}
                   sx={{
                     "& .MuiFormHelperText-root": {
                       color: helperColor,
-                      fontWeight: categoryName ? 800 : 500,
+                      fontWeight: categoryName || submitAttempted ? 800 : 500,
                     },
                   }}
                 />
@@ -165,7 +397,7 @@ export function ProductDialog({
                 value={getProductOriginLabel(productForm.origen)}
                 fullWidth
                 disabled
-                helperText="El origen se modifica únicamente mediante una acción controlada y auditada."
+                helperText="El origen se modifica desde una acción separada con motivo y auditoría."
               />
 
               {productForm.origen === "OTRO" ? (
@@ -205,14 +437,19 @@ export function ProductDialog({
                   }
                   fullWidth
                   required
-                  helperText="Explique por qué este producto no corresponde a Comprado, Fabricado o Servicio."
+                  error={submitAttempted && originObservationIsMissing}
+                  helperText={
+                    submitAttempted && originObservationIsMissing
+                      ? "Debe explicar el origen cuando selecciona OTRO."
+                      : "Explique por qué este producto no corresponde a Comprado, Fabricado o Servicio."
+                  }
                 />
               ) : null}
 
               {productForm.origen === "SERVICIO" ? (
                 <Alert severity="info" variant="outlined">
-                  Un producto de tipo Servicio no puede manejar stock físico,
-                  stock mínimo ni unidades por recibir.
+                  Un servicio no existe físicamente en bodega. No maneja stock,
+                  stock mínimo, unidades por recibir ni Kardex.
                 </Alert>
               ) : null}
             </>
@@ -224,6 +461,11 @@ export function ProductDialog({
             onChange={(event) => updateFormField("modelo", event.target.value)}
             fullWidth
             required
+            error={
+              (submitAttempted && modelIsMissing) ||
+              Boolean(duplicateValidation.duplicatedModelProduct)
+            }
+            helperText={modelHelperText}
           />
 
           <TextField
@@ -233,6 +475,8 @@ export function ProductDialog({
               updateFormField("codigo_sap", event.target.value)
             }
             fullWidth
+            error={Boolean(duplicateValidation.duplicatedSapProduct)}
+            helperText={sapHelperText}
           />
 
           <TextField
@@ -310,22 +554,16 @@ export function ProductDialog({
 
         <Button
           variant="contained"
-          onClick={() => void onSave()}
-          disabled={
-            savingProduct ||
-            !productForm.categoria_name.trim() ||
-            !productForm.modelo.trim() ||
-            productCategoryIsUnavailable ||
-            (!editingProduct &&
-              productForm.origen === "OTRO" &&
-              !productForm.origen_observacion.trim())
-          }
+          onClick={handleSubmit}
+          disabled={savingProduct || duplicateValidation.loading}
         >
           {savingProduct
             ? "Guardando..."
-            : editingProduct
-              ? "Guardar cambios"
-              : "Crear producto"}
+            : duplicateValidation.loading
+              ? "Validando..."
+              : editingProduct
+                ? "Guardar cambios"
+                : "Crear producto"}
         </Button>
       </DialogActions>
     </Dialog>

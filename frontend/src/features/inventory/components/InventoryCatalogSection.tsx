@@ -3,7 +3,6 @@ import {
   Box,
   Button,
   Collapse,
-  IconButton,
   InputAdornment,
   MenuItem,
   Stack,
@@ -184,22 +183,21 @@ export function InventoryCatalogSection({
                       <SearchIcon sx={{ color: colors.text.muted }} />
                     </InputAdornment>
                   ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="Ejecutar búsqueda de productos"
-                        edge="end"
-                        size="small"
-                        onClick={onExecuteProductSearch}
-                        disabled={loading}
-                      >
-                        <SearchIcon />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
                 },
               }}
             />
+
+            <Button
+              variant="contained"
+              startIcon={<SearchIcon />}
+              onClick={onExecuteProductSearch}
+              disabled={loading}
+              sx={{
+                minWidth: { xs: "100%", md: 130 },
+              }}
+            >
+              Buscar
+            </Button>
 
             <Button
               variant={

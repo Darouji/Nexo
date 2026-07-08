@@ -26,8 +26,38 @@ import {
   parseInteger,
   parseOptionalBoolean,
 } from "../features/inventory/utils/inventoryFormatters";
+import {
+  cancelPendingReceipt,
+  changeProductCategory,
+  changeProductLifecycle,
+  changeProductOrigin,
+  createPendingReceipt,
+  createProduct,
+  fetchCategories,
+  fetchInventorySummary,
+  fetchKardexMovementsPage,
+  fetchProductsPage,
+  fetchPendingReceiptsPage,
+  receivePendingReceipt,
+  registerInventoryAdjustment,
+  registerManualStockEntry,
+  updateProduct,
+} from "../services/inventoryService";
 
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
+import type {
+  AuditOrigin,
+  Category,
+  InventorySummary,
+  KardexMovement,
+  PendingReceipt,
+  PendingReceiptStatus,
+  Product,
+  ProductLifecycleAction,
+  ProductListParams,
+  ProductStockStatus,
+} from "../services/inventoryService";
+
 import {
   useCallback,
   useEffect,
@@ -56,44 +86,18 @@ import {
   emptyProductLifecycleDialog,
   emptyProductOriginDialog,
   type KardexDialogState,
+  type KardexFilterOverrides,
   type MovementDialogState,
   type PendingReceiptCreateDialogState,
+  type PendingReceiptFilterOverrides,
   type PendingReceiptOperationDialogState,
   type PendingReceiptOperationMode,
   type ProductActionMenuState,
   type ProductCategoryDialogState,
+  type ProductFilterOverrides,
   type ProductLifecycleDialogState,
   type ProductOriginDialogState,
 } from "../features/inventory/state/inventoryPageState";
-import {
-  cancelPendingReceipt,
-  changeProductCategory,
-  changeProductLifecycle,
-  changeProductOrigin,
-  createPendingReceipt,
-  createProduct,
-  fetchCategories,
-  fetchInventorySummary,
-  fetchKardexMovementsPage,
-  fetchProductsPage,
-  fetchPendingReceiptsPage,
-  receivePendingReceipt,
-  registerInventoryAdjustment,
-  registerManualStockEntry,
-  updateProduct,
-} from "../services/inventoryService";
-import type {
-  AuditOrigin,
-  Category,
-  InventorySummary,
-  KardexMovement,
-  PendingReceipt,
-  PendingReceiptStatus,
-  Product,
-  ProductLifecycleAction,
-  ProductListParams,
-  ProductStockStatus,
-} from "../services/inventoryService";
 
 export function ProductsPage() {
   const [productos, setProductos] = useState<Product[]>([]);
@@ -181,32 +185,6 @@ export function ProductsPage() {
   const [moreActionMenu, setMoreActionMenu] = useState<ProductActionMenuState>(
     emptyProductActionMenu,
   );
-
-  type ProductFilterOverrides = {
-    search?: string;
-    category?: string;
-    page?: number;
-    pageSize?: number;
-    status?: string;
-    stockControl?: string;
-    stockStatus?: ProductStockStatus | "";
-  };
-
-  type PendingReceiptFilterOverrides = {
-    search?: string;
-    status?: PendingReceiptStatus | "";
-    page?: number;
-    pageSize?: number;
-  };
-
-  type KardexFilterOverrides = {
-    search?: string;
-    movementType?: string;
-    origin?: AuditOrigin | "";
-    product?: number;
-    page?: number;
-    pageSize?: number;
-  };
 
   const loadProducts = async (
     searchOrFilters: string | ProductFilterOverrides = searchTerm,

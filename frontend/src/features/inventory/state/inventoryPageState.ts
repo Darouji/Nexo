@@ -1,12 +1,15 @@
 import type { GridPaginationModel } from "@mui/x-data-grid";
 import type {
+  AuditOrigin,
   Category,
   InventorySummary,
   KardexMovement,
+  PendingReceiptStatus,
   PendingReceipt,
   Product,
   ProductLifecycleAction,
   ProductOrigin,
+  ProductStockStatus,
 } from "../../../services/inventoryService";
 
 export type MovementDialogState = {
@@ -69,6 +72,32 @@ export type ProductCategoryDialogState = {
 export type ProductActionMenuState = {
   anchorEl: HTMLElement | null;
   product: Product | null;
+};
+
+export type ProductFilterOverrides = {
+  search?: string;
+  category?: string;
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  stockControl?: string;
+  stockStatus?: ProductStockStatus | "";
+};
+
+export type PendingReceiptFilterOverrides = {
+  search?: string;
+  status?: PendingReceiptStatus | "";
+  page?: number;
+  pageSize?: number;
+};
+
+export type KardexFilterOverrides = {
+  search?: string;
+  movementType?: string;
+  origin?: AuditOrigin | "";
+  product?: number;
+  page?: number;
+  pageSize?: number;
 };
 
 export const defaultProductPaginationModel: GridPaginationModel = {

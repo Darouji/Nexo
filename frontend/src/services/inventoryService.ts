@@ -257,6 +257,11 @@ export type ChangeProductOriginPayload = {
   motivo: string;
 };
 
+export type ChangeProductCategoryPayload = {
+  categoria_destino: number;
+  motivo: string;
+};
+
 type ProductCategorySelection =
   | {
       categoria: number;
@@ -585,6 +590,21 @@ export async function changeProductLifecycle(
     `/inventory/productos/${productId}/ciclo-vida/`,
     {
       accion: payload.accion,
+      motivo: payload.motivo.trim(),
+    },
+  );
+
+  return response.data;
+}
+
+export async function changeProductCategory(
+  productId: number,
+  payload: ChangeProductCategoryPayload,
+) {
+  const response = await api.post<Product>(
+    `/inventory/productos/${productId}/cambiar-categoria/`,
+    {
+      categoria_destino: payload.categoria_destino,
       motivo: payload.motivo.trim(),
     },
   );

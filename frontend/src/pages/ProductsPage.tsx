@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -38,6 +39,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import BlockIcon from "@mui/icons-material/Block";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import CategoryIcon from "@mui/icons-material/Category";
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import { PageHeader } from "../components/PageHeader";
 import { ProductDialog } from "../features/inventory/products/ProductDialog";
@@ -56,6 +58,7 @@ import { buildProductCatalogColumns } from "../features/inventory/products/produ
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   cancelPendingReceipt,
+  changeProductCategory,
   changeProductLifecycle,
   changeProductOrigin,
   createPendingReceipt,
@@ -133,6 +136,13 @@ type ProductOriginDialogState = {
   motivo: string;
 };
 
+type ProductCategoryDialogState = {
+  open: boolean;
+  product: Product | null;
+  destinationCategory: Category | null;
+  motivo: string;
+};
+
 type ProductActionMenuState = {
   anchorEl: HTMLElement | null;
   product: Product | null;
@@ -181,6 +191,13 @@ const emptyProductOriginDialog: ProductOriginDialogState = {
   product: null,
   origen: "COMPRADO",
   origen_observacion: "",
+  motivo: "",
+};
+
+const emptyProductCategoryDialog: ProductCategoryDialogState = {
+  open: false,
+  product: null,
+  destinationCategory: null,
   motivo: "",
 };
 
@@ -312,6 +329,10 @@ export function ProductsPage() {
   const [productOriginDialog, setProductOriginDialog] =
     useState<ProductOriginDialogState>(emptyProductOriginDialog);
   const [savingProductOrigin, setSavingProductOrigin] = useState(false);
+
+  const [productCategoryDialog, setProductCategoryDialog] =
+    useState<ProductCategoryDialogState>(emptyProductCategoryDialog);
+  const [savingProductCategory, setSavingProductCategory] = useState(false);
 
   const [productForm, setProductForm] =
     useState<ProductFormState>(emptyProductForm);
@@ -881,6 +902,92 @@ export function ProductsPage() {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setSavingProductOrigin(false);
+    }
+  };
+
+  const openProductCategoryDialog = (product: Product) => {
+    setProductCategoryDialog({
+      open: true,
+      product,
+      destinationCategory: null,
+      motivo: "",
+    });
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const closeProductCategoryDialog = () => {
+    if (savingProductCategory) {
+      return;
+    }
+
+    setProductCategoryDialog(emptyProductCategoryDialog);
+  };
+
+  const handleProductCategoryChange = async () => {
+    const product = productCategoryDialog.product;
+    const destinationCategory = productCategoryDialog.destinationCategory;
+    const motivo = productCategoryDialog.motivo.trim();
+
+    if (!product) {
+      return;
+    }
+
+    if (!destinationCategory) {
+      setErrorMessage("Debe seleccionar una categoría destino.");
+      return;
+    }
+
+    if (!motivo) {
+      setErrorMessage("El motivo del cambio de categoría es obligatorio.");
+      return;
+    }
+
+    if (product.categoria === destinationCategory.id) {
+      setErrorMessage("El producto ya pertenece a la categoría indicada.");
+      return;
+    }
+
+    try {
+      setSavingProductCategory(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const updatedProduct = await changeProductCategory(product.id, {
+        categoria_destino: destinationCategory.id,
+        motivo,
+      });
+
+      const updatedCategories = await fetchCategories();
+
+      setCategorias(updatedCategories);
+      setProductCategoryDialog(emptyProductCategoryDialog);
+
+      setSearchTerm(updatedProduct.modelo);
+      setCategoryFilter(String(destinationCategory.id));
+      setStatusFilter("");
+      setStockControlFilter("");
+      setStockStatusFilter("");
+      setFiltersOpen(true);
+
+      setSuccessMessage(
+        `Producto "${updatedProduct.modelo}" reclasificado a "${destinationCategory.name}" correctamente.`,
+      );
+
+      await Promise.all([
+        loadProducts({
+          search: updatedProduct.modelo,
+          category: String(destinationCategory.id),
+          status: "",
+          stockControl: "",
+          stockStatus: "",
+        }),
+        loadInventorySummary(),
+      ]);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setSavingProductCategory(false);
     }
   };
 
@@ -1476,6 +1583,16 @@ export function ProductsPage() {
     moreActionIsOperationallyActive &&
     Number(moreActionProduct.stock_actual || 0) === 0 &&
     Number(moreActionProduct.por_recibir || 0) === 0,
+  );
+
+  const availableCategoryOptions = useMemo(
+    () =>
+      categorias.filter(
+        (category) =>
+          category.is_available_for_products &&
+          category.id !== productCategoryDialog.product?.categoria,
+      ),
+    [categorias, productCategoryDialog.product?.categoria],
   );
 
   const handleSubmitProductSearch = () => {
@@ -2362,6 +2479,111 @@ export function ProductsPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={productCategoryDialog.open}
+        onClose={closeProductCategoryDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Cambiar categoría del producto</DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2.2} sx={{ mt: 1 }}>
+            <Alert severity="info" variant="outlined">
+              Esta acción reclasifica el producto en una nueva categoría
+              disponible. El cambio queda registrado en auditoría y no modifica
+              el Kardex histórico.
+            </Alert>
+
+            <TextField
+              label="Producto"
+              value={
+                productCategoryDialog.product
+                  ? `${productCategoryDialog.product.categoria_name} — ${productCategoryDialog.product.modelo}`
+                  : ""
+              }
+              fullWidth
+              disabled
+            />
+
+            <TextField
+              label="Categoría actual"
+              value={productCategoryDialog.product?.categoria_name || ""}
+              fullWidth
+              disabled
+            />
+
+            <Autocomplete
+              options={availableCategoryOptions}
+              value={productCategoryDialog.destinationCategory}
+              onChange={(_event, nextCategory) =>
+                setProductCategoryDialog((current) => ({
+                  ...current,
+                  destinationCategory: nextCategory,
+                }))
+              }
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              noOptionsText="No hay categorías disponibles"
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Nueva categoría"
+                  required
+                  helperText="Solo se muestran categorías activas y disponibles."
+                />
+              )}
+            />
+
+            {productCategoryDialog.destinationCategory ? (
+              <Alert severity="warning" variant="outlined">
+                Revise que la categoría destino sea correcta. Si en la categoría
+                destino ya existe un producto con el mismo modelo, el backend
+                bloqueará la reclasificación para evitar duplicados.
+              </Alert>
+            ) : null}
+
+            <TextField
+              label="Motivo del cambio"
+              value={productCategoryDialog.motivo}
+              onChange={(event) =>
+                setProductCategoryDialog((current) => ({
+                  ...current,
+                  motivo: event.target.value,
+                }))
+              }
+              fullWidth
+              required
+              multiline
+              minRows={3}
+              helperText="Este motivo quedará asociado a la auditoría del producto."
+            />
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={closeProductCategoryDialog}
+            disabled={savingProductCategory}
+          >
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={() => void handleProductCategoryChange()}
+            disabled={
+              savingProductCategory ||
+              !productCategoryDialog.product ||
+              !productCategoryDialog.destinationCategory ||
+              !productCategoryDialog.motivo.trim()
+            }
+          >
+            {savingProductCategory ? "Guardando..." : "Cambiar categoría"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <CategoryManagerDialog
         open={categoryManagerOpen}
         categories={categorias}
@@ -2471,6 +2693,19 @@ export function ProductsPage() {
                 <SwapHorizIcon fontSize="small" />
               </ListItemIcon>
               <ListItemText>Cambiar origen</ListItemText>
+            </MenuItem>
+
+            <MenuItem
+              disabled={!moreActionIsOperationallyActive}
+              onClick={() => {
+                closeProductActionMenus();
+                openProductCategoryDialog(moreActionProduct);
+              }}
+            >
+              <ListItemIcon>
+                <CategoryIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Cambiar categoría</ListItemText>
             </MenuItem>
 
             {moreActionProduct.status === "ACTIVO" ? (

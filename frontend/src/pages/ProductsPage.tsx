@@ -13,13 +13,11 @@ import {
   Button,
   Checkbox,
   Chip,
-  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
-  IconButton,
   InputAdornment,
   ListItemIcon,
   ListItemText,
@@ -36,21 +34,19 @@ import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import HistoryIcon from "@mui/icons-material/History";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
-import CategoryIcon from "@mui/icons-material/Category";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import BlockIcon from "@mui/icons-material/Block";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
-import { MetricCard } from "../components/MetricCard";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
+import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
+import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   cancelPendingReceipt,
@@ -207,38 +203,6 @@ const emptyInventorySummary: InventorySummary = {
   bajo_minimo: 0,
   por_recibir: 0,
 };
-
-function getStockStatusColor(status: ProductStockStatus) {
-  if (status === "STOCK_CORRECTO") {
-    return colors.status.success;
-  }
-
-  if (status === "BAJO_MINIMO") {
-    return colors.status.warning;
-  }
-
-  if (status === "SIN_STOCK") {
-    return colors.status.error;
-  }
-
-  return colors.status.info;
-}
-
-function getStockStatusLabel(status: ProductStockStatus) {
-  if (status === "STOCK_CORRECTO") {
-    return "Stock correcto";
-  }
-
-  if (status === "BAJO_MINIMO") {
-    return "Bajo mínimo";
-  }
-
-  if (status === "SIN_STOCK") {
-    return "Sin stock";
-  }
-
-  return "No controla stock";
-}
 
 function getPendingReceiptStatusColor(status: PendingReceiptStatus) {
   if (status === "PENDIENTE") {
@@ -1178,134 +1142,11 @@ export function ProductsPage() {
   };
 
   const columns = useMemo<GridColDef[]>(
-    () => [
-      {
-        field: "modelo",
-        headerName: "Modelo",
-        minWidth: 220,
-        flex: 1.1,
-        renderCell: (params) => (
-          <Typography sx={{ fontWeight: 850 }}>
-            {params.value || "Sin modelo"}
-          </Typography>
-        ),
-      },
-      {
-        field: "categoria_name",
-        headerName: "Categoría",
-        minWidth: 180,
-        flex: 0.8,
-      },
-      {
-        field: "codigo_sap",
-        headerName: "Código SAP",
-        minWidth: 145,
-        flex: 0.65,
-        renderCell: (params) => params.value || "Sin código",
-      },
-      {
-        field: "stock_actual",
-        headerName: "Stock actual",
-        width: 135,
-        type: "number",
-        renderCell: (params) => (
-          <Typography sx={{ fontWeight: 900 }}>
-            {formatNumber(Number(params.value || 0))}
-          </Typography>
-        ),
-      },
-      {
-        field: "por_recibir",
-        headerName: "Por recibir",
-        width: 130,
-        type: "number",
-        renderCell: (params) => formatNumber(Number(params.value || 0)),
-      },
-      {
-        field: "stock_critico",
-        headerName: "Stock mínimo",
-        width: 135,
-        type: "number",
-        renderCell: (params) => formatNumber(Number(params.value || 0)),
-      },
-      {
-        field: "stock_status",
-        headerName: "Estado de stock",
-        width: 180,
-        renderCell: (params) => {
-          const status = String(params.value || "") as ProductStockStatus;
-          const color = getStockStatusColor(status);
-
-          return (
-            <Chip
-              label={getStockStatusLabel(status)}
-              size="small"
-              sx={{
-                color,
-                bgcolor: colors.surface.soft,
-                borderColor: color,
-                border: "1px solid",
-                fontWeight: 800,
-              }}
-            />
-          );
-        },
-      },
-      {
-        field: "estado_producto_display",
-        headerName: "Estado del producto",
-        width: 175,
-        renderCell: (params) => (
-          <Chip
-            label={String(params.value || "Sin estado")}
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: 800 }}
-          />
-        ),
-      },
-      {
-        field: "detalle",
-        headerName: "Detalle",
-        minWidth: 250,
-        flex: 1.2,
-        renderCell: (params) => params.value || "Sin detalle",
-      },
-      {
-        field: "actions",
-        headerName: "Acciones",
-        width: 430,
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => {
-          const product = params.row as Product;
-
-          return (
-            <Stack direction="row" spacing={1}>
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<Inventory2Icon />}
-                endIcon={<KeyboardArrowDownIcon />}
-                onClick={(event) => openInventoryActionMenu(event, product)}
-              >
-                Gestionar inventario
-              </Button>
-
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<MoreHorizIcon />}
-                endIcon={<KeyboardArrowDownIcon />}
-                onClick={(event) => openMoreActionMenu(event, product)}
-              >
-                Más acciones
-              </Button>
-            </Stack>
-          );
-        },
-      },
-    ],
+    () =>
+      buildProductCatalogColumns({
+        onOpenInventoryActionMenu: openInventoryActionMenu,
+        onOpenMoreActionMenu: openMoreActionMenu,
+      }),
     [openInventoryActionMenu, openMoreActionMenu],
   );
 
@@ -1605,6 +1446,39 @@ export function ProductsPage() {
     Number(moreActionProduct.por_recibir || 0) === 0,
   );
 
+  const handleSubmitProductSearch = () => {
+    loadFirstProductPage();
+  };
+
+  const handleExecuteProductSearch = () => {
+    void loadProducts();
+  };
+
+  const handleToggleProductFilters = () => {
+    setFiltersOpen((current) => !current);
+  };
+
+  const handleClearProductFilters = () => {
+    setSearchTerm("");
+    setCategoryFilter("");
+    setStatusFilter("ACTIVO");
+    setStockControlFilter("");
+    setStockStatusFilter("");
+    setFiltersOpen(false);
+
+    loadFirstProductPage({
+      search: "",
+      category: "",
+      status: "ACTIVO",
+      stockControl: "",
+      stockStatus: "",
+    });
+  };
+
+  const handleOpenCategoryManager = () => {
+    setCategoryManagerOpen(true);
+  };
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <PageHeader
@@ -1644,277 +1518,48 @@ export function ProductsPage() {
         }
       />
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, minmax(0, 1fr))",
-            xl: "repeat(3, minmax(0, 1fr))",
-          },
-          gap: 2,
-        }}
-      >
-        <MetricCard
-          title="Productos activos"
-          value={formatNumber(activeProductsCount)}
-          helper="Disponibles en el catálogo operativo"
-          icon={<Inventory2Icon />}
-          tone={colors.modules.inventory}
-        />
+      <InventoryCatalogSection
+        inventorySummary={inventorySummary}
+        products={productos}
+        categories={categorias}
+        columns={columns}
+        loading={loading}
+        searchTerm={searchTerm}
+        onSearchTermChange={setSearchTerm}
+        onSubmitProductSearch={handleSubmitProductSearch}
+        onExecuteProductSearch={handleExecuteProductSearch}
+        filtersOpen={filtersOpen}
+        onToggleFilters={handleToggleProductFilters}
+        activeProductFiltersCount={activeProductFiltersCount}
+        categoryFilter={categoryFilter}
+        onCategoryFilterChange={setCategoryFilter}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        stockControlFilter={stockControlFilter}
+        onStockControlFilterChange={setStockControlFilter}
+        stockStatusFilter={stockStatusFilter}
+        onStockStatusFilterChange={setStockStatusFilter}
+        onClearProductFilters={handleClearProductFilters}
+        productPaginationModel={productPaginationModel}
+        onProductPaginationModelChange={handleProductPaginationModelChange}
+        productRowCount={productRowCount}
+        onOpenCategoryManager={handleOpenCategoryManager}
+        feedbackSlot={
+          <>
+            {successMessage ? (
+              <Alert severity="success" variant="outlined">
+                {successMessage}
+              </Alert>
+            ) : null}
 
-        <MetricCard
-          title="Bajo mínimo"
-          value={formatNumber(lowMinimumCount)}
-          helper="Productos que requieren reposición"
-          icon={<WarningAmberIcon />}
-          tone={{
-            main: colors.status.warning,
-            soft: colors.status.warningSoft,
-            border: colors.status.warning,
-          }}
-        />
-
-        <MetricCard
-          title="Por recibir"
-          value={formatNumber(incomingStockTotal)}
-          helper="Unidades pendientes de recepción física"
-          icon={<LocalShippingIcon />}
-          tone={{
-            main: colors.status.warning,
-            soft: colors.status.warningSoft,
-            border: colors.secondary.border,
-          }}
-        />
-      </Box>
-
-      <SectionCard
-        title="Buscar y filtrar productos"
-        subtitle="Busca por modelo, categoría, detalle o código SAP."
-      >
-        <Stack spacing={1.5}>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-            <TextField
-              label="Buscar productos"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  loadFirstProductPage();
-                }
-              }}
-              fullWidth
-              placeholder="Producto, categoría, detalle o código SAP..."
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: colors.text.muted }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="Ejecutar búsqueda de productos"
-                        edge="end"
-                        size="small"
-                        onClick={() => void loadProducts()}
-                        disabled={loading}
-                      >
-                        <SearchIcon />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <Button
-              variant={
-                filtersOpen || activeProductFiltersCount > 0
-                  ? "contained"
-                  : "outlined"
-              }
-              startIcon={<TuneIcon />}
-              onClick={() => setFiltersOpen((current) => !current)}
-              aria-expanded={filtersOpen}
-              aria-controls="product-filter-panel"
-              sx={{
-                minWidth: { xs: "100%", md: 155 },
-                ...(filtersOpen || activeProductFiltersCount > 0
-                  ? {}
-                  : {
-                      color: colors.text.primary,
-                      borderColor: colors.border.medium,
-                    }),
-              }}
-            >
-              {activeProductFiltersCount > 0
-                ? `Filtros (${activeProductFiltersCount})`
-                : "Filtros"}
-            </Button>
-
-            <Button
-              variant="outlined"
-              onClick={() => {
-                setSearchTerm("");
-                setCategoryFilter("");
-                setStatusFilter("ACTIVO");
-                setStockControlFilter("");
-                setStockStatusFilter("");
-                setFiltersOpen(false);
-
-                loadFirstProductPage({
-                  search: "",
-                  category: "",
-                  status: "ACTIVO",
-                  stockControl: "",
-                  stockStatus: "",
-                });
-              }}
-              disabled={loading}
-              sx={{
-                minWidth: { xs: "100%", md: 120 },
-                color: colors.text.primary,
-                borderColor: colors.border.medium,
-              }}
-            >
-              Limpiar
-            </Button>
-          </Stack>
-
-          <Collapse in={filtersOpen} timeout="auto" unmountOnExit>
-            <Box
-              id="product-filter-panel"
-              sx={{
-                display: "grid",
-                gridTemplateColumns: {
-                  xs: "1fr",
-                  sm: "repeat(2, minmax(0, 1fr))",
-                  lg: "repeat(4, minmax(0, 1fr))",
-                },
-                gap: 1.5,
-                p: 1.5,
-                border: `1px solid ${colors.border.light}`,
-                borderRadius: colors.radius.md,
-                bgcolor: colors.surface.soft,
-              }}
-            >
-              <TextField
-                select
-                label="Categoría"
-                value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value)}
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {categorias.map((category) => (
-                  <MenuItem key={category.id} value={String(category.id)}>
-                    {category.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-
-              <TextField
-                select
-                label="Estado del producto"
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="ACTIVO">Activo</MenuItem>
-                <MenuItem value="INACTIVO">Inactivo</MenuItem>
-                <MenuItem value="DESCONTINUADO">Descontinuado</MenuItem>
-                <MenuItem value="ARCHIVADO">Archivado</MenuItem>
-              </TextField>
-
-              <TextField
-                select
-                label="Maneja inventario"
-                value={stockControlFilter}
-                onChange={(event) => setStockControlFilter(event.target.value)}
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="true">Maneja inventario</MenuItem>
-                <MenuItem value="false">No maneja inventario</MenuItem>
-              </TextField>
-
-              <TextField
-                select
-                label="Estado de stock"
-                value={stockStatusFilter}
-                onChange={(event) => {
-                  const nextStockStatus = event.target.value;
-
-                  if (
-                    nextStockStatus === "" ||
-                    nextStockStatus === "STOCK_CORRECTO" ||
-                    nextStockStatus === "BAJO_MINIMO" ||
-                    nextStockStatus === "SIN_STOCK" ||
-                    nextStockStatus === "NO_CONTROLA_STOCK"
-                  ) {
-                    setStockStatusFilter(nextStockStatus);
-                  }
-                }}
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="STOCK_CORRECTO">Stock correcto</MenuItem>
-                <MenuItem value="BAJO_MINIMO">Bajo mínimo</MenuItem>
-                <MenuItem value="SIN_STOCK">Sin stock</MenuItem>
-                <MenuItem value="NO_CONTROLA_STOCK">
-                  No maneja inventario
-                </MenuItem>
-              </TextField>
-            </Box>
-          </Collapse>
-        </Stack>
-      </SectionCard>
-
-      {successMessage ? (
-        <Alert severity="success" variant="outlined">
-          {successMessage}
-        </Alert>
-      ) : null}
-
-      {errorMessage ? (
-        <Alert severity="error" variant="outlined">
-          {errorMessage}
-        </Alert>
-      ) : null}
-
-      <SectionCard
-        title="Catálogo de productos"
-        subtitle="Stock actual, stock mínimo, unidades por recibir, Kardex y acciones operativas."
-        actions={
-          <Button
-            variant="outlined"
-            startIcon={<CategoryIcon />}
-            onClick={() => setCategoryManagerOpen(true)}
-            sx={{
-              color: colors.text.primary,
-              borderColor: colors.border.medium,
-            }}
-          >
-            Gestionar categorías
-          </Button>
+            {errorMessage ? (
+              <Alert severity="error" variant="outlined">
+                {errorMessage}
+              </Alert>
+            ) : null}
+          </>
         }
-      >
-        <SmartDataGrid
-          rows={productos}
-          columns={columns}
-          loading={loading}
-          paginationMode="server"
-          paginationModel={productPaginationModel}
-          onPaginationModelChange={handleProductPaginationModelChange}
-          rowCount={productRowCount}
-          rowNumberOffset={
-            productPaginationModel.page * productPaginationModel.pageSize
-          }
-        />
-      </SectionCard>
+      />
 
       <Box ref={pendingReceiptsSectionRef} sx={{ scrollMarginTop: 24 }}>
         <SectionCard

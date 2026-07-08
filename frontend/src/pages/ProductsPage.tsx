@@ -55,6 +55,7 @@ import { GlobalKardexSection } from "../features/inventory/components/GlobalKard
 import { ProductKardexDialog } from "../features/inventory/components/ProductKardexDialog";
 import { ProductLifecycleDialog } from "../features/inventory/components/ProductLifecycleDialog";
 import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
+import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -1977,208 +1978,53 @@ export function ProductsPage() {
         onSave={handleSaveProduct}
       />
 
-      <Dialog
-        open={pendingReceiptCreateDialog.open}
-        onClose={closePendingReceiptCreateDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Registrar unidades por recibir</DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert severity="info" variant="outlined">
-              Registrar unidades por recibir no modifica el stock físico ni crea
-              Kardex. El stock cambia solamente al confirmar la recepción
-              física.
-            </Alert>
-
-            <TextField
-              label="Producto"
-              value={
-                pendingReceiptCreateDialog.product
-                  ? `${pendingReceiptCreateDialog.product.categoria_name} — ${pendingReceiptCreateDialog.product.modelo}`
-                  : ""
-              }
-              fullWidth
-              disabled
-            />
-
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                label="Cantidad por recibir"
-                type="number"
-                value={pendingReceiptCreateDialog.cantidad}
-                onChange={(event) =>
-                  setPendingReceiptCreateDialog((current) => ({
-                    ...current,
-                    cantidad: event.target.value,
-                  }))
-                }
-                fullWidth
-                required
-              />
-
-              <TextField
-                label="Orden de compra / referencia"
-                value={pendingReceiptCreateDialog.referencia}
-                onChange={(event) =>
-                  setPendingReceiptCreateDialog((current) => ({
-                    ...current,
-                    referencia: event.target.value,
-                  }))
-                }
-                fullWidth
-                placeholder="Ej.: OC-2026-001"
-                helperText="Usa la OC o el identificador que explique el origen de este pendiente."
-              />
-            </Stack>
-
-            <TextField
-              label="Motivo"
-              value={pendingReceiptCreateDialog.motivo}
-              onChange={(event) =>
-                setPendingReceiptCreateDialog((current) => ({
-                  ...current,
-                  motivo: event.target.value,
-                }))
-              }
-              fullWidth
-              multiline
-              minRows={2}
-              helperText="Debe indicar una referencia o un motivo."
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={closePendingReceiptCreateDialog}>Cancelar</Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handleCreatePendingReceipt()}
-            disabled={
-              savingPendingReceipt ||
-              !pendingReceiptCreateDialog.product ||
-              parseInteger(pendingReceiptCreateDialog.cantidad) <= 0 ||
-              (!pendingReceiptCreateDialog.referencia.trim() &&
-                !pendingReceiptCreateDialog.motivo.trim())
-            }
-          >
-            {savingPendingReceipt ? "Registrando..." : "Registrar pendiente"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={pendingReceiptOperationDialog.open}
-        onClose={closePendingReceiptOperationDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          {pendingReceiptOperationDialog.mode === "RECIBIR"
-            ? "Recibir unidades pendientes"
-            : "Cancelar unidades pendientes"}
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert
-              severity={
-                pendingReceiptOperationDialog.mode === "RECIBIR"
-                  ? "success"
-                  : "warning"
-              }
-              variant="outlined"
-            >
-              {pendingReceiptOperationDialog.mode === "RECIBIR"
-                ? "Esta operación aumenta el stock físico y crea un movimiento Kardex auditado."
-                : "Esta operación no modifica el stock físico ni crea un movimiento Kardex."}
-            </Alert>
-
-            <TextField
-              label="Producto"
-              value={
-                pendingReceiptOperationDialog.pendingReceipt
-                  ? `${pendingReceiptOperationDialog.pendingReceipt.producto_categoria} — ${pendingReceiptOperationDialog.pendingReceipt.producto_modelo}`
-                  : ""
-              }
-              fullWidth
-              disabled
-            />
-
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                label="Pendiente disponible"
-                value={formatNumber(
-                  pendingReceiptOperationDialog.pendingReceipt
-                    ?.cantidad_pendiente ?? 0,
-                )}
-                fullWidth
-                disabled
-              />
-
-              <TextField
-                label={
-                  pendingReceiptOperationDialog.mode === "RECIBIR"
-                    ? "Cantidad a recibir"
-                    : "Cantidad a cancelar"
-                }
-                type="number"
-                value={pendingReceiptOperationDialog.cantidad}
-                onChange={(event) =>
-                  setPendingReceiptOperationDialog((current) => ({
-                    ...current,
-                    cantidad: event.target.value,
-                  }))
-                }
-                fullWidth
-                required
-              />
-            </Stack>
-
-            <TextField
-              label="Motivo"
-              value={pendingReceiptOperationDialog.motivo}
-              onChange={(event) =>
-                setPendingReceiptOperationDialog((current) => ({
-                  ...current,
-                  motivo: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-              multiline
-              minRows={2}
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={closePendingReceiptOperationDialog}>Cancelar</Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handlePendingReceiptOperation()}
-            disabled={
-              savingPendingReceipt ||
-              !pendingReceiptOperationDialog.pendingReceipt ||
-              parseInteger(pendingReceiptOperationDialog.cantidad) <= 0 ||
-              parseInteger(pendingReceiptOperationDialog.cantidad) >
-                (pendingReceiptOperationDialog.pendingReceipt
-                  ?.cantidad_pendiente ?? 0) ||
-              !pendingReceiptOperationDialog.motivo.trim()
-            }
-          >
-            {savingPendingReceipt
-              ? "Procesando..."
-              : pendingReceiptOperationDialog.mode === "RECIBIR"
-                ? "Confirmar recepción"
-                : "Confirmar cancelación"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <PendingReceiptDialogs
+        createOpen={pendingReceiptCreateDialog.open}
+        createProduct={pendingReceiptCreateDialog.product}
+        createCantidad={pendingReceiptCreateDialog.cantidad}
+        createReferencia={pendingReceiptCreateDialog.referencia}
+        createMotivo={pendingReceiptCreateDialog.motivo}
+        operationOpen={pendingReceiptOperationDialog.open}
+        operationMode={pendingReceiptOperationDialog.mode}
+        operationPendingReceipt={pendingReceiptOperationDialog.pendingReceipt}
+        operationCantidad={pendingReceiptOperationDialog.cantidad}
+        operationMotivo={pendingReceiptOperationDialog.motivo}
+        saving={savingPendingReceipt}
+        onCreateCantidadChange={(cantidad) =>
+          setPendingReceiptCreateDialog((current) => ({
+            ...current,
+            cantidad,
+          }))
+        }
+        onCreateReferenciaChange={(referencia) =>
+          setPendingReceiptCreateDialog((current) => ({
+            ...current,
+            referencia,
+          }))
+        }
+        onCreateMotivoChange={(motivo) =>
+          setPendingReceiptCreateDialog((current) => ({
+            ...current,
+            motivo,
+          }))
+        }
+        onCreateClose={closePendingReceiptCreateDialog}
+        onCreateConfirm={() => void handleCreatePendingReceipt()}
+        onOperationCantidadChange={(cantidad) =>
+          setPendingReceiptOperationDialog((current) => ({
+            ...current,
+            cantidad,
+          }))
+        }
+        onOperationMotivoChange={(motivo) =>
+          setPendingReceiptOperationDialog((current) => ({
+            ...current,
+            motivo,
+          }))
+        }
+        onOperationClose={closePendingReceiptOperationDialog}
+        onOperationConfirm={() => void handlePendingReceiptOperation()}
+      />
 
       <StockMovementDialog
         open={movementDialog.open}

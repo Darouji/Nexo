@@ -6,9 +6,11 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import type { GridColDef } from "@mui/x-data-grid";
 import type {
   Product,
+  ProductOrigin,
   ProductStockStatus,
 } from "../../../services/inventoryService";
 import { colors } from "../../../theme/colors";
+import { getProductOriginLabel } from "./productFormModel";
 
 type ProductCatalogColumnsOptions = {
   onOpenInventoryActionMenu: (
@@ -59,6 +61,22 @@ function getStockStatusLabel(status: ProductStockStatus) {
   return "No controla stock";
 }
 
+function getProductOriginColor(origin: ProductOrigin) {
+  if (origin === "COMPRADO") {
+    return colors.status.info;
+  }
+
+  if (origin === "FABRICADO") {
+    return colors.status.success;
+  }
+
+  if (origin === "SERVICIO") {
+    return colors.status.warning;
+  }
+
+  return colors.text.muted;
+}
+
 export function buildProductCatalogColumns({
   onOpenInventoryActionMenu,
   onOpenMoreActionMenu,
@@ -80,6 +98,29 @@ export function buildProductCatalogColumns({
       headerName: "Categoría",
       minWidth: 180,
       flex: 0.8,
+    },
+    {
+      field: "origen",
+      headerName: "Origen",
+      width: 135,
+      renderCell: (params) => {
+        const origin = String(params.value || "COMPRADO") as ProductOrigin;
+        const color = getProductOriginColor(origin);
+
+        return (
+          <Chip
+            label={getProductOriginLabel(origin)}
+            size="small"
+            sx={{
+              color,
+              bgcolor: colors.surface.soft,
+              borderColor: color,
+              border: "1px solid",
+              fontWeight: 800,
+            }}
+          />
+        );
+      },
     },
     {
       field: "codigo_sap",

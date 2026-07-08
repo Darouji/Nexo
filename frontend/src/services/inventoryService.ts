@@ -213,6 +213,11 @@ export type KardexListParams = {
   fecha_hasta?: string;
 };
 
+export type KardexPageParams = KardexListParams & {
+  page?: number;
+  page_size?: number;
+};
+
 export type PendingReceiptListParams = {
   producto?: CsvParam<number>;
   estado?: CsvParam<PendingReceiptStatus>;
@@ -678,6 +683,25 @@ export async function fetchKardexMovements(params: KardexListParams = {}) {
   });
 
   return extractResults(response.data);
+}
+
+export async function fetchKardexMovementsPage(params: KardexPageParams = {}) {
+  const response = await api.get<KardexListResponse>("/inventory/kardex/", {
+    params: {
+      producto: toCsv(params.producto),
+      movement_type: toCsv(params.movement_type),
+      origin: toCsv(params.origin),
+      status: toCsv(params.status),
+      search: params.search?.trim() || undefined,
+      ordering: params.ordering || "-created_at",
+      fecha_desde: params.fecha_desde || undefined,
+      fecha_hasta: params.fecha_hasta || undefined,
+      page: params.page,
+      page_size: params.page_size,
+    },
+  });
+
+  return toPaginatedResponse(response.data);
 }
 
 export async function fetchPendingReceipts(

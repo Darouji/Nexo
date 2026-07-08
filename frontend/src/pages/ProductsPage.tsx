@@ -65,7 +65,7 @@ import {
   createProduct,
   fetchCategories,
   fetchInventorySummary,
-  fetchKardexMovements,
+  fetchKardexMovementsPage,
   fetchProductsPage,
   fetchPendingReceiptsPage,
   receivePendingReceipt,
@@ -100,6 +100,8 @@ type KardexDialogState = {
   open: boolean;
   product: Product | null;
   movements: KardexMovement[];
+  rowCount: number;
+  paginationModel: GridPaginationModel;
   loading: boolean;
 };
 
@@ -156,10 +158,17 @@ const emptyMovementDialog: MovementDialogState = {
   motivo: "",
 };
 
+const defaultKardexPaginationModel: GridPaginationModel = {
+  page: 0,
+  pageSize: 10,
+};
+
 const emptyKardexDialog: KardexDialogState = {
   open: false,
   product: null,
   movements: [],
+  rowCount: 0,
+  paginationModel: defaultKardexPaginationModel,
   loading: false,
 };
 
@@ -350,6 +359,9 @@ export function ProductsPage() {
   >([]);
   const [globalKardexLoading, setGlobalKardexLoading] = useState(false);
   const [hasLoadedGlobalKardex, setHasLoadedGlobalKardex] = useState(false);
+  const [globalKardexRowCount, setGlobalKardexRowCount] = useState(0);
+  const [globalKardexPaginationModel, setGlobalKardexPaginationModel] =
+    useState<GridPaginationModel>(defaultKardexPaginationModel);
   const [globalKardexSearchTerm, setGlobalKardexSearchTerm] = useState("");
   const [globalKardexMovementType, setGlobalKardexMovementType] = useState("");
   const [globalKardexOrigin, setGlobalKardexOrigin] = useState<
@@ -396,6 +408,15 @@ export function ProductsPage() {
   type PendingReceiptFilterOverrides = {
     search?: string;
     status?: PendingReceiptStatus | "";
+    page?: number;
+    pageSize?: number;
+  };
+
+  type KardexFilterOverrides = {
+    search?: string;
+    movementType?: string;
+    origin?: AuditOrigin | "";
+    product?: number;
     page?: number;
     pageSize?: number;
   };
@@ -499,29 +520,30 @@ export function ProductsPage() {
     });
   };
 
-  const loadGlobalKardex = async (
-    filters: {
-      search?: string;
-      movementType?: string;
-      origin?: AuditOrigin | "";
-    } = {},
-  ) => {
-    const search = filters.search ?? globalKardexSearchTerm;
-    const movementType = filters.movementType ?? globalKardexMovementType;
-    const origin = filters.origin ?? globalKardexOrigin;
+  const loadGlobalKardex = async (filters: KardexFilterOverrides = {}) => {
+    const resolvedSearch = filters.search ?? globalKardexSearchTerm;
+    const resolvedMovementType =
+      filters.movementType ?? globalKardexMovementType;
+    const resolvedOrigin = filters.origin ?? globalKardexOrigin;
+    const resolvedPage = filters.page ?? globalKardexPaginationModel.page;
+    const resolvedPageSize =
+      filters.pageSize ?? globalKardexPaginationModel.pageSize;
 
     try {
       setGlobalKardexLoading(true);
       setErrorMessage("");
 
-      const movements = await fetchKardexMovements({
-        search,
-        movement_type: movementType,
-        origin: origin || undefined,
+      const movementsPage = await fetchKardexMovementsPage({
+        search: resolvedSearch,
+        movement_type: resolvedMovementType || undefined,
+        origin: resolvedOrigin || undefined,
         ordering: "-created_at",
+        page: resolvedPage + 1,
+        page_size: resolvedPageSize,
       });
 
-      setGlobalKardexMovements(movements);
+      setGlobalKardexMovements(movementsPage.results);
+      setGlobalKardexRowCount(movementsPage.count);
       setHasLoadedGlobalKardex(true);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
@@ -536,6 +558,51 @@ export function ProductsPage() {
     }
 
     await loadGlobalKardex();
+  };
+
+  const handleGlobalKardexPaginationModelChange = (
+    nextPaginationModel: GridPaginationModel,
+  ) => {
+    setGlobalKardexPaginationModel(nextPaginationModel);
+
+    void loadGlobalKardex({
+      page: nextPaginationModel.page,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handleSearchGlobalKardex = () => {
+    const nextPaginationModel = {
+      ...globalKardexPaginationModel,
+      page: 0,
+    };
+
+    setGlobalKardexPaginationModel(nextPaginationModel);
+
+    void loadGlobalKardex({
+      page: 0,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handleClearGlobalKardexFilters = () => {
+    const nextPaginationModel = {
+      ...globalKardexPaginationModel,
+      page: 0,
+    };
+
+    setGlobalKardexSearchTerm("");
+    setGlobalKardexMovementType("");
+    setGlobalKardexOrigin("");
+    setGlobalKardexPaginationModel(nextPaginationModel);
+
+    void loadGlobalKardex({
+      search: "",
+      movementType: "",
+      origin: "",
+      page: 0,
+      pageSize: nextPaginationModel.pageSize,
+    });
   };
 
   const loadPendingReceipts = async (
@@ -588,8 +655,10 @@ export function ProductsPage() {
     setPendingReceiptPaginationModel(nextPaginationModel);
 
     void loadPendingReceipts({
-      page: pendingReceiptPaginationModel.page,
-      pageSize: pendingReceiptPaginationModel.pageSize,
+      search: pendingReceiptSearchTerm,
+      status: pendingReceiptStatusFilter,
+      page: 0,
+      pageSize: nextPaginationModel.pageSize,
     });
   };
 
@@ -1091,37 +1160,72 @@ export function ProductsPage() {
     setMovementDialog(emptyMovementDialog);
   };
 
-  const openKardexDialog = async (product: Product) => {
-    setKardexDialog({
+  const loadProductKardexPage = async (
+    product: Product,
+    paginationModel: GridPaginationModel = defaultKardexPaginationModel,
+  ) => {
+    setKardexDialog((current) => ({
+      ...current,
       open: true,
       product,
-      movements: [],
+      paginationModel,
       loading: true,
-    });
-    setErrorMessage("");
-    setSuccessMessage("");
+    }));
 
     try {
-      const movements = await fetchKardexMovements({
+      const movementsPage = await fetchKardexMovementsPage({
         producto: product.id,
         ordering: "-created_at",
+        page: paginationModel.page + 1,
+        page_size: paginationModel.pageSize,
       });
 
-      setKardexDialog({
+      setKardexDialog((current) => ({
+        ...current,
         open: true,
         product,
-        movements,
+        movements: movementsPage.results,
+        rowCount: movementsPage.count,
+        paginationModel,
         loading: false,
-      });
+      }));
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
-      setKardexDialog({
+
+      setKardexDialog((current) => ({
+        ...current,
         open: true,
         product,
         movements: [],
+        rowCount: 0,
+        paginationModel,
         loading: false,
-      });
+      }));
     }
+  };
+
+  const openKardexDialog = (product: Product) => {
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    void loadProductKardexPage(product, defaultKardexPaginationModel);
+  };
+
+  const handleProductKardexPaginationModelChange = (
+    nextPaginationModel: GridPaginationModel,
+  ) => {
+    const product = kardexDialog.product;
+
+    if (!product) {
+      return;
+    }
+
+    setKardexDialog((current) => ({
+      ...current,
+      paginationModel: nextPaginationModel,
+    }));
+
+    void loadProductKardexPage(product, nextPaginationModel);
   };
 
   const closeKardexDialog = () => {
@@ -1902,7 +2006,7 @@ export function ProductsPage() {
 
             <Button
               variant="outlined"
-              onClick={handleClearPendingReceiptFilters}
+              onClick={handleClearGlobalKardexFilters}
               disabled={pendingReceiptsLoading}
               sx={{
                 minWidth: { xs: "100%", lg: 120 },
@@ -1937,7 +2041,7 @@ export function ProductsPage() {
           <Button
             variant={hasLoadedGlobalKardex ? "outlined" : "contained"}
             startIcon={<HistoryIcon />}
-            onClick={() => void loadGlobalKardex()}
+            onClick={handleSearchGlobalKardex}
             disabled={globalKardexLoading}
             sx={
               hasLoadedGlobalKardex
@@ -1967,7 +2071,7 @@ export function ProductsPage() {
             <Button
               variant="contained"
               startIcon={<HistoryIcon />}
-              onClick={() => void loadGlobalKardex()}
+              onClick={handleSearchGlobalKardex}
               disabled={globalKardexLoading}
             >
               {globalKardexLoading
@@ -1990,7 +2094,7 @@ export function ProductsPage() {
                 }
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
-                    void loadGlobalKardex();
+                    handleSearchGlobalKardex();
                   }
                 }}
                 fullWidth
@@ -2062,7 +2166,7 @@ export function ProductsPage() {
 
               <Button
                 variant="contained"
-                onClick={() => void loadGlobalKardex()}
+                onClick={handleSearchGlobalKardex}
                 disabled={globalKardexLoading}
                 sx={{ minWidth: { xs: "100%", lg: 140 } }}
               >
@@ -2097,6 +2201,14 @@ export function ProductsPage() {
               rows={globalKardexMovements}
               columns={kardexColumns}
               loading={globalKardexLoading}
+              paginationMode="server"
+              paginationModel={globalKardexPaginationModel}
+              onPaginationModelChange={handleGlobalKardexPaginationModelChange}
+              rowCount={globalKardexRowCount}
+              rowNumberOffset={
+                globalKardexPaginationModel.page *
+                globalKardexPaginationModel.pageSize
+              }
             />
           </>
         )}
@@ -2428,6 +2540,14 @@ export function ProductsPage() {
               rows={kardexDialog.movements}
               columns={kardexColumns}
               loading={kardexDialog.loading}
+              paginationMode="server"
+              paginationModel={kardexDialog.paginationModel}
+              onPaginationModelChange={handleProductKardexPaginationModelChange}
+              rowCount={kardexDialog.rowCount}
+              rowNumberOffset={
+                kardexDialog.paginationModel.page *
+                kardexDialog.paginationModel.pageSize
+              }
             />
           </Stack>
         </DialogContent>

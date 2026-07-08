@@ -26,7 +26,6 @@ import { StockMovementDialog } from "../features/inventory/components/StockMovem
 import {
   formatNumber,
   parseInteger,
-  parseOptionalBoolean,
 } from "../features/inventory/utils/inventoryFormatters";
 import {
   cancelPendingReceipt,
@@ -45,6 +44,11 @@ import {
   registerManualStockEntry,
   updateProduct,
 } from "../services/inventoryService";
+import {
+  buildKardexMovementPageParams,
+  buildPendingReceiptPageParams,
+  buildProductPageParams,
+} from "../features/inventory/utils/inventoryQueryParams";
 
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import type {
@@ -56,7 +60,6 @@ import type {
   PendingReceiptStatus,
   Product,
   ProductLifecycleAction,
-  ProductListParams,
   ProductStockStatus,
 } from "../services/inventoryService";
 
@@ -191,38 +194,20 @@ export function ProductsPage() {
   const loadProducts = async (
     searchOrFilters: string | ProductFilterOverrides = searchTerm,
   ) => {
-    const filters =
-      typeof searchOrFilters === "string"
-        ? { search: searchOrFilters }
-        : searchOrFilters;
-
-    const resolvedSearch = filters.search ?? searchTerm;
-    const resolvedCategory = filters.category ?? categoryFilter;
-    const resolvedStatus = filters.status ?? statusFilter;
-    const resolvedStockControl = filters.stockControl ?? stockControlFilter;
-    const resolvedStockStatus = filters.stockStatus ?? stockStatusFilter;
-    const resolvedPage = filters.page ?? productPaginationModel.page;
-    const resolvedPageSize =
-      filters.pageSize ?? productPaginationModel.pageSize;
-
-    const params: ProductListParams = {
-      search: resolvedSearch,
-      ordering: "categoria__name,modelo",
-      categoria: resolvedCategory ? Number(resolvedCategory) : undefined,
-      status: resolvedStatus || undefined,
-      controla_stock: parseOptionalBoolean(resolvedStockControl),
-      stock_status: resolvedStockStatus || undefined,
-    };
-
     try {
       setLoading(true);
       setErrorMessage("");
 
-      const data = await fetchProductsPage({
-        ...params,
-        page: resolvedPage + 1,
-        page_size: resolvedPageSize,
-      });
+      const data = await fetchProductsPage(
+        buildProductPageParams(searchOrFilters, {
+          searchTerm,
+          categoryFilter,
+          statusFilter,
+          stockControlFilter,
+          stockStatusFilter,
+          paginationModel: productPaginationModel,
+        }),
+      );
 
       setProductos(data.results);
       setProductRowCount(data.count);
@@ -288,26 +273,18 @@ export function ProductsPage() {
   };
 
   const loadGlobalKardex = async (filters: KardexFilterOverrides = {}) => {
-    const resolvedSearch = filters.search ?? globalKardexSearchTerm;
-    const resolvedMovementType =
-      filters.movementType ?? globalKardexMovementType;
-    const resolvedOrigin = filters.origin ?? globalKardexOrigin;
-    const resolvedPage = filters.page ?? globalKardexPaginationModel.page;
-    const resolvedPageSize =
-      filters.pageSize ?? globalKardexPaginationModel.pageSize;
-
     try {
       setGlobalKardexLoading(true);
       setErrorMessage("");
 
-      const movementsPage = await fetchKardexMovementsPage({
-        search: resolvedSearch,
-        movement_type: resolvedMovementType || undefined,
-        origin: resolvedOrigin || undefined,
-        ordering: "-created_at",
-        page: resolvedPage + 1,
-        page_size: resolvedPageSize,
-      });
+      const movementsPage = await fetchKardexMovementsPage(
+        buildKardexMovementPageParams(filters, {
+          searchTerm: globalKardexSearchTerm,
+          movementType: globalKardexMovementType,
+          origin: globalKardexOrigin,
+          paginationModel: globalKardexPaginationModel,
+        }),
+      );
 
       setGlobalKardexMovements(movementsPage.results);
       setGlobalKardexRowCount(movementsPage.count);
@@ -375,23 +352,17 @@ export function ProductsPage() {
   const loadPendingReceipts = async (
     filters: PendingReceiptFilterOverrides = {},
   ) => {
-    const resolvedSearch = filters.search ?? pendingReceiptSearchTerm;
-    const resolvedStatus = filters.status ?? pendingReceiptStatusFilter;
-    const resolvedPage = filters.page ?? pendingReceiptPaginationModel.page;
-    const resolvedPageSize =
-      filters.pageSize ?? pendingReceiptPaginationModel.pageSize;
-
     try {
       setPendingReceiptsLoading(true);
       setErrorMessage("");
 
-      const pendingReceiptsPage = await fetchPendingReceiptsPage({
-        ordering: "-created_at",
-        search: resolvedSearch,
-        estado: resolvedStatus || undefined,
-        page: resolvedPage + 1,
-        page_size: resolvedPageSize,
-      });
+      const pendingReceiptsPage = await fetchPendingReceiptsPage(
+        buildPendingReceiptPageParams(filters, {
+          searchTerm: pendingReceiptSearchTerm,
+          statusFilter: pendingReceiptStatusFilter,
+          paginationModel: pendingReceiptPaginationModel,
+        }),
+      );
 
       setPendingReceipts(pendingReceiptsPage.results);
       setPendingReceiptRowCount(pendingReceiptsPage.count);

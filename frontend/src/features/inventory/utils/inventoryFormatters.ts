@@ -5,6 +5,8 @@ const chileanDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
   timeStyle: "short",
 });
 
+const integerPattern = /^-?\d+$/;
+
 export function formatNumber(value: number) {
   return chileanNumberFormatter.format(value);
 }
@@ -23,10 +25,20 @@ export function formatDateTime(value: string) {
   return chileanDateTimeFormatter.format(date);
 }
 
-export function parseInteger(value: string, fallback = 0) {
-  const parsed = Number.parseInt(value, 10);
+export function isIntegerInput(value: string) {
+  return integerPattern.test(value.trim());
+}
 
-  if (Number.isNaN(parsed)) {
+export function parseInteger(value: string, fallback = 0) {
+  const normalizedValue = value.trim();
+
+  if (!isIntegerInput(normalizedValue)) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(normalizedValue, 10);
+
+  if (!Number.isSafeInteger(parsed)) {
     return fallback;
   }
 

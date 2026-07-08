@@ -53,6 +53,7 @@ import { InventoryCatalogSection } from "../features/inventory/components/Invent
 import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { ProductKardexDialog } from "../features/inventory/components/ProductKardexDialog";
+import { ProductLifecycleDialog } from "../features/inventory/components/ProductLifecycleDialog";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -897,18 +898,6 @@ export function ProductsPage() {
     }
 
     setProductLifecycleDialog(emptyProductLifecycleDialog);
-  };
-
-  const getProductLifecycleActionLabel = (action: ProductLifecycleAction) => {
-    const labels: Record<ProductLifecycleAction, string> = {
-      INACTIVAR: "Inactivar",
-      ARCHIVAR: "Archivar",
-      REACTIVAR: "Reactivar",
-      DESCONTINUAR: "Descontinuar",
-      REANUDAR: "Reanudar",
-    };
-
-    return labels[action];
   };
 
   const getProductLifecycleSuccessLabel = (action: ProductLifecycleAction) => {
@@ -2284,95 +2273,21 @@ export function ProductsPage() {
         onClose={closeKardexDialog}
       />
 
-      <Dialog
+      <ProductLifecycleDialog
         open={productLifecycleDialog.open}
+        product={productLifecycleDialog.product}
+        action={productLifecycleDialog.action}
+        motivo={productLifecycleDialog.motivo}
+        saving={savingProductLifecycle}
+        onMotivoChange={(motivo) =>
+          setProductLifecycleDialog((current) => ({
+            ...current,
+            motivo,
+          }))
+        }
         onClose={closeProductLifecycleDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          {productLifecycleDialog.action
-            ? getProductLifecycleActionLabel(productLifecycleDialog.action)
-            : "Gestionar producto"}
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert
-              severity={
-                productLifecycleDialog.action === "ARCHIVAR" ||
-                productLifecycleDialog.action === "INACTIVAR"
-                  ? "warning"
-                  : "info"
-              }
-              variant="outlined"
-            >
-              {productLifecycleDialog.action === "DESCONTINUAR"
-                ? "El producto dejará de aceptar nuevas entradas manuales, importaciones y nuevas unidades por recibir. Su Kardex e historial se conservarán."
-                : productLifecycleDialog.action === "REANUDAR"
-                  ? "El producto volverá a estar disponible para nuevas operaciones de inventario."
-                  : productLifecycleDialog.action === "INACTIVAR"
-                    ? "El producto dejará de estar disponible para operaciones. Solo puede inactivarse sin stock físico ni unidades pendientes."
-                    : productLifecycleDialog.action === "ARCHIVAR"
-                      ? "El producto quedará fuera del catálogo operativo, manteniendo su historial disponible para auditoría."
-                      : "El producto volverá a estar activo y disponible para operaciones de inventario."}
-            </Alert>
-
-            <TextField
-              label="Producto"
-              value={
-                productLifecycleDialog.product
-                  ? `${productLifecycleDialog.product.categoria_name} — ${productLifecycleDialog.product.modelo}`
-                  : ""
-              }
-              fullWidth
-              disabled
-            />
-
-            <TextField
-              label="Motivo"
-              value={productLifecycleDialog.motivo}
-              onChange={(event) =>
-                setProductLifecycleDialog((current) => ({
-                  ...current,
-                  motivo: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-              multiline
-              minRows={3}
-              helperText="Este motivo quedará asociado a la auditoría del producto."
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button
-            onClick={closeProductLifecycleDialog}
-            disabled={savingProductLifecycle}
-          >
-            Cancelar
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handleProductLifecycle()}
-            disabled={
-              savingProductLifecycle ||
-              !productLifecycleDialog.product ||
-              !productLifecycleDialog.action ||
-              !productLifecycleDialog.motivo.trim()
-            }
-          >
-            {savingProductLifecycle
-              ? "Procesando..."
-              : productLifecycleDialog.action
-                ? getProductLifecycleActionLabel(productLifecycleDialog.action)
-                : "Confirmar"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={() => void handleProductLifecycle()}
+      />
 
       <Dialog
         open={productOriginDialog.open}

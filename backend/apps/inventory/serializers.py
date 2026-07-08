@@ -521,6 +521,23 @@ class ProductoLifecycleActionSerializer(serializers.Serializer):
         return value
 
 
+class ProductoCategoriaChangeSerializer(serializers.Serializer):
+    categoria_destino = serializers.PrimaryKeyRelatedField(
+        queryset=Categoria.objects.all(),
+    )
+    motivo = serializers.CharField(max_length=255)
+
+    def validate_motivo(self, value):
+        value = str(value or "").strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "El motivo del cambio de categoría es obligatorio."
+            )
+
+        return value
+
+
 class ProductoOrigenChangeSerializer(serializers.Serializer):
     origen = serializers.ChoiceField(
         choices=ProductOrigin.choices,

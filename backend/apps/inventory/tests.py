@@ -1140,6 +1140,114 @@ class ProductCreationAndOriginApiTests(TestCase):
         self.assertTrue(product.controla_stock)
         self.assertEqual(product.stock_actual, 3)
 
+    def test_direct_category_patch_is_rejected_and_controlled_change_is_audited(self):
+        destination_category = Categoria.objects.create(
+            name="Categoría destino controlada",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto reclasificable",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        direct_patch = self.client.patch(
+            f"/api/inventory/productos/{product.pk}/",
+            {
+                "categoria": destination_category.pk,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            direct_patch.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        controlled_change = self.client.post(
+            f"/api/inventory/productos/{product.pk}/cambiar-categoria/",
+            {
+                "categoria_destino": destination_category.pk,
+                "motivo": "Se corrigió la clasificación del producto.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            controlled_change.status_code,
+            status.HTTP_200_OK,
+        )
+
+        product.refresh_from_db()
+
+        self.assertEqual(product.categoria_id, destination_category.pk)
+
+        self.assertTrue(
+            RecordChangeLog.objects.filter(
+                object_id=str(product.pk),
+                action=AuditAction.EDITAR,
+                field_name="categoria",
+                reason="Se corrigió la clasificación del producto.",
+            ).exists()
+        )
+
+        self.assertTrue(
+            AuditLog.objects.filter(
+                object_id=str(product.pk),
+                action=AuditAction.EDITAR,
+                reason="Se corrigió la clasificación del producto.",
+            ).exists()
+        )
+
+
+def test_controlled_category_change_rejects_duplicate_model_in_destination(self):
+    destination_category = Categoria.objects.create(
+        name="Categoría con modelo existente",
+        created_by=self.admin,
+        updated_by=self.admin,
+    )
+
+    Producto.objects.create(
+        categoria=destination_category,
+        modelo="Producto duplicado por modelo",
+        origen=ProductOrigin.COMPRADO,
+        controla_stock=True,
+        created_by=self.admin,
+        updated_by=self.admin,
+    )
+
+    product = Producto.objects.create(
+        categoria=self.category,
+        modelo="Producto duplicado por modelo",
+        origen=ProductOrigin.COMPRADO,
+        controla_stock=True,
+        created_by=self.admin,
+        updated_by=self.admin,
+    )
+
+    response = self.client.post(
+        f"/api/inventory/productos/{product.pk}/cambiar-categoria/",
+        {
+            "categoria_destino": destination_category.pk,
+            "motivo": "Intento de reclasificación con modelo duplicado.",
+        },
+        format="json",
+    )
+
+    self.assertEqual(
+        response.status_code,
+        status.HTTP_400_BAD_REQUEST,
+    )
+
+    product.refresh_from_db()
+
+    self.assertEqual(product.categoria_id, self.category.pk)
+
 
 class KardexImmutabilityTests(TestCase):
     def setUp(self):

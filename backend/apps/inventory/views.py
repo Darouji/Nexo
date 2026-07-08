@@ -47,12 +47,14 @@ from .serializers import (
     MovimientoKardexSerializer,
     OperacionPendientePorRecibirSerializer,
     PendientePorRecibirSerializer,
+    ProductoCategoriaChangeSerializer,
     ProductoLifecycleActionSerializer,
     ProductoOrigenChangeSerializer,
     ProductoSerializer,
 )
 from .services import (
     cancel_pending_receipt,
+    change_product_category,
     change_product_lifecycle,
     change_product_origin,
     create_pending_receipt,
@@ -592,6 +594,35 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         django_request.audit_metadata = {
             "lifecycle_action": serializer.validated_data["accion"],
         }
+
+        return Response(
+            ProductoSerializer(
+                updated_product,
+                context={"request": request},
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="cambiar-categoria")
+    def cambiar_categoria(self, request, pk=None):
+        producto = self.get_object()
+
+        serializer = ProductoCategoriaChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_product = change_product_category(
+                producto=producto,
+                categoria_destino=serializer.validated_data["categoria_destino"],
+                motivo=serializer.validated_data["motivo"],
+                user=request.user,
+                request=getattr(request, "_request", request),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        django_request = getattr(request, "_request", request)
+        django_request.skip_activity_audit = True
 
         return Response(
             ProductoSerializer(

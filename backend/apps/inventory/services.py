@@ -78,6 +78,11 @@ CATEGORY_PRODUCT_MERGE_AUDIT_FIELDS = [
     "updated_by",
 ]
 
+PRODUCT_CATEGORY_CHANGE_AUDIT_FIELDS = [
+    "categoria",
+    "updated_by",
+]
+
 PRODUCT_ORIGIN_AUDIT_FIELDS = [
     "origen",
     "origen_observacion",
@@ -708,6 +713,135 @@ def create_product_with_category(
         )
 
     return product
+
+
+def change_product_category(
+    *,
+    producto,
+    categoria_destino,
+    motivo="",
+    user=None,
+    request=None,
+):
+    if producto is None:
+        raise ValidationError({"producto": "El producto es obligatorio."})
+
+    if categoria_destino is None:
+        raise ValidationError(
+            {"categoria_destino": "La categoría destino es obligatoria."}
+        )
+
+    motivo = _require_category_reason(motivo)
+    operator = get_operator(user)
+
+    with transaction.atomic():
+        locked_product = (
+            Producto.objects.select_for_update()
+            .select_related("categoria")
+            .get(pk=producto.pk)
+        )
+
+        locked_destination_category = Categoria.objects.select_for_update().get(
+            pk=categoria_destino.pk
+        )
+
+        _require_available_category(
+            locked_destination_category,
+            "categoria_destino",
+        )
+
+        if locked_product.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {
+                    "status": (
+                        "Debe reactivar el producto antes de cambiar su categoría."
+                    )
+                }
+            )
+
+        if locked_product.categoria_id == locked_destination_category.pk:
+            raise ValidationError(
+                {
+                    "categoria_destino": (
+                        "El producto ya pertenece a la categoría indicada."
+                    )
+                }
+            )
+
+        duplicate_model_exists = (
+            Producto.objects.select_for_update()
+            .exclude(pk=locked_product.pk)
+            .filter(
+                categoria=locked_destination_category,
+                modelo_normalized=locked_product.modelo_normalized,
+            )
+            .exists()
+        )
+
+        if locked_product.modelo_normalized and duplicate_model_exists:
+            raise ValidationError(
+                {
+                    "modelo": (
+                        "Ya existe un producto con el mismo modelo en la categoría "
+                        "destino. No se puede reclasificar porque generaría un "
+                        "duplicado dentro de esa categoría."
+                    )
+                }
+            )
+
+        previous_category = locked_product.categoria
+
+        old_values = capture_field_values(
+            locked_product,
+            PRODUCT_CATEGORY_CHANGE_AUDIT_FIELDS,
+        )
+
+        locked_product.categoria = locked_destination_category
+        locked_product.updated_by = operator
+
+        locked_product.save(
+            update_fields=[
+                "categoria",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        Categoria.objects.filter(
+            pk__in=[
+                previous_category.pk,
+                locked_destination_category.pk,
+            ],
+            has_historical_usage=False,
+        ).update(has_historical_usage=True)
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_product,
+            old_values=old_values,
+            fields=PRODUCT_CATEGORY_CHANGE_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            action=AuditAction.EDITAR,
+        )
+
+        create_business_audit_log(
+            instance=locked_product,
+            action=AuditAction.EDITAR,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "product_category_change",
+                "previous_category_id": previous_category.pk,
+                "previous_category_name": previous_category.name,
+                "new_category_id": locked_destination_category.pk,
+                "new_category_name": locked_destination_category.name,
+            },
+            request=request,
+        )
+
+    return locked_product
 
 
 def change_product_origin(

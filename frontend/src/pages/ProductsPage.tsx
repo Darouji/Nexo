@@ -45,7 +45,6 @@ import {
   emptyProductForm,
   findCategoryByInputName,
   getProductOriginLabel,
-  productOriginLabels,
   type ProductFormState,
 } from "../features/inventory/products/productFormModel";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
@@ -56,6 +55,7 @@ import { ProductKardexDialog } from "../features/inventory/components/ProductKar
 import { ProductLifecycleDialog } from "../features/inventory/components/ProductLifecycleDialog";
 import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
 import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
+import { ProductOriginChangeDialog } from "../features/inventory/components/ProductOriginChangeDialog";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -211,16 +211,6 @@ const emptyProductCategoryDialog: ProductCategoryDialogState = {
   destinationCategory: null,
   motivo: "",
 };
-
-const productOriginOptions: Array<{
-  value: ProductOrigin;
-  label: string;
-}> = [
-  { value: "COMPRADO", label: productOriginLabels.COMPRADO },
-  { value: "FABRICADO", label: productOriginLabels.FABRICADO },
-  { value: "SERVICIO", label: productOriginLabels.SERVICIO },
-  { value: "OTRO", label: productOriginLabels.OTRO },
-];
 
 const emptyProductActionMenu: ProductActionMenuState = {
   anchorEl: null,
@@ -2077,132 +2067,36 @@ export function ProductsPage() {
         onConfirm={() => void handleProductLifecycle()}
       />
 
-      <Dialog
+      <ProductOriginChangeDialog
         open={productOriginDialog.open}
+        product={productOriginDialog.product}
+        origin={productOriginDialog.origen}
+        originObservation={productOriginDialog.origen_observacion}
+        motivo={productOriginDialog.motivo}
+        saving={savingProductOrigin}
+        onOriginChange={(origen) =>
+          setProductOriginDialog((current) => ({
+            ...current,
+            origen,
+            origen_observacion:
+              origen === "OTRO" ? current.origen_observacion : "",
+          }))
+        }
+        onOriginObservationChange={(origen_observacion) =>
+          setProductOriginDialog((current) => ({
+            ...current,
+            origen_observacion,
+          }))
+        }
+        onMotivoChange={(motivo) =>
+          setProductOriginDialog((current) => ({
+            ...current,
+            motivo,
+          }))
+        }
         onClose={closeProductOriginDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Cambiar origen del producto</DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert severity="info" variant="outlined">
-              Esta acción cambia el origen del producto y queda registrada en
-              auditoría. No modifica el Kardex histórico ni borra movimientos.
-            </Alert>
-
-            <TextField
-              label="Producto"
-              value={
-                productOriginDialog.product
-                  ? `${productOriginDialog.product.categoria_name} — ${productOriginDialog.product.modelo}`
-                  : ""
-              }
-              fullWidth
-              disabled
-            />
-
-            <TextField
-              label="Origen actual"
-              value={
-                productOriginDialog.product
-                  ? getProductOriginLabel(productOriginDialog.product.origen)
-                  : ""
-              }
-              fullWidth
-              disabled
-            />
-
-            <TextField
-              select
-              label="Nuevo origen"
-              value={productOriginDialog.origen}
-              onChange={(event) => {
-                const nextOrigin = event.target.value as ProductOrigin;
-
-                setProductOriginDialog((current) => ({
-                  ...current,
-                  origen: nextOrigin,
-                  origen_observacion:
-                    nextOrigin === "OTRO" ? current.origen_observacion : "",
-                }));
-              }}
-              fullWidth
-              required
-            >
-              {productOriginOptions.map((option) => (
-                <MenuItem key={option.value} value={option.value}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            {productOriginDialog.origen === "SERVICIO" ? (
-              <Alert severity="warning" variant="outlined">
-                Un servicio no puede manejar stock físico, stock mínimo, Kardex
-                ni pendientes por recibir. El backend bloqueará el cambio si el
-                producto ya tiene historial incompatible.
-              </Alert>
-            ) : null}
-
-            {productOriginDialog.origen === "OTRO" ? (
-              <TextField
-                label="Detalle del origen"
-                value={productOriginDialog.origen_observacion}
-                onChange={(event) =>
-                  setProductOriginDialog((current) => ({
-                    ...current,
-                    origen_observacion: event.target.value,
-                  }))
-                }
-                fullWidth
-                required
-                helperText="Explique por qué este producto no corresponde a Comprado, Fabricado o Servicio."
-              />
-            ) : null}
-
-            <TextField
-              label="Motivo del cambio"
-              value={productOriginDialog.motivo}
-              onChange={(event) =>
-                setProductOriginDialog((current) => ({
-                  ...current,
-                  motivo: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-              multiline
-              minRows={3}
-              helperText="Este motivo quedará asociado a la auditoría del producto."
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button
-            onClick={closeProductOriginDialog}
-            disabled={savingProductOrigin}
-          >
-            Cancelar
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handleProductOriginChange()}
-            disabled={
-              savingProductOrigin ||
-              !productOriginDialog.product ||
-              !productOriginDialog.motivo.trim() ||
-              (productOriginDialog.origen === "OTRO" &&
-                !productOriginDialog.origen_observacion.trim())
-            }
-          >
-            {savingProductOrigin ? "Guardando..." : "Cambiar origen"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={() => void handleProductOriginChange()}
+      />
 
       <Dialog
         open={productCategoryDialog.open}

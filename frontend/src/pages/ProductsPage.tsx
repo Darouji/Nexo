@@ -1,3 +1,33 @@
+import AddIcon from "@mui/icons-material/Add";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+
+import { Alert, Box, Button } from "@mui/material";
+import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
+import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipts/pendingReceiptColumns";
+import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
+import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
+import { colors } from "../theme/colors";
+import { getApiErrorMessage as getErrorMessage } from "../services/api";
+import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
+import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
+import { PageHeader } from "../components/PageHeader";
+import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
+import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
+import { ProductDialog } from "../features/inventory/products/ProductDialog";
+import { ProductKardexDialog } from "../features/inventory/components/ProductKardexDialog";
+import { ProductLifecycleDialog } from "../features/inventory/components/ProductLifecycleDialog";
+import { ProductOriginChangeDialog } from "../features/inventory/components/ProductOriginChangeDialog";
+import { ProductCategoryChangeDialog } from "../features/inventory/components/ProductCategoryChangeDialog";
+import { ProductActionMenus } from "../features/inventory/components/ProductActionMenus";
+import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
+import {
+  formatNumber,
+  parseInteger,
+  parseOptionalBoolean,
+} from "../features/inventory/utils/inventoryFormatters";
+
+import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import {
   useCallback,
   useEffect,
@@ -6,39 +36,35 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { Alert, Box, Button } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import Inventory2Icon from "@mui/icons-material/Inventory2";
-import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
-import { PageHeader } from "../components/PageHeader";
-import { ProductDialog } from "../features/inventory/products/ProductDialog";
 import {
   emptyProductForm,
   findCategoryByInputName,
   getProductOriginLabel,
   type ProductFormState,
 } from "../features/inventory/products/productFormModel";
-import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
-import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
-import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
-import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
-import { ProductKardexDialog } from "../features/inventory/components/ProductKardexDialog";
-import { ProductLifecycleDialog } from "../features/inventory/components/ProductLifecycleDialog";
-import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
-import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
-import { ProductOriginChangeDialog } from "../features/inventory/components/ProductOriginChangeDialog";
-import { ProductCategoryChangeDialog } from "../features/inventory/components/ProductCategoryChangeDialog";
-import { ProductActionMenus } from "../features/inventory/components/ProductActionMenus";
-import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
-import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipts/pendingReceiptColumns";
-import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
-import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
-  formatNumber,
-  parseInteger,
-  parseOptionalBoolean,
-} from "../features/inventory/utils/inventoryFormatters";
+  defaultKardexPaginationModel,
+  defaultPendingReceiptPaginationModel,
+  defaultProductPaginationModel,
+  emptyInventorySummary,
+  emptyKardexDialog,
+  emptyMovementDialog,
+  emptyPendingReceiptCreateDialog,
+  emptyPendingReceiptOperationDialog,
+  emptyProductActionMenu,
+  emptyProductCategoryDialog,
+  emptyProductLifecycleDialog,
+  emptyProductOriginDialog,
+  type KardexDialogState,
+  type MovementDialogState,
+  type PendingReceiptCreateDialogState,
+  type PendingReceiptOperationDialogState,
+  type PendingReceiptOperationMode,
+  type ProductActionMenuState,
+  type ProductCategoryDialogState,
+  type ProductLifecycleDialogState,
+  type ProductOriginDialogState,
+} from "../features/inventory/state/inventoryPageState";
 import {
   cancelPendingReceipt,
   changeProductCategory,
@@ -66,153 +92,8 @@ import type {
   Product,
   ProductLifecycleAction,
   ProductListParams,
-  ProductOrigin,
   ProductStockStatus,
 } from "../services/inventoryService";
-import { colors } from "../theme/colors";
-
-type MovementDialogState = {
-  open: boolean;
-  mode: "ENTRADA_MANUAL" | "AJUSTE_INVENTARIO";
-  product: Product | null;
-  cantidad: string;
-  motivo: string;
-};
-
-type KardexDialogState = {
-  open: boolean;
-  product: Product | null;
-  movements: KardexMovement[];
-  rowCount: number;
-  paginationModel: GridPaginationModel;
-  loading: boolean;
-};
-
-type PendingReceiptCreateDialogState = {
-  open: boolean;
-  product: Product | null;
-  cantidad: string;
-  referencia: string;
-  motivo: string;
-};
-
-type PendingReceiptOperationMode = "RECIBIR" | "CANCELAR";
-
-type PendingReceiptOperationDialogState = {
-  open: boolean;
-  mode: PendingReceiptOperationMode;
-  pendingReceipt: PendingReceipt | null;
-  cantidad: string;
-  motivo: string;
-};
-
-type ProductLifecycleDialogState = {
-  open: boolean;
-  product: Product | null;
-  action: ProductLifecycleAction | null;
-  motivo: string;
-};
-
-type ProductOriginDialogState = {
-  open: boolean;
-  product: Product | null;
-  origen: ProductOrigin;
-  origen_observacion: string;
-  motivo: string;
-};
-
-type ProductCategoryDialogState = {
-  open: boolean;
-  product: Product | null;
-  destinationCategory: Category | null;
-  motivo: string;
-};
-
-type ProductActionMenuState = {
-  anchorEl: HTMLElement | null;
-  product: Product | null;
-};
-
-const emptyMovementDialog: MovementDialogState = {
-  open: false,
-  mode: "ENTRADA_MANUAL",
-  product: null,
-  cantidad: "",
-  motivo: "",
-};
-
-const defaultKardexPaginationModel: GridPaginationModel = {
-  page: 0,
-  pageSize: 10,
-};
-
-const emptyKardexDialog: KardexDialogState = {
-  open: false,
-  product: null,
-  movements: [],
-  rowCount: 0,
-  paginationModel: defaultKardexPaginationModel,
-  loading: false,
-};
-
-const emptyPendingReceiptCreateDialog: PendingReceiptCreateDialogState = {
-  open: false,
-  product: null,
-  cantidad: "",
-  referencia: "",
-  motivo: "",
-};
-
-const emptyPendingReceiptOperationDialog: PendingReceiptOperationDialogState = {
-  open: false,
-  mode: "RECIBIR",
-  pendingReceipt: null,
-  cantidad: "",
-  motivo: "",
-};
-
-const emptyProductLifecycleDialog: ProductLifecycleDialogState = {
-  open: false,
-  product: null,
-  action: null,
-  motivo: "",
-};
-
-const emptyProductOriginDialog: ProductOriginDialogState = {
-  open: false,
-  product: null,
-  origen: "COMPRADO",
-  origen_observacion: "",
-  motivo: "",
-};
-
-const emptyProductCategoryDialog: ProductCategoryDialogState = {
-  open: false,
-  product: null,
-  destinationCategory: null,
-  motivo: "",
-};
-
-const emptyProductActionMenu: ProductActionMenuState = {
-  anchorEl: null,
-  product: null,
-};
-
-const defaultProductPaginationModel: GridPaginationModel = {
-  page: 0,
-  pageSize: 25,
-};
-
-const defaultPendingReceiptPaginationModel: GridPaginationModel = {
-  page: 0,
-  pageSize: 10,
-};
-
-const emptyInventorySummary: InventorySummary = {
-  productos_activos: 0,
-  bajo_minimo: 0,
-  por_recibir: 0,
-};
 
 export function ProductsPage() {
   const [productos, setProductos] = useState<Product[]>([]);

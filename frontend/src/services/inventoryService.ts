@@ -30,6 +30,7 @@ export type Category = {
   merge_reason: string;
   is_merged: boolean;
   is_available_for_products: boolean;
+  productos_count: number;
   created_at: string;
   updated_at: string;
 };

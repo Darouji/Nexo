@@ -19,6 +19,7 @@ class CategoriaSerializer(serializers.ModelSerializer):
     is_merged = serializers.BooleanField(read_only=True)
     is_available_for_products = serializers.BooleanField(read_only=True)
     merged_into_name = serializers.SerializerMethodField()
+    productos_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Categoria
@@ -36,6 +37,7 @@ class CategoriaSerializer(serializers.ModelSerializer):
             "merge_reason",
             "is_merged",
             "is_available_for_products",
+            "productos_count",
             "created_at",
             "updated_at",
         ]
@@ -50,6 +52,7 @@ class CategoriaSerializer(serializers.ModelSerializer):
             "merge_reason",
             "is_merged",
             "is_available_for_products",
+            "productos_count",
             "created_at",
             "updated_at",
         ]

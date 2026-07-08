@@ -540,6 +540,25 @@ export function CategoryManagerDialog({
           params.value ? String(params.value) : "Sin descripción",
       },
       {
+        field: "productos_count",
+        headerName: "Productos",
+        width: 125,
+        type: "number",
+        renderCell: (params) => (
+          <Chip
+            label={String(params.value ?? 0)}
+            size="small"
+            sx={{
+              color: colors.primary.main,
+              bgcolor: colors.primary.soft,
+              borderColor: colors.primary.border,
+              border: "1px solid",
+              fontWeight: 900,
+            }}
+          />
+        ),
+      },
+      {
         field: "status",
         headerName: "Estado",
         width: 140,

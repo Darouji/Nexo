@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import (
+    Count,
     ExpressionWrapper,
     F,
     IntegerField,
@@ -215,15 +216,25 @@ class InventoryPermissionMixin:
 
 
 class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
-    queryset = Categoria.objects.select_related(
-        "merged_into",
-        "merged_by",
-    ).all()
+    queryset = (
+        Categoria.objects.select_related(
+            "merged_into",
+            "merged_by",
+        )
+        .annotate(
+            productos_count=Count(
+                "productos",
+                filter=Q(productos__status=BaseStatus.ACTIVO),
+                distinct=True,
+            ),
+        )
+        .all()
+    )
 
     serializer_class = CategoriaSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ["name", "name_normalized", "description"]
-    ordering_fields = ["name", "status", "created_at", "updated_at"]
+    ordering_fields = ["name", "status", "productos_count", "created_at", "updated_at"]
     ordering = ["name"]
 
     def get_queryset(self):

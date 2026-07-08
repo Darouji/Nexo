@@ -50,7 +50,7 @@ import {
   buildProductPageParams,
 } from "../features/inventory/utils/inventoryQueryParams";
 
-import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
+import type { GridPaginationModel } from "@mui/x-data-grid";
 import type {
   AuditOrigin,
   Category,
@@ -1203,7 +1203,7 @@ export function ProductsPage() {
     }
   };
 
-  const columns = useMemo<GridColDef[]>(
+  const columns = useMemo(
     () =>
       buildProductCatalogColumns({
         onOpenInventoryActionMenu: openInventoryActionMenu,
@@ -1212,9 +1212,9 @@ export function ProductsPage() {
     [openInventoryActionMenu, openMoreActionMenu],
   );
 
-  const kardexColumns = useMemo<GridColDef[]>(() => buildKardexColumns(), []);
+  const kardexColumns = useMemo(() => buildKardexColumns(), []);
 
-  const pendingReceiptColumns = useMemo<GridColDef[]>(
+  const pendingReceiptColumns = useMemo(
     () =>
       buildPendingReceiptColumns({
         onOpenPendingReceiptOperationDialog: openPendingReceiptOperationDialog,

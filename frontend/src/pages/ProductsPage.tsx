@@ -6,12 +6,10 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
 } from "react";
-import { Alert, Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import AddBoxIcon from "@mui/icons-material/AddBox";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
-import DeleteIcon from "@mui/icons-material/Delete";
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import { PageHeader } from "../components/PageHeader";
 import { ProductDialog } from "../features/inventory/products/ProductDialog";
@@ -33,6 +31,7 @@ import { ProductOriginChangeDialog } from "../features/inventory/components/Prod
 import { ProductCategoryChangeDialog } from "../features/inventory/components/ProductCategoryChangeDialog";
 import { ProductActionMenus } from "../features/inventory/components/ProductActionMenus";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
+import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipts/pendingReceiptColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   cancelPendingReceipt,
@@ -208,26 +207,6 @@ const emptyInventorySummary: InventorySummary = {
   bajo_minimo: 0,
   por_recibir: 0,
 };
-
-function getPendingReceiptStatusColor(status: PendingReceiptStatus) {
-  if (status === "PENDIENTE") {
-    return colors.status.warning;
-  }
-
-  if (status === "PARCIAL") {
-    return colors.status.info;
-  }
-
-  if (status === "RECIBIDA") {
-    return colors.status.success;
-  }
-
-  if (status === "CANCELADA") {
-    return colors.status.error;
-  }
-
-  return colors.text.muted;
-}
 
 const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
 
@@ -1549,153 +1528,10 @@ export function ProductsPage() {
   );
 
   const pendingReceiptColumns = useMemo<GridColDef[]>(
-    () => [
-      {
-        field: "created_at",
-        headerName: "Registrado",
-        width: 160,
-        renderCell: (params) => formatDateTime(String(params.value || "")),
-      },
-      {
-        field: "producto_categoria",
-        headerName: "Categoría",
-        minWidth: 150,
-        flex: 0.7,
-      },
-      {
-        field: "producto_modelo",
-        headerName: "Producto",
-        minWidth: 210,
-        flex: 1,
-      },
-      {
-        field: "producto_codigo_sap",
-        headerName: "Código SAP",
-        minWidth: 145,
-        flex: 0.6,
-        renderCell: (params) => params.value || "Sin código",
-      },
-      {
-        field: "cantidad_original",
-        headerName: "Original",
-        width: 105,
-        type: "number",
-        renderCell: (params) => formatNumber(Number(params.value || 0)),
-      },
-      {
-        field: "cantidad_recibida",
-        headerName: "Recibida",
-        width: 110,
-        type: "number",
-        renderCell: (params) => formatNumber(Number(params.value || 0)),
-      },
-      {
-        field: "cantidad_cancelada",
-        headerName: "Cancelada",
-        width: 115,
-        type: "number",
-        renderCell: (params) => formatNumber(Number(params.value || 0)),
-      },
-      {
-        field: "cantidad_pendiente",
-        headerName: "Pendiente",
-        width: 115,
-        type: "number",
-        renderCell: (params) => (
-          <Typography sx={{ fontWeight: 900 }}>
-            {formatNumber(Number(params.value || 0))}
-          </Typography>
-        ),
-      },
-      {
-        field: "estado",
-        headerName: "Estado",
-        width: 155,
-        renderCell: (params) => {
-          const pendingReceipt = params.row as PendingReceipt;
-          const color = getPendingReceiptStatusColor(pendingReceipt.estado);
-
-          return (
-            <Chip
-              label={pendingReceipt.estado_display}
-              size="small"
-              sx={{
-                color,
-                bgcolor: colors.surface.soft,
-                borderColor: color,
-                border: "1px solid",
-                fontWeight: 800,
-              }}
-            />
-          );
-        },
-      },
-      {
-        field: "referencia",
-        headerName: "OC / referencia",
-        minWidth: 170,
-        flex: 0.8,
-        renderCell: (params) => params.value || "Sin referencia",
-      },
-      {
-        field: "motivo",
-        headerName: "Motivo",
-        minWidth: 250,
-        flex: 1.2,
-        renderCell: (params) => params.value || "Sin motivo",
-      },
-      {
-        field: "actions",
-        headerName: "Acciones",
-        width: 240,
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => {
-          const pendingReceipt = params.row as PendingReceipt;
-
-          const canOperate =
-            pendingReceipt.cantidad_pendiente > 0 &&
-            (pendingReceipt.estado === "PENDIENTE" ||
-              pendingReceipt.estado === "PARCIAL");
-
-          return (
-            <Stack direction="row" spacing={1}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<AddBoxIcon />}
-                disabled={!canOperate}
-                onClick={() =>
-                  openPendingReceiptOperationDialog(pendingReceipt, "RECIBIR")
-                }
-              >
-                Recibir
-              </Button>
-
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<DeleteIcon />}
-                disabled={!canOperate}
-                onClick={() =>
-                  openPendingReceiptOperationDialog(pendingReceipt, "CANCELAR")
-                }
-                sx={{
-                  color: colors.status.error,
-                  borderColor: colors.status.error,
-                  "&:hover": {
-                    bgcolor: colors.status.errorSoft,
-                    borderColor: colors.status.error,
-                  },
-                }}
-              >
-                Cancelar
-              </Button>
-            </Stack>
-          );
-        },
-      },
-    ],
+    () =>
+      buildPendingReceiptColumns({
+        onOpenPendingReceiptOperationDialog: openPendingReceiptOperationDialog,
+      }),
     [openPendingReceiptOperationDialog],
   );
 

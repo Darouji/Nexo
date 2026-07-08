@@ -35,6 +35,11 @@ import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipt
 import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
+  formatNumber,
+  parseInteger,
+  parseOptionalBoolean,
+} from "../features/inventory/utils/inventoryFormatters";
+import {
   cancelPendingReceipt,
   changeProductCategory,
   changeProductLifecycle,
@@ -208,34 +213,6 @@ const emptyInventorySummary: InventorySummary = {
   bajo_minimo: 0,
   por_recibir: 0,
 };
-
-const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
-
-function formatNumber(value: number) {
-  return chileanNumberFormatter.format(value);
-}
-
-function parseInteger(value: string, fallback = 0) {
-  const parsed = Number.parseInt(value, 10);
-
-  if (Number.isNaN(parsed)) {
-    return fallback;
-  }
-
-  return parsed;
-}
-
-function parseOptionalBoolean(value: string) {
-  if (value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  return undefined;
-}
 
 export function ProductsPage() {
   const [productos, setProductos] = useState<Product[]>([]);

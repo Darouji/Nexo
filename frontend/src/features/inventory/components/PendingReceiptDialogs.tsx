@@ -1,3 +1,4 @@
+import { formatNumber, parseInteger } from "../utils/inventoryFormatters";
 import {
   Alert,
   Button,
@@ -41,22 +42,6 @@ type PendingReceiptDialogsProps = {
   onOperationClose: () => void;
   onOperationConfirm: () => void;
 };
-
-const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
-
-function formatNumber(value: number) {
-  return chileanNumberFormatter.format(value);
-}
-
-function parseInteger(value: string, fallback = 0) {
-  const parsed = Number.parseInt(value, 10);
-
-  if (Number.isNaN(parsed)) {
-    return fallback;
-  }
-
-  return parsed;
-}
 
 export function PendingReceiptDialogs({
   createOpen,

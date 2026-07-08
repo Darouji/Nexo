@@ -1,3 +1,4 @@
+import { formatDateTime, formatNumber } from "../utils/inventoryFormatters";
 import { Button, Chip, Stack, Typography } from "@mui/material";
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -16,31 +17,6 @@ type PendingReceiptColumnsOptions = {
     mode: PendingReceiptOperationMode,
   ) => void;
 };
-
-const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
-
-const chileanDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
-  dateStyle: "short",
-  timeStyle: "short",
-});
-
-function formatNumber(value: number) {
-  return chileanNumberFormatter.format(value);
-}
-
-function formatDateTime(value: string) {
-  if (!value) {
-    return "Sin fecha";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return chileanDateTimeFormatter.format(date);
-}
 
 function getPendingReceiptStatusColor(status: PendingReceiptStatus) {
   if (status === "PENDIENTE") {

@@ -1,31 +1,7 @@
 import { Chip, Typography } from "@mui/material";
 import type { GridColDef } from "@mui/x-data-grid";
 import { colors } from "../../../theme/colors";
-
-const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
-
-const chileanDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
-  dateStyle: "short",
-  timeStyle: "short",
-});
-
-function formatNumber(value: number) {
-  return chileanNumberFormatter.format(value);
-}
-
-function formatDateTime(value: string) {
-  if (!value) {
-    return "Sin fecha";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return chileanDateTimeFormatter.format(date);
-}
+import { formatDateTime, formatNumber } from "../utils/inventoryFormatters";
 
 export function buildKardexColumns(): GridColDef[] {
   return [

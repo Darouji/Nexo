@@ -1,16 +1,19 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
-import { Button, Chip, Stack, Typography } from "@mui/material";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+
+import { formatNumber } from "../utils/inventoryFormatters";
+import { Button, Chip, Stack, Typography } from "@mui/material";
+import { colors } from "../../../theme/colors";
+import { getProductOriginLabel } from "./productFormModel";
+
+import type { MouseEvent as ReactMouseEvent } from "react";
 import type { GridColDef } from "@mui/x-data-grid";
 import type {
   Product,
   ProductOrigin,
   ProductStockStatus,
 } from "../../../services/inventoryService";
-import { colors } from "../../../theme/colors";
-import { getProductOriginLabel } from "./productFormModel";
 
 type ProductCatalogColumnsOptions = {
   onOpenInventoryActionMenu: (
@@ -22,12 +25,6 @@ type ProductCatalogColumnsOptions = {
     product: Product,
   ) => void;
 };
-
-const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
-
-function formatNumber(value: number) {
-  return chileanNumberFormatter.format(value);
-}
 
 function getStockStatusColor(status: ProductStockStatus) {
   if (status === "STOCK_CORRECTO") {

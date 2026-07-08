@@ -8,16 +8,13 @@ import {
 } from "react";
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
-  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   InputAdornment,
   ListItemIcon,
   ListItemText,
@@ -42,6 +39,12 @@ import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
 import BlockIcon from "@mui/icons-material/Block";
 import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
 import { PageHeader } from "../components/PageHeader";
+import { ProductDialog } from "../features/inventory/products/ProductDialog";
+import {
+  emptyProductForm,
+  findCategoryByInputName,
+  type ProductFormState,
+} from "../features/inventory/products/productFormModel";
 import { SectionCard } from "../components/SectionCard";
 import { SmartDataGrid } from "../components/SmartDataGrid";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
@@ -58,7 +61,6 @@ import {
   fetchKardexMovements,
   fetchProductsPage,
   fetchPendingReceipts,
-  normalizeCategoryNameForComparison,
   receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
@@ -74,23 +76,9 @@ import type {
   Product,
   ProductLifecycleAction,
   ProductListParams,
-  ProductOrigin,
   ProductStockStatus,
 } from "../services/inventoryService";
 import { colors } from "../theme/colors";
-
-type ProductFormState = {
-  categoria_name: string;
-  modelo: string;
-  detalle: string;
-  codigo_sap: string;
-  origen: ProductOrigin;
-  origen_observacion: string;
-  stock_critico: string;
-  controla_stock: boolean;
-  initial_stock: string;
-  initial_stock_motivo: string;
-};
 
 type MovementDialogState = {
   open: boolean;
@@ -135,19 +123,6 @@ type ProductLifecycleDialogState = {
 type ProductActionMenuState = {
   anchorEl: HTMLElement | null;
   product: Product | null;
-};
-
-const emptyProductForm: ProductFormState = {
-  categoria_name: "",
-  modelo: "",
-  detalle: "",
-  codigo_sap: "",
-  origen: "COMPRADO",
-  origen_observacion: "",
-  stock_critico: "0",
-  controla_stock: true,
-  initial_stock: "0",
-  initial_stock_motivo: "Stock inicial registrado desde frontend.",
 };
 
 const emptyMovementDialog: MovementDialogState = {
@@ -271,37 +246,6 @@ function parseOptionalBoolean(value: string) {
   return undefined;
 }
 
-function findCategoryByInputName(categories: Category[], name: string) {
-  const normalizedName = normalizeCategoryNameForComparison(name);
-
-  if (!normalizedName) {
-    return undefined;
-  }
-
-  return categories.find((category) => {
-    const backendNormalizedName =
-      typeof category.name_normalized === "string"
-        ? category.name_normalized
-        : "";
-
-    return (
-      normalizeCategoryNameForComparison(category.name) === normalizedName ||
-      backendNormalizedName === normalizedName
-    );
-  });
-}
-
-const productOriginLabels: Record<ProductOrigin, string> = {
-  COMPRADO: "Comprado",
-  FABRICADO: "Fabricado",
-  SERVICIO: "Servicio",
-  OTRO: "Otro",
-};
-
-function getProductOriginLabel(origin: ProductOrigin) {
-  return productOriginLabels[origin];
-}
-
 export function ProductsPage() {
   const [productos, setProductos] = useState<Product[]>([]);
   const [productRowCount, setProductRowCount] = useState(0);
@@ -369,11 +313,6 @@ export function ProductsPage() {
 
   const [moreActionMenu, setMoreActionMenu] = useState<ProductActionMenuState>(
     emptyProductActionMenu,
-  );
-
-  const availableCategoriesForProducts = useMemo(
-    () => categorias.filter((category) => category.is_available_for_products),
-    [categorias],
   );
 
   type ProductFilterOverrides = {
@@ -599,17 +538,6 @@ export function ProductsPage() {
     stockControlFilter,
     stockStatusFilter,
   ].filter(Boolean).length;
-
-  const productCategoryMatch = findCategoryByInputName(
-    categorias,
-    productForm.categoria_name,
-  );
-
-  const productCategoryIsUnavailable = Boolean(
-    !editingProduct &&
-    productCategoryMatch &&
-    !productCategoryMatch.is_available_for_products,
-  );
 
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
@@ -1746,287 +1674,16 @@ export function ProductsPage() {
         )}
       </SectionCard>
 
-      <Dialog
+      <ProductDialog
         open={productDialogOpen}
+        editingProduct={editingProduct}
+        productForm={productForm}
+        categories={categorias}
+        savingProduct={savingProduct}
+        onFormChange={setProductForm}
         onClose={handleCloseProductDialog}
-        fullWidth
-        maxWidth="md"
-      >
-        <DialogTitle>
-          {editingProduct ? "Editar producto" : "Nuevo producto"}
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Autocomplete<Category, false, false, true>
-              freeSolo
-              disabled={Boolean(editingProduct)}
-              options={availableCategoriesForProducts}
-              inputValue={productForm.categoria_name}
-              onInputChange={(_event, newInputValue) =>
-                setProductForm((current) => ({
-                  ...current,
-                  categoria_name: newInputValue,
-                }))
-              }
-              onChange={(_event, newValue) =>
-                setProductForm((current) => ({
-                  ...current,
-                  categoria_name:
-                    typeof newValue === "string"
-                      ? newValue
-                      : newValue?.name || current.categoria_name,
-                }))
-              }
-              getOptionLabel={(option) =>
-                typeof option === "string" ? option : option.name
-              }
-              renderInput={(params) => {
-                const categoryName = productForm.categoria_name.trim();
-
-                const helperText = !categoryName
-                  ? "Escribe una categoría. Si ya existe, se reutilizará."
-                  : !productCategoryMatch
-                    ? `Se creará la nueva categoría "${categoryName}" al guardar junto con el producto.`
-                    : productCategoryMatch.is_available_for_products
-                      ? `Se reutilizará la categoría existente "${productCategoryMatch.name}".`
-                      : `La categoría "${productCategoryMatch.name}" es histórica o fue fusionada y no puede utilizarse.`;
-
-                const helperColor = !categoryName
-                  ? colors.text.muted
-                  : !productCategoryMatch
-                    ? colors.status.warning
-                    : productCategoryMatch.is_available_for_products
-                      ? colors.status.success
-                      : colors.status.error;
-
-                return (
-                  <TextField
-                    {...params}
-                    label="Categoría"
-                    required
-                    helperText={helperText}
-                    sx={{
-                      "& .MuiFormHelperText-root": {
-                        color: helperColor,
-                        fontWeight: categoryName ? 800 : 500,
-                      },
-                    }}
-                  />
-                );
-              }}
-            />
-
-            {editingProduct ? (
-              <Stack spacing={1.5}>
-                <TextField
-                  label="Origen del producto"
-                  value={getProductOriginLabel(productForm.origen)}
-                  fullWidth
-                  disabled
-                  helperText="El origen se modifica únicamente mediante una acción controlada y auditada."
-                />
-
-                {productForm.origen === "OTRO" ? (
-                  <TextField
-                    label="Detalle del origen"
-                    value={productForm.origen_observacion}
-                    fullWidth
-                    disabled
-                  />
-                ) : null}
-              </Stack>
-            ) : (
-              <>
-                <TextField
-                  select
-                  label="Origen del producto"
-                  value={productForm.origen}
-                  onChange={(event) => {
-                    const nextOrigin = event.target.value as ProductOrigin;
-
-                    setProductForm((current) => ({
-                      ...current,
-                      origen: nextOrigin,
-                      origen_observacion:
-                        nextOrigin === "OTRO" ? current.origen_observacion : "",
-                      controla_stock:
-                        nextOrigin === "SERVICIO"
-                          ? false
-                          : current.controla_stock,
-                      stock_critico:
-                        nextOrigin === "SERVICIO" ? "0" : current.stock_critico,
-                      initial_stock:
-                        nextOrigin === "SERVICIO" ? "0" : current.initial_stock,
-                    }));
-                  }}
-                  fullWidth
-                  required
-                >
-                  <MenuItem value="COMPRADO">Comprado</MenuItem>
-                  <MenuItem value="FABRICADO">Fabricado</MenuItem>
-                  <MenuItem value="SERVICIO">Servicio</MenuItem>
-                  <MenuItem value="OTRO">Otro</MenuItem>
-                </TextField>
-
-                {productForm.origen === "OTRO" ? (
-                  <TextField
-                    label="Detalle del origen"
-                    value={productForm.origen_observacion}
-                    onChange={(event) =>
-                      setProductForm((current) => ({
-                        ...current,
-                        origen_observacion: event.target.value,
-                      }))
-                    }
-                    fullWidth
-                    required
-                    helperText="Explique por qué este producto no corresponde a Comprado, Fabricado o Servicio."
-                  />
-                ) : null}
-
-                {productForm.origen === "SERVICIO" ? (
-                  <Alert severity="info" variant="outlined">
-                    Un producto de tipo Servicio no puede manejar stock físico,
-                    stock mínimo ni unidades por recibir.
-                  </Alert>
-                ) : null}
-              </>
-            )}
-
-            <TextField
-              label="Modelo"
-              value={productForm.modelo}
-              onChange={(event) =>
-                setProductForm((current) => ({
-                  ...current,
-                  modelo: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-            />
-
-            <TextField
-              label="Código SAP"
-              value={productForm.codigo_sap}
-              onChange={(event) =>
-                setProductForm((current) => ({
-                  ...current,
-                  codigo_sap: event.target.value,
-                }))
-              }
-              fullWidth
-            />
-
-            <TextField
-              label="Detalle"
-              value={productForm.detalle}
-              onChange={(event) =>
-                setProductForm((current) => ({
-                  ...current,
-                  detalle: event.target.value,
-                }))
-              }
-              fullWidth
-              multiline
-              minRows={2}
-            />
-
-            <TextField
-              label="Stock mínimo"
-              type="number"
-              value={productForm.stock_critico}
-              onChange={(event) =>
-                setProductForm((current) => ({
-                  ...current,
-                  stock_critico: event.target.value,
-                }))
-              }
-              fullWidth
-              disabled={productForm.origen === "SERVICIO"}
-              helperText={
-                productForm.origen === "SERVICIO"
-                  ? "Los servicios no manejan stock mínimo."
-                  : undefined
-              }
-            />
-
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={productForm.controla_stock}
-                  disabled={productForm.origen === "SERVICIO"}
-                  onChange={(event) =>
-                    setProductForm((current) => ({
-                      ...current,
-                      controla_stock: event.target.checked,
-                      initial_stock: event.target.checked
-                        ? current.initial_stock
-                        : "0",
-                    }))
-                  }
-                />
-              }
-              label="Este producto maneja inventario y genera Kardex"
-            />
-
-            {productForm.controla_stock && !editingProduct ? (
-              <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                <TextField
-                  label="Stock inicial"
-                  type="number"
-                  value={productForm.initial_stock}
-                  onChange={(event) =>
-                    setProductForm((current) => ({
-                      ...current,
-                      initial_stock: event.target.value,
-                    }))
-                  }
-                  fullWidth
-                  helperText="Se registrará en la misma operación de creación mediante una entrada Kardex auditada."
-                />
-
-                <TextField
-                  label="Motivo stock inicial"
-                  value={productForm.initial_stock_motivo}
-                  onChange={(event) =>
-                    setProductForm((current) => ({
-                      ...current,
-                      initial_stock_motivo: event.target.value,
-                    }))
-                  }
-                  fullWidth
-                />
-              </Stack>
-            ) : null}
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={handleCloseProductDialog}>Cancelar</Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handleSaveProduct()}
-            disabled={
-              savingProduct ||
-              !productForm.categoria_name.trim() ||
-              !productForm.modelo.trim() ||
-              productCategoryIsUnavailable ||
-              (!editingProduct &&
-                productForm.origen === "OTRO" &&
-                !productForm.origen_observacion.trim())
-            }
-          >
-            {savingProduct
-              ? "Guardando..."
-              : editingProduct
-                ? "Guardar cambios"
-                : "Crear producto"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onSave={handleSaveProduct}
+      />
 
       <Dialog
         open={pendingReceiptCreateDialog.open}

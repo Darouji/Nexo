@@ -9,6 +9,7 @@ import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
 import { colors } from "../theme/colors";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
+import { getAvailableProductCategoryOptions } from "../features/inventory/categories/categoryOptions";
 import { getProductActionMenuPermissions } from "../features/inventory/products/productActionPermissions";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
@@ -1269,10 +1270,9 @@ export function ProductsPage() {
 
   const availableCategoryOptions = useMemo(
     () =>
-      categorias.filter(
-        (category) =>
-          category.is_available_for_products &&
-          category.id !== productCategoryDialog.product?.categoria,
+      getAvailableProductCategoryOptions(
+        categorias,
+        productCategoryDialog.product?.categoria,
       ),
     [categorias, productCategoryDialog.product?.categoria],
   );

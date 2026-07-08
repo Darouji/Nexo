@@ -59,6 +59,7 @@ def get_operator(user):
 CATEGORY_RENAME_AUDIT_FIELDS = [
     "name",
     "name_normalized",
+    "description",
     "updated_by",
 ]
 
@@ -114,6 +115,7 @@ def rename_category(
     categoria,
     nombre,
     motivo,
+    descripcion=None,
     user=None,
     request=None,
 ):
@@ -122,6 +124,8 @@ def rename_category(
 
     nombre = str(nombre or "").strip()
     motivo = _require_category_reason(motivo)
+    description_provided = descripcion is not None
+    descripcion = str(descripcion or "").strip() if description_provided else None
     nombre_normalized = normalize_text(nombre)
 
     if not nombre or not nombre_normalized:
@@ -159,18 +163,25 @@ def rename_category(
         )
 
         locked_category.name = nombre
+
+        if description_provided:
+            locked_category.description = descripcion
+
         locked_category.updated_by = get_operator(user)
+
+        update_fields = [
+            "name",
+            "name_normalized",
+            "updated_by",
+            "updated_at",
+        ]
+
+        if description_provided:
+            update_fields.insert(2, "description")
 
         try:
             with transaction.atomic():
-                locked_category.save(
-                    update_fields=[
-                        "name",
-                        "name_normalized",
-                        "updated_by",
-                        "updated_at",
-                    ]
-                )
+                locked_category.save(update_fields=update_fields)
         except IntegrityError as error:
             raise ValidationError(
                 {
@@ -201,6 +212,10 @@ def rename_category(
                 "operation": "category_rename",
                 "previous_name": old_values["name"],
                 "new_name": locked_category.name,
+                "description_changed": (
+                    description_provided
+                    and old_values["description"] != locked_category.description
+                ),
             },
             request=request,
         )

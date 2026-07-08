@@ -556,6 +556,10 @@ class ProductoOrigenChangeSerializer(serializers.Serializer):
 
 class CategoriaRenameSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=150)
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
     motivo = serializers.CharField(max_length=255)
 
     def validate_name(self, value):

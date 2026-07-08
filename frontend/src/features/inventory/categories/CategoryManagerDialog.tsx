@@ -16,7 +16,6 @@ import {
 import AddIcon from "@mui/icons-material/Add";
 import CallMergeIcon from "@mui/icons-material/CallMerge";
 import DeleteIcon from "@mui/icons-material/Delete";
-import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import EditIcon from "@mui/icons-material/Edit";
 import type { GridColDef } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../../../components/SmartDataGrid";
@@ -50,16 +49,11 @@ type CreateCategoryFormState = {
   description: string;
 };
 
-type DescriptionDialogState = {
-  open: boolean;
-  category: Category | null;
-  description: string;
-};
-
-type RenameDialogState = {
+type EditCategoryDialogState = {
   open: boolean;
   category: Category | null;
   name: string;
+  description: string;
   motivo: string;
 };
 
@@ -81,16 +75,11 @@ const emptyCreateCategoryForm: CreateCategoryFormState = {
   description: "",
 };
 
-const emptyDescriptionDialog: DescriptionDialogState = {
-  open: false,
-  category: null,
-  description: "",
-};
-
-const emptyRenameDialog: RenameDialogState = {
+const emptyEditCategoryDialog: EditCategoryDialogState = {
   open: false,
   category: null,
   name: "",
+  description: "",
   motivo: "",
 };
 
@@ -167,11 +156,8 @@ export function CategoryManagerDialog({
     emptyCreateCategoryForm,
   );
 
-  const [descriptionDialog, setDescriptionDialog] =
-    useState<DescriptionDialogState>(emptyDescriptionDialog);
-
-  const [renameDialog, setRenameDialog] =
-    useState<RenameDialogState>(emptyRenameDialog);
+  const [editCategoryDialog, setEditCategoryDialog] =
+    useState<EditCategoryDialogState>(emptyEditCategoryDialog);
 
   const [mergeDialog, setMergeDialog] =
     useState<MergeDialogState>(emptyMergeDialog);
@@ -250,47 +236,27 @@ export function CategoryManagerDialog({
     setCreateForm(emptyCreateCategoryForm);
   };
 
-  const openDescriptionDialog = useCallback(
+  const openEditCategoryDialog = useCallback(
     (category: Category) => {
       clearFeedback();
 
-      setDescriptionDialog({
-        open: true,
-        category,
-        description: category.description || "",
-      });
-    },
-    [clearFeedback],
-  );
-
-  const closeDescriptionDialog = () => {
-    if (saving) {
-      return;
-    }
-
-    setDescriptionDialog(emptyDescriptionDialog);
-  };
-
-  const openRenameDialog = useCallback(
-    (category: Category) => {
-      clearFeedback();
-
-      setRenameDialog({
+      setEditCategoryDialog({
         open: true,
         category,
         name: category.name,
+        description: category.description || "",
         motivo: "",
       });
     },
     [clearFeedback],
   );
 
-  const closeRenameDialog = () => {
+  const closeEditCategoryDialog = () => {
     if (saving) {
       return;
     }
 
-    setRenameDialog(emptyRenameDialog);
+    setEditCategoryDialog(emptyEditCategoryDialog);
   };
 
   const openMergeDialog = useCallback(
@@ -364,55 +330,34 @@ export function CategoryManagerDialog({
     }
   };
 
-  const handleUpdateDescription = async () => {
-    const category = descriptionDialog.category;
+  const handleSaveCategoryEdit = async () => {
+    const category = editCategoryDialog.category;
 
     if (!category) {
       return;
     }
 
-    try {
-      setSaving(true);
-      clearFeedback();
+    const name = editCategoryDialog.name.trim();
+    const description = editCategoryDialog.description.trim();
+    const motivo = editCategoryDialog.motivo.trim();
 
-      await updateCategory(category.id, {
-        description: descriptionDialog.description.trim(),
-      });
-
-      await completeAction(
-        `Descripción de la categoría "${category.name}" actualizada correctamente.`,
-      );
-
-      setDescriptionDialog(emptyDescriptionDialog);
-    } catch (error: unknown) {
-      showRequestError(error);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRenameCategory = async () => {
-    const category = renameDialog.category;
-    const name = renameDialog.name.trim();
-    const motivo = renameDialog.motivo.trim();
-
-    if (!category) {
-      return;
-    }
+    const nameChanged = name !== category.name;
+    const descriptionChanged =
+      description !== (category.description || "").trim();
 
     if (!name) {
-      showValidationError("El nuevo nombre de la categoría es obligatorio.");
+      showValidationError("El nombre de la categoría es obligatorio.");
       return;
     }
 
-    if (!motivo) {
-      showValidationError("El motivo del renombrado es obligatorio.");
+    if (!nameChanged && !descriptionChanged) {
+      closeEditCategoryDialog();
       return;
     }
 
-    if (name === category.name) {
+    if (nameChanged && !motivo) {
       showValidationError(
-        "El nuevo nombre debe ser diferente del nombre actual.",
+        "El motivo es obligatorio cuando cambia el nombre de una categoría.",
       );
       return;
     }
@@ -421,16 +366,27 @@ export function CategoryManagerDialog({
       setSaving(true);
       clearFeedback();
 
-      await renameCategory(category.id, {
-        name,
-        motivo,
-      });
+      if (nameChanged) {
+        await renameCategory(category.id, {
+          name,
+          motivo,
+          ...(descriptionChanged ? { description } : {}),
+        });
+      } else {
+        await updateCategory(category.id, {
+          description,
+        });
+      }
 
-      await completeAction(
-        `Categoría "${category.name}" renombrada a "${name}" correctamente.`,
-      );
+      const message = nameChanged
+        ? descriptionChanged
+          ? `Categoría "${category.name}" renombrada a "${name}" y descripción actualizada correctamente.`
+          : `Categoría "${category.name}" renombrada a "${name}" correctamente.`
+        : `Descripción de la categoría "${category.name}" actualizada correctamente.`;
 
-      setRenameDialog(emptyRenameDialog);
+      await completeAction(message);
+
+      setEditCategoryDialog(emptyEditCategoryDialog);
     } catch (error: unknown) {
       showRequestError(error);
     } finally {
@@ -605,19 +561,9 @@ export function CategoryManagerDialog({
                 variant="outlined"
                 startIcon={<EditIcon />}
                 disabled={saving}
-                onClick={() => openDescriptionDialog(category)}
+                onClick={() => openEditCategoryDialog(category)}
               >
-                Descripción
-              </Button>
-
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<DriveFileRenameOutlineIcon />}
-                disabled={saving || !category.is_available_for_products}
-                onClick={() => openRenameDialog(category)}
-              >
-                Renombrar
+                Editar
               </Button>
 
               <Button
@@ -655,8 +601,7 @@ export function CategoryManagerDialog({
     [
       availableCategories,
       saving,
-      openDescriptionDialog,
-      openRenameDialog,
+      openEditCategoryDialog,
       openMergeDialog,
       openDeleteDialog,
     ],
@@ -789,32 +734,46 @@ export function CategoryManagerDialog({
       </Dialog>
 
       <Dialog
-        open={descriptionDialog.open}
-        onClose={closeDescriptionDialog}
+        open={editCategoryDialog.open}
+        onClose={closeEditCategoryDialog}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Editar descripción</DialogTitle>
+        <DialogTitle>Editar categoría</DialogTitle>
 
         <DialogContent>
           <Stack spacing={2.2} sx={{ mt: 1 }}>
             <Alert severity="info" variant="outlined">
-              El nombre no se modifica desde esta acción. Para cambiarlo,
-              utiliza Renombrar e indica el motivo.
+              Puedes actualizar la descripción libremente. Si cambias el nombre,
+              se registrará como una acción auditada y deberás indicar el
+              motivo.
             </Alert>
 
             <TextField
-              label="Categoría"
-              value={descriptionDialog.category?.name || ""}
+              label="Nombre de la categoría"
+              value={editCategoryDialog.name}
+              onChange={(event) =>
+                setEditCategoryDialog((current) => ({
+                  ...current,
+                  name: event.target.value,
+                }))
+              }
               fullWidth
-              disabled
+              required
+              autoFocus
+              disabled={!editCategoryDialog.category?.is_available_for_products}
+              helperText={
+                editCategoryDialog.category?.is_available_for_products
+                  ? "Cambiar el nombre requiere un motivo."
+                  : "Las categorías históricas o fusionadas no pueden renombrarse."
+              }
             />
 
             <TextField
               label="Descripción"
-              value={descriptionDialog.description}
+              value={editCategoryDialog.description}
               onChange={(event) =>
-                setDescriptionDialog((current) => ({
+                setEditCategoryDialog((current) => ({
                   ...current,
                   description: event.target.value,
                 }))
@@ -823,96 +782,52 @@ export function CategoryManagerDialog({
               multiline
               minRows={4}
               placeholder="Opcional"
-              autoFocus
             />
+
+            {editCategoryDialog.category &&
+            editCategoryDialog.name.trim() !==
+              editCategoryDialog.category.name ? (
+              <TextField
+                label="Motivo del cambio de nombre"
+                value={editCategoryDialog.motivo}
+                onChange={(event) =>
+                  setEditCategoryDialog((current) => ({
+                    ...current,
+                    motivo: event.target.value,
+                  }))
+                }
+                fullWidth
+                required
+                multiline
+                minRows={3}
+                helperText="Este motivo quedará asociado a la auditoría."
+              />
+            ) : null}
           </Stack>
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={closeDescriptionDialog} disabled={saving}>
+          <Button onClick={closeEditCategoryDialog} disabled={saving}>
             Cancelar
           </Button>
 
           <Button
             variant="contained"
-            onClick={() => void handleUpdateDescription()}
-            disabled={saving || !descriptionDialog.category}
-          >
-            {saving ? "Guardando..." : "Guardar descripción"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={renameDialog.open}
-        onClose={closeRenameDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Renombrar categoría</DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert severity="warning" variant="outlined">
-              El renombrado queda registrado en auditoría. La categoría mantiene
-              su identidad e historial.
-            </Alert>
-
-            <TextField
-              label="Nombre actual"
-              value={renameDialog.category?.name || ""}
-              fullWidth
-              disabled
-            />
-
-            <TextField
-              label="Nuevo nombre"
-              value={renameDialog.name}
-              onChange={(event) =>
-                setRenameDialog((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-              autoFocus
-            />
-
-            <TextField
-              label="Motivo del renombrado"
-              value={renameDialog.motivo}
-              onChange={(event) =>
-                setRenameDialog((current) => ({
-                  ...current,
-                  motivo: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-              multiline
-              minRows={3}
-              helperText="Este motivo quedará asociado a la auditoría."
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={closeRenameDialog} disabled={saving}>
-            Cancelar
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handleRenameCategory()}
+            onClick={() => void handleSaveCategoryEdit()}
             disabled={
               saving ||
-              !renameDialog.category ||
-              !renameDialog.name.trim() ||
-              !renameDialog.motivo.trim()
+              !editCategoryDialog.category ||
+              !editCategoryDialog.name.trim() ||
+              (editCategoryDialog.name.trim() ===
+                editCategoryDialog.category.name &&
+                editCategoryDialog.description.trim() ===
+                  (editCategoryDialog.category.description || "").trim()) ||
+              (editCategoryDialog.name.trim() !==
+                editCategoryDialog.category.name &&
+                !editCategoryDialog.motivo.trim())
             }
           >
-            {saving ? "Procesando..." : "Renombrar categoría"}
+            {saving ? "Guardando..." : "Guardar cambios"}
           </Button>
         </DialogActions>
       </Dialog>

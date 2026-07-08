@@ -281,6 +281,7 @@ class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         try:
             updated_category = rename_category(
                 categoria=categoria,
+                descripcion=serializer.validated_data.get("description"),
                 nombre=serializer.validated_data["name"],
                 motivo=serializer.validated_data["motivo"],
                 user=request.user,

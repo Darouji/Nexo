@@ -230,6 +230,7 @@ export type UpdateCategoryPayload = Partial<CreateCategoryPayload>;
 
 export type RenameCategoryPayload = {
   name: string;
+  description?: string;
   motivo: string;
 };
 

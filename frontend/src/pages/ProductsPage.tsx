@@ -2006,7 +2006,7 @@ export function ProductsPage() {
 
             <Button
               variant="outlined"
-              onClick={handleClearGlobalKardexFilters}
+              onClick={handleClearPendingReceiptFilters}
               disabled={pendingReceiptsLoading}
               sx={{
                 minWidth: { xs: "100%", lg: 120 },
@@ -2175,18 +2175,8 @@ export function ProductsPage() {
 
               <Button
                 variant="outlined"
+                onClick={handleClearGlobalKardexFilters}
                 disabled={globalKardexLoading}
-                onClick={() => {
-                  setGlobalKardexSearchTerm("");
-                  setGlobalKardexMovementType("");
-                  setGlobalKardexOrigin("");
-
-                  void loadGlobalKardex({
-                    search: "",
-                    movementType: "",
-                    origin: "",
-                  });
-                }}
                 sx={{
                   minWidth: { xs: "100%", lg: 120 },
                   color: colors.text.primary,

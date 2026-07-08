@@ -9,6 +9,7 @@ import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
 import { colors } from "../theme/colors";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
+import { getProductActionMenuPermissions } from "../features/inventory/products/productActionPermissions";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
 import { PageHeader } from "../components/PageHeader";
@@ -1249,43 +1250,21 @@ export function ProductsPage() {
     [openPendingReceiptOperationDialog],
   );
 
-  const inventoryMenuProduct = inventoryActionMenu.product;
-
-  const inventoryMenuIsOperationallyActive = Boolean(
-    inventoryMenuProduct && inventoryMenuProduct.status === "ACTIVO",
-  );
-
-  const inventoryMenuCanRegisterManualEntry = Boolean(
-    inventoryMenuProduct &&
-    inventoryMenuIsOperationallyActive &&
-    inventoryMenuProduct.controla_stock &&
-    !inventoryMenuProduct.descontinuado,
-  );
-
-  const inventoryMenuCanAdjustStock = Boolean(
-    inventoryMenuProduct &&
-    inventoryMenuIsOperationallyActive &&
-    inventoryMenuProduct.controla_stock,
-  );
-
-  const inventoryMenuCanRegisterPendingReceipt = Boolean(
-    inventoryMenuProduct &&
-    inventoryMenuIsOperationallyActive &&
-    inventoryMenuProduct.controla_stock &&
-    !inventoryMenuProduct.descontinuado,
-  );
-
-  const moreActionProduct = moreActionMenu.product;
-
-  const moreActionIsOperationallyActive = Boolean(
-    moreActionProduct && moreActionProduct.status === "ACTIVO",
-  );
-
-  const moreActionCanInactivate = Boolean(
-    moreActionProduct &&
-    moreActionIsOperationallyActive &&
-    Number(moreActionProduct.stock_actual || 0) === 0 &&
-    Number(moreActionProduct.por_recibir || 0) === 0,
+  const {
+    inventoryProduct: inventoryMenuProduct,
+    inventoryCanRegisterManualEntry: inventoryMenuCanRegisterManualEntry,
+    inventoryCanAdjustStock: inventoryMenuCanAdjustStock,
+    inventoryCanRegisterPendingReceipt: inventoryMenuCanRegisterPendingReceipt,
+    moreProduct: moreActionProduct,
+    moreIsOperationallyActive: moreActionIsOperationallyActive,
+    moreCanInactivate: moreActionCanInactivate,
+  } = useMemo(
+    () =>
+      getProductActionMenuPermissions({
+        inventoryProduct: inventoryActionMenu.product,
+        moreProduct: moreActionMenu.product,
+      }),
+    [inventoryActionMenu.product, moreActionMenu.product],
   );
 
   const availableCategoryOptions = useMemo(

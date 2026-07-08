@@ -1,4 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Alert,
   Autocomplete,
@@ -9,6 +14,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -17,6 +26,7 @@ import AddIcon from "@mui/icons-material/Add";
 import CallMergeIcon from "@mui/icons-material/CallMerge";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import type { GridColDef } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../../../components/SmartDataGrid";
 import { getApiErrorMessage as getErrorMessage } from "../../../services/api";
@@ -70,6 +80,11 @@ type DeleteDialogState = {
   motivo: string;
 };
 
+type CategoryActionMenuState = {
+  anchorEl: HTMLElement | null;
+  category: Category | null;
+};
+
 const emptyCreateCategoryForm: CreateCategoryFormState = {
   name: "",
   description: "",
@@ -94,6 +109,11 @@ const emptyDeleteDialog: DeleteDialogState = {
   open: false,
   category: null,
   motivo: "",
+};
+
+const emptyCategoryActionMenu: CategoryActionMenuState = {
+  anchorEl: null,
+  category: null,
 };
 
 function getCategoryStatusLabel(status: string) {
@@ -165,6 +185,9 @@ export function CategoryManagerDialog({
   const [deleteDialog, setDeleteDialog] =
     useState<DeleteDialogState>(emptyDeleteDialog);
 
+  const [categoryActionMenu, setCategoryActionMenu] =
+    useState<CategoryActionMenuState>(emptyCategoryActionMenu);
+
   const availableCategories = useMemo(
     () => categories.filter((category) => category.is_available_for_products),
     [categories],
@@ -177,6 +200,34 @@ export function CategoryManagerDialog({
       ),
     [availableCategories, mergeDialog.sourceCategory],
   );
+
+  const selectedCategory = categoryActionMenu.category;
+
+  const selectedCategoryCanMerge = Boolean(
+    selectedCategory &&
+    selectedCategory.is_available_for_products &&
+    availableCategories.some(
+      (candidate) => candidate.id !== selectedCategory.id,
+    ),
+  );
+
+  const selectedCategoryCanDelete = Boolean(
+    selectedCategory && canDeleteCategory(selectedCategory),
+  );
+
+  const openCategoryActionMenu = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>, category: Category) => {
+      setCategoryActionMenu({
+        anchorEl: event.currentTarget,
+        category,
+      });
+    },
+    [],
+  );
+
+  const closeCategoryActionMenu = useCallback(() => {
+    setCategoryActionMenu(emptyCategoryActionMenu);
+  }, []);
 
   const clearFeedback = useCallback(() => {
     setFeedback(null);
@@ -542,69 +593,31 @@ export function CategoryManagerDialog({
       {
         field: "actions",
         headerName: "Acciones",
-        width: 500,
+        width: 165,
         sortable: false,
         filterable: false,
         renderCell: (params) => {
           const category = params.row as Category;
 
-          const canMerge =
-            category.is_available_for_products &&
-            availableCategories.some(
-              (candidate) => candidate.id !== category.id,
-            );
-
           return (
-            <Stack direction="row" spacing={0.75}>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<EditIcon />}
-                disabled={saving}
-                onClick={() => openEditCategoryDialog(category)}
-              >
-                Editar
-              </Button>
-
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<CallMergeIcon />}
-                disabled={saving || !canMerge}
-                onClick={() => openMergeDialog(category)}
-              >
-                Fusionar
-              </Button>
-
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<DeleteIcon />}
-                disabled={saving || !canDeleteCategory(category)}
-                onClick={() => openDeleteDialog(category)}
-                sx={{
-                  color: colors.status.error,
-                  borderColor: colors.status.error,
-                  "&:hover": {
-                    bgcolor: colors.status.errorSoft,
-                    borderColor: colors.status.error,
-                  },
-                }}
-              >
-                Eliminar
-              </Button>
-            </Stack>
+            <Button
+              size="small"
+              variant="outlined"
+              endIcon={<KeyboardArrowDownIcon />}
+              disabled={saving}
+              onClick={(event) => openCategoryActionMenu(event, category)}
+              sx={{
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+            >
+              Acciones
+            </Button>
           );
         },
       },
     ],
-    [
-      availableCategories,
-      saving,
-      openEditCategoryDialog,
-      openMergeDialog,
-      openDeleteDialog,
-    ],
+    [saving, openCategoryActionMenu],
   );
 
   return (
@@ -670,6 +683,61 @@ export function CategoryManagerDialog({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Menu
+        anchorEl={categoryActionMenu.anchorEl}
+        open={Boolean(categoryActionMenu.anchorEl)}
+        onClose={closeCategoryActionMenu}
+      >
+        {selectedCategory ? (
+          <>
+            <MenuItem
+              disabled={saving}
+              onClick={() => {
+                closeCategoryActionMenu();
+                openEditCategoryDialog(selectedCategory);
+              }}
+            >
+              <ListItemIcon>
+                <EditIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Editar categoría</ListItemText>
+            </MenuItem>
+
+            <MenuItem
+              disabled={saving || !selectedCategoryCanMerge}
+              onClick={() => {
+                closeCategoryActionMenu();
+                openMergeDialog(selectedCategory);
+              }}
+            >
+              <ListItemIcon>
+                <CallMergeIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Fusionar categoría</ListItemText>
+            </MenuItem>
+
+            <MenuItem
+              disabled={saving || !selectedCategoryCanDelete}
+              onClick={() => {
+                closeCategoryActionMenu();
+                openDeleteDialog(selectedCategory);
+              }}
+              sx={{
+                color: colors.status.error,
+              }}
+            >
+              <ListItemIcon>
+                <DeleteIcon
+                  fontSize="small"
+                  sx={{ color: colors.status.error }}
+                />
+              </ListItemIcon>
+              <ListItemText>Eliminar categoría</ListItemText>
+            </MenuItem>
+          </>
+        ) : null}
+      </Menu>
 
       <Dialog
         open={createDialogOpen}

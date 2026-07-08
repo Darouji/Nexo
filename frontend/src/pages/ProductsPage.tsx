@@ -1675,6 +1675,13 @@ export function ProductsPage() {
       </SectionCard>
 
       <ProductDialog
+        key={
+          productDialogOpen
+            ? editingProduct
+              ? `edit-product-${editingProduct.id}`
+              : "create-product-open"
+            : "product-dialog-closed"
+        }
         open={productDialogOpen}
         editingProduct={editingProduct}
         productForm={productForm}

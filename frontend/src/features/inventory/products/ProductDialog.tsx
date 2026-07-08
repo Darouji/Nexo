@@ -120,27 +120,32 @@ function useProductDuplicateValidation({
     initialDuplicateValidationState,
   );
 
+  const cleanModel = model.trim();
+  const cleanSapCode = sapCode.trim();
+
+  const shouldCheckModel = cleanModel.length >= 3;
+  const shouldCheckSapCode = cleanSapCode.length >= 2;
+  const shouldValidate = open && (shouldCheckModel || shouldCheckSapCode);
+
   useEffect(() => {
-    const cleanModel = model.trim();
-    const cleanSapCode = sapCode.trim();
-
-    const shouldCheckModel = cleanModel.length >= 3;
-    const shouldCheckSapCode = cleanSapCode.length >= 2;
-
-    if (!open || (!shouldCheckModel && !shouldCheckSapCode)) {
-      setState(initialDuplicateValidationState);
-      return;
-    }
-
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
-    setState((current) => ({
-      ...current,
-      loading: true,
-    }));
+    if (!shouldValidate) {
+      return;
+    }
 
     const timeoutId = window.setTimeout(() => {
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+
+      setState({
+        loading: true,
+        duplicatedModelProduct: null,
+        duplicatedSapProduct: null,
+      });
+
       Promise.all([
         shouldCheckModel
           ? fetchProductsPage({
@@ -187,16 +192,47 @@ function useProductDuplicateValidation({
             return;
           }
 
-          setState(initialDuplicateValidationState);
+          setState({
+            loading: false,
+            duplicatedModelProduct: null,
+            duplicatedSapProduct: null,
+          });
         });
     }, 450);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [open, editingProduct?.id, model, sapCode]);
+  }, [
+    shouldValidate,
+    shouldCheckModel,
+    shouldCheckSapCode,
+    cleanModel,
+    cleanSapCode,
+    editingProduct?.id,
+  ]);
 
-  return state;
+  const duplicatedModelProduct =
+    shouldValidate &&
+    shouldCheckModel &&
+    state.duplicatedModelProduct &&
+    isSameModel(state.duplicatedModelProduct, cleanModel)
+      ? state.duplicatedModelProduct
+      : null;
+
+  const duplicatedSapProduct =
+    shouldValidate &&
+    shouldCheckSapCode &&
+    state.duplicatedSapProduct &&
+    isSameSapCode(state.duplicatedSapProduct, cleanSapCode)
+      ? state.duplicatedSapProduct
+      : null;
+
+  return {
+    loading: shouldValidate ? state.loading : false,
+    duplicatedModelProduct,
+    duplicatedSapProduct,
+  };
 }
 
 export function ProductDialog({
@@ -303,8 +339,17 @@ export function ProductDialog({
     ? `Ya existe un producto con este código SAP: "${duplicateValidation.duplicatedSapProduct.modelo}".`
     : "Opcional. Si se informa, debe ser único.";
 
+  const handleCloseDialog = () => {
+    if (savingProduct) {
+      return;
+    }
+
+    setSubmitAttempted(false);
+    onClose();
+  };
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
+    <Dialog open={open} onClose={handleCloseDialog} fullWidth maxWidth="md">
       <DialogTitle>
         {editingProduct ? "Editar producto" : "Nuevo producto"}
       </DialogTitle>
@@ -550,7 +595,7 @@ export function ProductDialog({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose}>Cancelar</Button>
+        <Button onClick={handleCloseDialog}>Cancelar</Button>
 
         <Button
           variant="contained"

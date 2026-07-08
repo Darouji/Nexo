@@ -54,6 +54,7 @@ import { PendingReceiptsSection } from "../features/inventory/components/Pending
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { ProductKardexDialog } from "../features/inventory/components/ProductKardexDialog";
 import { ProductLifecycleDialog } from "../features/inventory/components/ProductLifecycleDialog";
+import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -2179,87 +2180,28 @@ export function ProductsPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog
+      <StockMovementDialog
         open={movementDialog.open}
+        mode={movementDialog.mode}
+        product={movementDialog.product}
+        cantidad={movementDialog.cantidad}
+        motivo={movementDialog.motivo}
+        saving={savingMovement}
+        onCantidadChange={(cantidad) =>
+          setMovementDialog((current) => ({
+            ...current,
+            cantidad,
+          }))
+        }
+        onMotivoChange={(motivo) =>
+          setMovementDialog((current) => ({
+            ...current,
+            motivo,
+          }))
+        }
         onClose={closeMovementDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          {movementDialog.mode === "ENTRADA_MANUAL"
-            ? "Entrada manual de stock"
-            : "Ajuste de inventario"}
-        </DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert severity="info" variant="outlined">
-              El stock no se edita directamente. Esta acción creará un
-              movimiento Kardex auditado en backend.
-            </Alert>
-
-            <TextField
-              label="Producto"
-              value={movementDialog.product?.modelo || ""}
-              fullWidth
-              disabled
-            />
-
-            <TextField
-              label={
-                movementDialog.mode === "ENTRADA_MANUAL"
-                  ? "Cantidad a ingresar"
-                  : "Cantidad del ajuste"
-              }
-              type="number"
-              value={movementDialog.cantidad}
-              onChange={(event) =>
-                setMovementDialog((current) => ({
-                  ...current,
-                  cantidad: event.target.value,
-                }))
-              }
-              fullWidth
-              helperText={
-                movementDialog.mode === "AJUSTE_INVENTARIO"
-                  ? "Usa números positivos para sumar stock o negativos para restar stock."
-                  : "La entrada manual debe ser una cantidad positiva."
-              }
-            />
-
-            <TextField
-              label="Motivo"
-              value={movementDialog.motivo}
-              onChange={(event) =>
-                setMovementDialog((current) => ({
-                  ...current,
-                  motivo: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-              multiline
-              minRows={2}
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={closeMovementDialog}>Cancelar</Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handleSaveMovement()}
-            disabled={
-              savingMovement ||
-              !movementDialog.cantidad ||
-              !movementDialog.motivo.trim()
-            }
-          >
-            {savingMovement ? "Guardando..." : "Registrar Kardex"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={() => void handleSaveMovement()}
+      />
 
       <ProductKardexDialog
         open={kardexDialog.open}

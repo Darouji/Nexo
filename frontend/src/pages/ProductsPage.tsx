@@ -67,7 +67,7 @@ import {
   fetchInventorySummary,
   fetchKardexMovements,
   fetchProductsPage,
-  fetchPendingReceipts,
+  fetchPendingReceiptsPage,
   receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
@@ -221,6 +221,11 @@ const defaultProductPaginationModel: GridPaginationModel = {
   pageSize: 25,
 };
 
+const defaultPendingReceiptPaginationModel: GridPaginationModel = {
+  page: 0,
+  pageSize: 10,
+};
+
 const emptyInventorySummary: InventorySummary = {
   productos_activos: 0,
   bajo_minimo: 0,
@@ -352,6 +357,10 @@ export function ProductsPage() {
   >("");
   const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
   const [pendingReceiptsLoading, setPendingReceiptsLoading] = useState(true);
+
+  const [pendingReceiptRowCount, setPendingReceiptRowCount] = useState(0);
+  const [pendingReceiptPaginationModel, setPendingReceiptPaginationModel] =
+    useState<GridPaginationModel>(defaultPendingReceiptPaginationModel);
 
   const [pendingReceiptCreateDialog, setPendingReceiptCreateDialog] =
     useState<PendingReceiptCreateDialogState>(emptyPendingReceiptCreateDialog);
@@ -519,21 +528,34 @@ export function ProductsPage() {
     await loadGlobalKardex();
   };
 
-  const loadPendingReceipts = async () => {
+  const loadPendingReceipts = async (
+    paginationModel: GridPaginationModel = pendingReceiptPaginationModel,
+  ) => {
     try {
       setPendingReceiptsLoading(true);
       setErrorMessage("");
 
-      const pendingReceiptsData = await fetchPendingReceipts({
+      const pendingReceiptsPage = await fetchPendingReceiptsPage({
         ordering: "-created_at",
+        page: paginationModel.page + 1,
+        page_size: paginationModel.pageSize,
       });
 
-      setPendingReceipts(pendingReceiptsData);
+      setPendingReceipts(pendingReceiptsPage.results);
+      setPendingReceiptRowCount(pendingReceiptsPage.count);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setPendingReceiptsLoading(false);
     }
+  };
+
+  const handlePendingReceiptPaginationModelChange = (
+    nextPaginationModel: GridPaginationModel,
+  ) => {
+    setPendingReceiptPaginationModel(nextPaginationModel);
+
+    void loadPendingReceipts(nextPaginationModel);
   };
 
   useEffect(() => {
@@ -548,8 +570,10 @@ export function ProductsPage() {
         page_size: defaultProductPaginationModel.pageSize,
       }),
       fetchCategories(),
-      fetchPendingReceipts({
+      fetchPendingReceiptsPage({
         ordering: "-created_at",
+        page: 1,
+        page_size: defaultPendingReceiptPaginationModel.pageSize,
       }),
       fetchInventorySummary(),
     ])
@@ -562,7 +586,8 @@ export function ProductsPage() {
           setProductos(productsPage.results);
           setProductRowCount(productsPage.count);
           setCategorias(categoriesData);
-          setPendingReceipts(pendingReceiptsData);
+          setPendingReceipts(pendingReceiptsData.results);
+          setPendingReceiptRowCount(pendingReceiptsData.count);
           setInventorySummary(summaryData);
           setErrorMessage("");
         },
@@ -1167,7 +1192,10 @@ export function ProductsPage() {
 
       closePendingReceiptCreateDialog();
 
-      await Promise.all([loadProducts(searchTerm), loadPendingReceipts()]);
+      await Promise.all([
+        loadProducts(searchTerm),
+        loadPendingReceipts(pendingReceiptPaginationModel),
+      ]);
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -1221,7 +1249,7 @@ export function ProductsPage() {
         await Promise.all([
           loadInventorySummary(),
           loadProducts(searchTerm),
-          loadPendingReceipts(),
+          loadPendingReceipts(pendingReceiptPaginationModel),
           refreshGlobalKardexIfLoaded(),
         ]);
       } else {
@@ -1234,7 +1262,10 @@ export function ProductsPage() {
           `Se cancelaron ${formatNumber(cantidad)} unidades pendientes de "${pendingReceipt.producto_modelo}". El stock físico no cambió.`,
         );
 
-        await Promise.all([loadProducts(searchTerm), loadPendingReceipts()]);
+        await Promise.all([
+          loadProducts(searchTerm),
+          loadPendingReceipts(pendingReceiptPaginationModel),
+        ]);
       }
 
       closePendingReceiptOperationDialog();
@@ -1678,7 +1709,7 @@ export function ProductsPage() {
               onClick={() => {
                 loadFirstProductPage();
                 void loadInventorySummary();
-                void loadPendingReceipts();
+                void loadPendingReceipts(pendingReceiptPaginationModel);
                 void refreshGlobalKardexIfLoaded();
               }}
               disabled={loading}
@@ -1751,6 +1782,14 @@ export function ProductsPage() {
             rows={pendingReceipts}
             columns={pendingReceiptColumns}
             loading={pendingReceiptsLoading}
+            paginationMode="server"
+            paginationModel={pendingReceiptPaginationModel}
+            onPaginationModelChange={handlePendingReceiptPaginationModelChange}
+            rowCount={pendingReceiptRowCount}
+            rowNumberOffset={
+              pendingReceiptPaginationModel.page *
+              pendingReceiptPaginationModel.pageSize
+            }
           />
         </SectionCard>
       </Box>

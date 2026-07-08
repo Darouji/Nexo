@@ -222,6 +222,11 @@ export type PendingReceiptListParams = {
   fecha_hasta?: string;
 };
 
+export type PendingReceiptPageParams = PendingReceiptListParams & {
+  page?: number;
+  page_size?: number;
+};
+
 export type CreateCategoryPayload = {
   name: string;
   description?: string;
@@ -693,6 +698,28 @@ export async function fetchPendingReceipts(
   );
 
   return extractResults(response.data);
+}
+
+export async function fetchPendingReceiptsPage(
+  params: PendingReceiptPageParams = {},
+) {
+  const response = await api.get<PendingReceiptListResponse>(
+    "/inventory/pendientes-por-recibir/",
+    {
+      params: {
+        producto: toCsv(params.producto),
+        estado: toCsv(params.estado),
+        fecha_desde: params.fecha_desde || undefined,
+        fecha_hasta: params.fecha_hasta || undefined,
+        search: params.search?.trim() || undefined,
+        ordering: params.ordering || "-created_at",
+        page: params.page,
+        page_size: params.page_size,
+      },
+    },
+  );
+
+  return toPaginatedResponse(response.data);
 }
 
 export async function createPendingReceipt(

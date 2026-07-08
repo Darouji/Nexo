@@ -8,20 +8,14 @@ import {
 } from "react";
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
   Stack,
-  TextField,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -56,6 +50,7 @@ import { ProductLifecycleDialog } from "../features/inventory/components/Product
 import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
 import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
 import { ProductOriginChangeDialog } from "../features/inventory/components/ProductOriginChangeDialog";
+import { ProductCategoryChangeDialog } from "../features/inventory/components/ProductCategoryChangeDialog";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
@@ -2098,110 +2093,28 @@ export function ProductsPage() {
         onConfirm={() => void handleProductOriginChange()}
       />
 
-      <Dialog
+      <ProductCategoryChangeDialog
         open={productCategoryDialog.open}
+        product={productCategoryDialog.product}
+        destinationCategory={productCategoryDialog.destinationCategory}
+        availableCategories={availableCategoryOptions}
+        motivo={productCategoryDialog.motivo}
+        saving={savingProductCategory}
+        onDestinationCategoryChange={(destinationCategory) =>
+          setProductCategoryDialog((current) => ({
+            ...current,
+            destinationCategory,
+          }))
+        }
+        onMotivoChange={(motivo) =>
+          setProductCategoryDialog((current) => ({
+            ...current,
+            motivo,
+          }))
+        }
         onClose={closeProductCategoryDialog}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Cambiar categoría del producto</DialogTitle>
-
-        <DialogContent>
-          <Stack spacing={2.2} sx={{ mt: 1 }}>
-            <Alert severity="info" variant="outlined">
-              Esta acción reclasifica el producto en una nueva categoría
-              disponible. El cambio queda registrado en auditoría y no modifica
-              el Kardex histórico.
-            </Alert>
-
-            <TextField
-              label="Producto"
-              value={
-                productCategoryDialog.product
-                  ? `${productCategoryDialog.product.categoria_name} — ${productCategoryDialog.product.modelo}`
-                  : ""
-              }
-              fullWidth
-              disabled
-            />
-
-            <TextField
-              label="Categoría actual"
-              value={productCategoryDialog.product?.categoria_name || ""}
-              fullWidth
-              disabled
-            />
-
-            <Autocomplete
-              options={availableCategoryOptions}
-              value={productCategoryDialog.destinationCategory}
-              onChange={(_event, nextCategory) =>
-                setProductCategoryDialog((current) => ({
-                  ...current,
-                  destinationCategory: nextCategory,
-                }))
-              }
-              getOptionLabel={(option) => option.name}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              noOptionsText="No hay categorías disponibles"
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Nueva categoría"
-                  required
-                  helperText="Solo se muestran categorías activas y disponibles."
-                />
-              )}
-            />
-
-            {productCategoryDialog.destinationCategory ? (
-              <Alert severity="warning" variant="outlined">
-                Revise que la categoría destino sea correcta. Si en la categoría
-                destino ya existe un producto con el mismo modelo, el backend
-                bloqueará la reclasificación para evitar duplicados.
-              </Alert>
-            ) : null}
-
-            <TextField
-              label="Motivo del cambio"
-              value={productCategoryDialog.motivo}
-              onChange={(event) =>
-                setProductCategoryDialog((current) => ({
-                  ...current,
-                  motivo: event.target.value,
-                }))
-              }
-              fullWidth
-              required
-              multiline
-              minRows={3}
-              helperText="Este motivo quedará asociado a la auditoría del producto."
-            />
-          </Stack>
-        </DialogContent>
-
-        <DialogActions>
-          <Button
-            onClick={closeProductCategoryDialog}
-            disabled={savingProductCategory}
-          >
-            Cancelar
-          </Button>
-
-          <Button
-            variant="contained"
-            onClick={() => void handleProductCategoryChange()}
-            disabled={
-              savingProductCategory ||
-              !productCategoryDialog.product ||
-              !productCategoryDialog.destinationCategory ||
-              !productCategoryDialog.motivo.trim()
-            }
-          >
-            {savingProductCategory ? "Guardando..." : "Cambiar categoría"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        onConfirm={() => void handleProductCategoryChange()}
+      />
 
       <CategoryManagerDialog
         open={categoryManagerOpen}

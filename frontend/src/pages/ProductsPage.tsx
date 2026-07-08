@@ -593,12 +593,6 @@ export function ProductsPage() {
     };
   }, []);
 
-  const activeProductsCount = inventorySummary.productos_activos;
-
-  const lowMinimumCount = inventorySummary.bajo_minimo;
-
-  const incomingStockTotal = inventorySummary.por_recibir;
-
   const activeProductFiltersCount = [
     categoryFilter,
     statusFilter === "ACTIVO" ? "" : statusFilter,

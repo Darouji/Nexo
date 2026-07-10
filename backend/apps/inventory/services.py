@@ -1087,29 +1087,29 @@ def register_kardex_movement(
         with allow_kardex_write():
             movement.save()
 
-            create_business_audit_log(
-                instance=movement,
-                action=KARDEX_AUDIT_ACTION_BY_TYPE.get(
-                    movement_type,
-                    AuditAction.CREAR,
-                ),
-                user=user,
-                origin=origin,
-                reason=movement.motivo,
-                metadata={
-                    "operation": "kardex_movement",
-                    "product_id": locked_product.pk,
-                    "product_model": locked_product.modelo,
-                    "movement_type": movement.movement_type,
-                    "quantity": movement.cantidad,
-                    "stock_before": movement.stock_antes,
-                    "stock_after": movement.stock_despues,
-                    "reference_content_type_id": (movement.reference_content_type_id),
-                    "reference_object_id": movement.reference_object_id,
-                    "reference_repr": movement.reference_repr,
-                },
-                request=request,
-            )
+        create_business_audit_log(
+            instance=movement,
+            action=KARDEX_AUDIT_ACTION_BY_TYPE.get(
+                movement_type,
+                AuditAction.CREAR,
+            ),
+            user=user,
+            origin=origin,
+            reason=movement.motivo,
+            metadata={
+                "operation": "kardex_movement",
+                "product_id": locked_product.pk,
+                "product_model": locked_product.modelo,
+                "movement_type": movement.movement_type,
+                "quantity": movement.cantidad,
+                "stock_before": movement.stock_antes,
+                "stock_after": movement.stock_despues,
+                "reference_content_type_id": (movement.reference_content_type_id),
+                "reference_object_id": movement.reference_object_id,
+                "reference_repr": movement.reference_repr,
+            },
+            request=request,
+        )
 
         return movement
 

@@ -45,6 +45,11 @@ PRODUCT_LIFECYCLE_AUDIT_ACTIONS = {
     "REANUDAR": AuditAction.RESTAURAR,
 }
 
+KARDEX_AUDIT_ACTION_BY_TYPE = {
+    KardexMovementType.ENTRADA_IMPORTACION: AuditAction.IMPORTAR,
+    KardexMovementType.AJUSTE_INVENTARIO: AuditAction.AJUSTE_INVENTARIO,
+}
+
 
 def get_operator(user):
     if user is None:
@@ -693,6 +698,7 @@ def create_product_with_category(
                 cantidad=initial_stock,
                 motivo=initial_stock_reason,
                 user=user,
+                request=request,
             )
 
         create_business_audit_log(
@@ -963,6 +969,7 @@ def register_kardex_movement(
     user=None,
     origin=AuditOrigin.MANUAL,
     reference=None,
+    request=None,
 ):
     """
     Única entrada oficial para modificar stock.
@@ -1080,10 +1087,41 @@ def register_kardex_movement(
         with allow_kardex_write():
             movement.save()
 
+            create_business_audit_log(
+                instance=movement,
+                action=KARDEX_AUDIT_ACTION_BY_TYPE.get(
+                    movement_type,
+                    AuditAction.CREAR,
+                ),
+                user=user,
+                origin=origin,
+                reason=movement.motivo,
+                metadata={
+                    "operation": "kardex_movement",
+                    "product_id": locked_product.pk,
+                    "product_model": locked_product.modelo,
+                    "movement_type": movement.movement_type,
+                    "quantity": movement.cantidad,
+                    "stock_before": movement.stock_antes,
+                    "stock_after": movement.stock_despues,
+                    "reference_content_type_id": (movement.reference_content_type_id),
+                    "reference_object_id": movement.reference_object_id,
+                    "reference_repr": movement.reference_repr,
+                },
+                request=request,
+            )
+
         return movement
 
 
-def register_manual_entry(*, producto, cantidad, motivo, user=None):
+def register_manual_entry(
+    *,
+    producto,
+    cantidad,
+    motivo,
+    user=None,
+    request=None,
+):
     return register_kardex_movement(
         producto=producto,
         movement_type=KardexMovementType.ENTRADA_MANUAL,
@@ -1091,10 +1129,18 @@ def register_manual_entry(*, producto, cantidad, motivo, user=None):
         motivo=motivo,
         user=user,
         origin=AuditOrigin.MANUAL,
+        request=request,
     )
 
 
-def register_inventory_adjustment(*, producto, cantidad, motivo, user=None):
+def register_inventory_adjustment(
+    *,
+    producto,
+    cantidad,
+    motivo,
+    user=None,
+    request=None,
+):
     return register_kardex_movement(
         producto=producto,
         movement_type=KardexMovementType.AJUSTE_INVENTARIO,
@@ -1102,10 +1148,19 @@ def register_inventory_adjustment(*, producto, cantidad, motivo, user=None):
         motivo=motivo,
         user=user,
         origin=AuditOrigin.MANUAL,
+        request=request,
     )
 
 
-def register_sale_exit(*, producto, cantidad, motivo, user=None, reference=None):
+def register_sale_exit(
+    *,
+    producto,
+    cantidad,
+    motivo,
+    user=None,
+    reference=None,
+    request=None,
+):
     return register_kardex_movement(
         producto=producto,
         movement_type=KardexMovementType.SALIDA_VENTA,
@@ -1114,11 +1169,18 @@ def register_sale_exit(*, producto, cantidad, motivo, user=None, reference=None)
         user=user,
         origin=AuditOrigin.AUTOMATICO,
         reference=reference,
+        request=request,
     )
 
 
 def register_sale_annulment_reverse(
-    *, producto, cantidad, motivo, user=None, reference=None
+    *,
+    producto,
+    cantidad,
+    motivo,
+    user=None,
+    reference=None,
+    request=None,
 ):
     return register_kardex_movement(
         producto=producto,
@@ -1128,6 +1190,7 @@ def register_sale_annulment_reverse(
         user=user,
         origin=AuditOrigin.AUTOMATICO,
         reference=reference,
+        request=request,
     )
 
 
@@ -1138,6 +1201,7 @@ def register_sale_difference_adjustment(
     motivo,
     user=None,
     reference=None,
+    request=None,
 ):
     return register_kardex_movement(
         producto=producto,
@@ -1147,6 +1211,7 @@ def register_sale_difference_adjustment(
         user=user,
         origin=AuditOrigin.AUTOMATICO,
         reference=reference,
+        request=request,
     )
 
 
@@ -1156,6 +1221,7 @@ def change_product_lifecycle(
     accion,
     motivo,
     user=None,
+    request=None,
 ):
     accion = str(accion or "").strip().upper()
     motivo = str(motivo or "").strip()
@@ -1293,6 +1359,23 @@ def change_product_lifecycle(
             action=audit_action,
         )
 
+        create_business_audit_log(
+            instance=locked_product,
+            action=audit_action,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "product_lifecycle_change",
+                "lifecycle_action": accion,
+                "previous_status": old_values["status"],
+                "new_status": locked_product.status,
+                "previous_discontinued": old_values["descontinuado"],
+                "new_discontinued": str(locked_product.descontinuado),
+            },
+            request=request,
+        )
+
     return locked_product, audit_action
 
 
@@ -1303,6 +1386,7 @@ def create_pending_receipt(
     motivo="",
     referencia="",
     user=None,
+    request=None,
 ):
     motivo = str(motivo or "").strip()
     referencia = str(referencia or "").strip()
@@ -1354,6 +1438,23 @@ def create_pending_receipt(
             updated_by=get_operator(user),
         )
 
+        create_business_audit_log(
+            instance=pending_receipt,
+            action=AuditAction.CREAR,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo or referencia,
+            metadata={
+                "operation": "pending_receipt_create",
+                "product_id": locked_product.pk,
+                "product_model": locked_product.modelo,
+                "original_quantity": pending_receipt.cantidad_original,
+                "reference": pending_receipt.referencia,
+                "initial_status": pending_receipt.estado,
+            },
+            request=request,
+        )
+
     return pending_receipt
 
 
@@ -1363,6 +1464,7 @@ def receive_pending_receipt(
     cantidad,
     motivo,
     user=None,
+    request=None,
 ):
     motivo = str(motivo or "").strip()
 

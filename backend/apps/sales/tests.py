@@ -16,6 +16,7 @@ from apps.inventory.models import (
     MovimientoKardex,
     Producto,
 )
+from apps.inventory.services import register_manual_entry
 from apps.sales.models import Venta, VentaAlertCode, VentaStatus
 from apps.sales.serializers import VentaSerializer
 from apps.sales.services import (
@@ -71,16 +72,26 @@ class SalesServiceTests(TestCase):
             categoria=self.categoria,
             modelo="Sensor Industrial A",
             codigo_sap="SAP-001",
-            stock_actual=10,
             stock_critico=2,
             controla_stock=True,
             created_by=self.user,
             updated_by=self.user,
         )
+
+        register_manual_entry(
+            producto=self.producto,
+            cantidad=10,
+            motivo="Stock inicial para pruebas del módulo de Ventas.",
+            user=self.user,
+        )
+
+        self.producto.refresh_from_db()
+
+        self.initial_kardex_count = MovimientoKardex.objects.count()
+
         self.servicio = Producto.objects.create(
             categoria=self.categoria,
             modelo="Servicio de instalación",
-            stock_actual=0,
             stock_critico=0,
             controla_stock=False,
             created_by=self.user,
@@ -160,7 +171,10 @@ class SalesServiceTests(TestCase):
         self.producto.refresh_from_db()
 
         self.assertEqual(Venta.objects.count(), 0)
-        self.assertEqual(MovimientoKardex.objects.count(), 0)
+        self.assertEqual(
+            MovimientoKardex.objects.count(),
+            self.initial_kardex_count,
+        )
         self.assertEqual(self.producto.stock_actual, 10)
 
         error = context.exception.message_dict
@@ -190,7 +204,10 @@ class SalesServiceTests(TestCase):
         self.producto.refresh_from_db()
 
         self.assertEqual(Venta.objects.count(), 0)
-        self.assertEqual(MovimientoKardex.objects.count(), 0)
+        self.assertEqual(
+            MovimientoKardex.objects.count(),
+            self.initial_kardex_count,
+        )
         self.assertEqual(self.producto.stock_actual, 10)
 
         error = context.exception.message_dict
@@ -215,7 +232,10 @@ class SalesServiceTests(TestCase):
 
         self.assertFalse(venta.stock_descontado)
         self.assertEqual(self.servicio.stock_actual, 0)
-        self.assertEqual(MovimientoKardex.objects.count(), 0)
+        self.assertEqual(
+            MovimientoKardex.objects.count(),
+            self.initial_kardex_count,
+        )
 
     def test_annul_sale_reverses_stock_and_audits_status_change(self):
         venta = create_sale_with_details(
@@ -286,9 +306,15 @@ class SalesServiceTests(TestCase):
         self.producto.refresh_from_db()
         concreted_sale.refresh_from_db()
 
-        self.assertEqual(concreted_sale.sale_status, VentaStatus.CONCRETADA)
+        self.assertEqual(
+            concreted_sale.sale_status,
+            VentaStatus.CONCRETADA,
+        )
         self.assertEqual(self.producto.stock_actual, 8)
-        self.assertEqual(MovimientoKardex.objects.count(), 1)
+        self.assertEqual(
+            MovimientoKardex.objects.count(),
+            self.initial_kardex_count + 1,
+        )
         self.assertTrue(
             RecordChangeLog.objects.filter(
                 object_id=str(concreted_sale.pk),

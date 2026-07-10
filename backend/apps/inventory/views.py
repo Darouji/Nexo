@@ -190,15 +190,34 @@ def apply_created_at_date_range(queryset, params):
 class InventoryPermissionMixin:
     def get_permissions(self):
         if self.action in ["list", "retrieve", "resumen"]:
-            permission_classes = [IsAuthenticated, IsConsultaOrOperativoGlobal]
+            permission_classes = [
+                IsAuthenticated,
+                IsConsultaOrOperativoGlobal,
+            ]
         else:
-            permission_classes = [IsAuthenticated, IsOperativoGlobal]
+            permission_classes = [
+                IsAuthenticated,
+                IsOperativoGlobal,
+            ]
 
         return [permission() for permission in permission_classes]
 
     def set_audit_instance(self, instance):
-        django_request = getattr(self.request, "_request", self.request)
+        django_request = getattr(
+            self.request,
+            "_request",
+            self.request,
+        )
         django_request.audit_instance = instance
+
+    def _skip_activity_audit(self, request=None):
+        source_request = request or self.request
+        django_request = getattr(
+            source_request,
+            "_request",
+            source_request,
+        )
+        django_request.skip_activity_audit = True
 
     def perform_create(self, serializer):
         instance = serializer.save(
@@ -259,10 +278,6 @@ class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
             )
 
         return queryset
-
-    def _skip_activity_audit(self, request):
-        django_request = getattr(request, "_request", request)
-        django_request.skip_activity_audit = True
 
     def destroy(self, request, *args, **kwargs):
         categoria = self.get_object()
@@ -576,24 +591,17 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         try:
-            updated_product, audit_action = change_product_lifecycle(
+            updated_product, _ = change_product_lifecycle(
                 producto=producto,
                 accion=serializer.validated_data["accion"],
                 motivo=serializer.validated_data["motivo"],
                 user=request.user,
+                request=getattr(request, "_request", request),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
 
-        django_request = getattr(request, "_request", request)
-
-        django_request.user = request.user
-        django_request.audit_action = audit_action
-        django_request.audit_reason = serializer.validated_data["motivo"]
-        django_request.audit_instance = updated_product
-        django_request.audit_metadata = {
-            "lifecycle_action": serializer.validated_data["accion"],
-        }
+        self._skip_activity_audit(request)
 
         return Response(
             ProductoSerializer(
@@ -668,6 +676,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="entrada-manual")
     def entrada_manual(self, request, pk=None):
         producto = self.get_object()
+
         serializer = ManualStockEntrySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -677,16 +686,28 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
                 user=request.user,
+                request=getattr(request, "_request", request),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
 
-        output_serializer = MovimientoKardexSerializer(movement)
-        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+        self._skip_activity_audit(request)
 
-    @action(detail=True, methods=["post"], url_path="ajuste-inventario")
+        output_serializer = MovimientoKardexSerializer(movement)
+
+        return Response(
+            output_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="ajuste-inventario",
+    )
     def ajuste_inventario(self, request, pk=None):
         producto = self.get_object()
+
         serializer = InventoryAdjustmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -696,12 +717,19 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
                 user=request.user,
+                request=getattr(request, "_request", request),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
 
+        self._skip_activity_audit(request)
+
         output_serializer = MovimientoKardexSerializer(movement)
-        return Response(output_serializer.data, status=status.HTTP_201_CREATED)
+
+        return Response(
+            output_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class PendientePorRecibirViewSet(
@@ -770,12 +798,21 @@ class PendientePorRecibirViewSet(
             pending_receipt = create_pending_receipt(
                 producto=serializer.validated_data["producto"],
                 cantidad=serializer.validated_data["cantidad"],
-                motivo=serializer.validated_data.get("motivo", ""),
-                referencia=serializer.validated_data.get("referencia", ""),
+                motivo=serializer.validated_data.get(
+                    "motivo",
+                    "",
+                ),
+                referencia=serializer.validated_data.get(
+                    "referencia",
+                    "",
+                ),
                 user=request.user,
+                request=getattr(request, "_request", request),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+
+        self._skip_activity_audit(request)
 
         output_serializer = PendientePorRecibirSerializer(pending_receipt)
 
@@ -797,9 +834,16 @@ class PendientePorRecibirViewSet(
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
                 user=request.user,
+                request=getattr(
+                    request,
+                    "_request",
+                    request,
+                ),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+
+        self._skip_activity_audit(request)
 
         return Response(
             {
@@ -824,9 +868,12 @@ class PendientePorRecibirViewSet(
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
                 user=request.user,
+                request=getattr(request, "_request", request),
             )
         except DjangoValidationError as error:
             raise_drf_validation_error(error)
+
+        self._skip_activity_audit(request)
 
         return Response(
             PendientePorRecibirSerializer(updated_pending_receipt).data,

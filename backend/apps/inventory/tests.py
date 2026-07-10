@@ -639,6 +639,19 @@ class PendientePorRecibirApiTests(TestCase):
 
         pending_receipt_id = create_response.data["id"]
 
+        create_audits = list(
+            AuditLog.objects.filter(
+                model_name="pendienteporrecibir",
+                object_id=str(pending_receipt_id),
+            )
+        )
+
+        self.assertEqual(len(create_audits), 1)
+        self.assertEqual(
+            create_audits[0].metadata.get("operation"),
+            "pending_receipt_create",
+        )
+
         receive_response = client.post(
             (f"/api/inventory/pendientes-por-recibir/{pending_receipt_id}/recibir/"),
             {
@@ -652,13 +665,51 @@ class PendientePorRecibirApiTests(TestCase):
             receive_response.status_code,
             status.HTTP_200_OK,
         )
+
         self.assertEqual(
             receive_response.data["pendiente"]["estado"],
             "RECIBIDA",
         )
+
         self.assertEqual(
             receive_response.data["movimiento_kardex"]["movement_type"],
             KardexMovementType.ENTRADA_RECEPCION,
+        )
+
+        movement_id = receive_response.data["movimiento_kardex"]["id"]
+
+        pending_audits = list(
+            AuditLog.objects.filter(
+                model_name="pendienteporrecibir",
+                object_id=str(pending_receipt_id),
+            ).order_by("created_at")
+        )
+
+        self.assertEqual(len(pending_audits), 2)
+
+        pending_operations = {
+            audit.metadata.get("operation") for audit in pending_audits
+        }
+
+        self.assertEqual(
+            pending_operations,
+            {
+                "pending_receipt_create",
+                "pending_receipt_receive",
+            },
+        )
+
+        kardex_audits = list(
+            AuditLog.objects.filter(
+                model_name="movimientokardex",
+                object_id=str(movement_id),
+            )
+        )
+
+        self.assertEqual(len(kardex_audits), 1)
+        self.assertEqual(
+            kardex_audits[0].metadata.get("operation"),
+            "kardex_movement",
         )
 
     def test_consulta_user_cannot_create_pending_receipt(self):
@@ -715,12 +766,23 @@ class PendientePorRecibirApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], BaseStatus.INACTIVO)
 
-        self.assertTrue(
+        lifecycle_audits = list(
             AuditLog.objects.filter(
                 action=AuditAction.INACTIVAR,
+                model_name="producto",
                 object_id=str(lifecycle_product.pk),
-                reason="Producto creado por error y sin movimientos.",
-            ).exists()
+                reason=("Producto creado por error y sin movimientos."),
+            )
+        )
+
+        self.assertEqual(len(lifecycle_audits), 1)
+        self.assertEqual(
+            lifecycle_audits[0].metadata.get("operation"),
+            "product_lifecycle_change",
+        )
+        self.assertEqual(
+            lifecycle_audits[0].metadata.get("lifecycle_action"),
+            "INACTIVAR",
         )
 
     def test_category_rejects_direct_status_change_and_used_category_delete(self):

@@ -1498,8 +1498,8 @@ def receive_pending_receipt(
             raise ValidationError(
                 {
                     "producto": (
-                        "Este producto no maneja inventario y no puede recibir "
-                        "stock físico."
+                        "Este producto no maneja inventario y no puede "
+                        "recibir stock físico."
                     )
                 }
             )
@@ -1508,7 +1508,8 @@ def receive_pending_receipt(
             raise ValidationError(
                 {
                     "cantidad": (
-                        "La cantidad recibida no puede superar las unidades pendientes. "
+                        "La cantidad recibida no puede superar las "
+                        "unidades pendientes. "
                         f"Pendiente actual: "
                         f"{locked_pending_receipt.cantidad_pendiente}."
                     )
@@ -1520,6 +1521,8 @@ def receive_pending_receipt(
             PENDING_RECEIPT_AUDIT_FIELDS,
         )
 
+        pending_before = locked_pending_receipt.cantidad_pendiente
+
         movement = register_kardex_movement(
             producto=locked_product,
             movement_type=KardexMovementType.ENTRADA_RECEPCION,
@@ -1528,6 +1531,7 @@ def receive_pending_receipt(
             user=user,
             origin=AuditOrigin.MANUAL,
             reference=locked_pending_receipt,
+            request=request,
         )
 
         locked_pending_receipt.cantidad_recibida += cantidad
@@ -1550,6 +1554,28 @@ def receive_pending_receipt(
             action=AuditAction.CAMBIAR_ESTADO,
         )
 
+        create_business_audit_log(
+            instance=locked_pending_receipt,
+            action=AuditAction.CAMBIAR_ESTADO,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "pending_receipt_receive",
+                "product_id": locked_product.pk,
+                "product_model": locked_product.modelo,
+                "kardex_movement_id": movement.pk,
+                "received_quantity": cantidad,
+                "received_before": int(old_values.get("cantidad_recibida") or 0),
+                "received_after": (locked_pending_receipt.cantidad_recibida),
+                "pending_before": pending_before,
+                "pending_after": (locked_pending_receipt.cantidad_pendiente),
+                "previous_status": old_values.get("estado", ""),
+                "new_status": locked_pending_receipt.estado,
+            },
+            request=request,
+        )
+
     return locked_pending_receipt, movement
 
 
@@ -1559,6 +1585,7 @@ def cancel_pending_receipt(
     cantidad,
     motivo,
     user=None,
+    request=None,
 ):
     motivo = str(motivo or "").strip()
 
@@ -1569,17 +1596,31 @@ def cancel_pending_receipt(
         raise ValidationError({"motivo": "El motivo de la cancelación es obligatorio."})
 
     with transaction.atomic():
-        Producto.objects.select_for_update().get(pk=pending_receipt.producto_id)
-
-        locked_pending_receipt = PendientePorRecibir.objects.select_for_update().get(
-            pk=pending_receipt.pk
+        locked_product = Producto.objects.select_for_update().get(
+            pk=pending_receipt.producto_id
         )
+
+        locked_pending_receipt = (
+            PendientePorRecibir.objects.select_for_update()
+            .select_related("producto")
+            .get(pk=pending_receipt.pk)
+        )
+
+        if locked_pending_receipt.producto_id != locked_product.pk:
+            raise ValidationError(
+                {
+                    "producto": (
+                        "La recepción pendiente no corresponde al producto indicado."
+                    )
+                }
+            )
 
         if cantidad > locked_pending_receipt.cantidad_pendiente:
             raise ValidationError(
                 {
                     "cantidad": (
-                        "La cantidad cancelada no puede superar las unidades pendientes. "
+                        "La cantidad cancelada no puede superar las "
+                        "unidades pendientes. "
                         f"Pendiente actual: "
                         f"{locked_pending_receipt.cantidad_pendiente}."
                     )
@@ -1590,6 +1631,8 @@ def cancel_pending_receipt(
             locked_pending_receipt,
             PENDING_RECEIPT_AUDIT_FIELDS,
         )
+
+        pending_before = locked_pending_receipt.cantidad_pendiente
 
         locked_pending_receipt.cantidad_cancelada += cantidad
         locked_pending_receipt.updated_by = get_operator(user)
@@ -1609,6 +1652,27 @@ def cancel_pending_receipt(
             origin=AuditOrigin.MANUAL,
             reason=motivo,
             action=AuditAction.CAMBIAR_ESTADO,
+        )
+
+        create_business_audit_log(
+            instance=locked_pending_receipt,
+            action=AuditAction.CAMBIAR_ESTADO,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=motivo,
+            metadata={
+                "operation": "pending_receipt_cancel",
+                "product_id": locked_product.pk,
+                "product_model": locked_product.modelo,
+                "cancelled_quantity": cantidad,
+                "cancelled_before": int(old_values.get("cantidad_cancelada") or 0),
+                "cancelled_after": (locked_pending_receipt.cantidad_cancelada),
+                "pending_before": pending_before,
+                "pending_after": (locked_pending_receipt.cantidad_pendiente),
+                "previous_status": old_values.get("estado", ""),
+                "new_status": locked_pending_receipt.estado,
+            },
+            request=request,
         )
 
     return locked_pending_receipt

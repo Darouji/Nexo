@@ -557,9 +557,16 @@ export function SalesPage() {
   const columns: GridColDef[] = [
     {
       field: "fecha_venta",
-      headerName: "Fecha venta",
-      width: 130,
+      headerName: "Fecha de emisión factura",
+      width: 210,
       renderCell: (params) => formatDate(String(params.value || "")),
+    },
+    {
+      field: "orden_compra",
+      headerName: "Orden de compra",
+      minWidth: 160,
+      flex: 0.8,
+      renderCell: (params) => params.value || "Sin OC",
     },
     {
       field: "minera_name",
@@ -567,13 +574,6 @@ export function SalesPage() {
       minWidth: 190,
       flex: 1,
       renderCell: (params) => params.value || "Sin minera",
-    },
-    {
-      field: "orden_compra",
-      headerName: "Orden compra",
-      minWidth: 150,
-      flex: 0.8,
-      renderCell: (params) => params.value || "Sin OC",
     },
     {
       field: "factura_numero",

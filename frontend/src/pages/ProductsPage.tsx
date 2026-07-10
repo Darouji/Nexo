@@ -1,32 +1,36 @@
 import AddIcon from "@mui/icons-material/Add";
-import RefreshIcon from "@mui/icons-material/Refresh";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 import { Alert, Box, Button } from "@mui/material";
-import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
-import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipts/pendingReceiptColumns";
-import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
+import { PageHeader } from "../components/PageHeader";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
-import { colors } from "../theme/colors";
-import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import { getAvailableProductCategoryOptions } from "../features/inventory/categories/categoryOptions";
-import { getProductActionMenuPermissions } from "../features/inventory/products/productActionPermissions";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
-import { PageHeader } from "../components/PageHeader";
-import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
 import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
-import { ProductDialog } from "../features/inventory/products/ProductDialog";
+import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
+import { ProductActionMenus } from "../features/inventory/components/ProductActionMenus";
+import { ProductCategoryChangeDialog } from "../features/inventory/components/ProductCategoryChangeDialog";
 import { ProductKardexDialog } from "../features/inventory/components/ProductKardexDialog";
 import { ProductLifecycleDialog } from "../features/inventory/components/ProductLifecycleDialog";
 import { ProductOriginChangeDialog } from "../features/inventory/components/ProductOriginChangeDialog";
-import { ProductCategoryChangeDialog } from "../features/inventory/components/ProductCategoryChangeDialog";
-import { ProductActionMenus } from "../features/inventory/components/ProductActionMenus";
 import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
+import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
+import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipts/pendingReceiptColumns";
+import { getProductActionMenuPermissions } from "../features/inventory/products/productActionPermissions";
+import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
+import { ProductDialog } from "../features/inventory/products/ProductDialog";
 import {
   formatNumber,
   parseInteger,
 } from "../features/inventory/utils/inventoryFormatters";
+import {
+  buildKardexMovementPageParams,
+  buildPendingReceiptPageParams,
+  buildProductPageParams,
+} from "../features/inventory/utils/inventoryQueryParams";
+import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   cancelPendingReceipt,
   changeProductCategory,
@@ -37,18 +41,14 @@ import {
   fetchCategories,
   fetchInventorySummary,
   fetchKardexMovementsPage,
-  fetchProductsPage,
   fetchPendingReceiptsPage,
+  fetchProductsPage,
   receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
   updateProduct,
 } from "../services/inventoryService";
-import {
-  buildKardexMovementPageParams,
-  buildPendingReceiptPageParams,
-  buildProductPageParams,
-} from "../features/inventory/utils/inventoryQueryParams";
+import { colors } from "../theme/colors";
 
 import type { GridPaginationModel } from "@mui/x-data-grid";
 import type {

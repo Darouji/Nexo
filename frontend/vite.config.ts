@@ -5,15 +5,21 @@ export default defineConfig({
   plugins: [react()],
 
   server: {
-    // Escucha únicamente dentro de este computador.
-    // No expone Vite directamente a otros dispositivos de la red local.
     host: "127.0.0.1",
-
     port: 5173,
     strictPort: true,
 
-    // Los dominios adicionales se autorizan mediante
-    // __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS.
+    // Los hosts externos se autorizan mediante:
+    // __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
     allowedHosts: [],
+
+    // Permite que frontend y backend se publiquen mediante
+    // una sola dirección ngrok.
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8000",
+        changeOrigin: true,
+      },
+    },
   },
 });

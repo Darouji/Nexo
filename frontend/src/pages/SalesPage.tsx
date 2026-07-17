@@ -590,9 +590,23 @@ export function SalesPage() {
       renderCell: (params) => params.value || "Sin guía/HES",
     },
     {
-      field: "total",
-      headerName: "Total",
+      field: "valor_neto",
+      headerName: "Monto neto",
+      width: 150,
+      type: "number",
+      renderCell: (params) => formatCLP(String(params.value || 0)),
+    },
+    {
+      field: "iva",
+      headerName: "IVA (19%)",
       width: 140,
+      type: "number",
+      renderCell: (params) => formatCLP(String(params.value || 0)),
+    },
+    {
+      field: "total",
+      headerName: "Total con IVA",
+      width: 165,
       type: "number",
       renderCell: (params) => (
         <Typography sx={{ fontWeight: 900 }}>
@@ -751,15 +765,15 @@ export function SalesPage() {
     },
     {
       field: "valor_unitario",
-      headerName: "Valor unitario",
-      width: 150,
+      headerName: "Valor unitario neto",
+      width: 180,
       type: "number",
       renderCell: (params) => formatCLP(String(params.value || 0)),
     },
     {
       field: "valor_total",
-      headerName: "Total línea",
-      width: 150,
+      headerName: "Subtotal neto",
+      width: 160,
       type: "number",
       renderCell: (params) => (
         <Typography sx={{ fontWeight: 900 }}>
@@ -1306,7 +1320,7 @@ export function SalesPage() {
                       />
 
                       <TextField
-                        label="Valor unitario"
+                        label="Valor unitario neto"
                         type="number"
                         value={line.valor_unitario}
                         onChange={(event) =>
@@ -1346,7 +1360,7 @@ export function SalesPage() {
                       variant="body2"
                       sx={{ color: colors.text.muted }}
                     >
-                      Total línea:{" "}
+                      Subtotal neto de línea:{" "}
                       <strong>
                         {formatCLP(
                           parsePositiveInteger(line.cantidad) *
@@ -1363,9 +1377,9 @@ export function SalesPage() {
             </Stack>
 
             <Alert severity="success" variant="outlined">
-              Neto: <strong>{formatCLP(salePreview.neto)}</strong> — IVA 19%:{" "}
-              <strong>{formatCLP(salePreview.iva)}</strong> — Total:{" "}
-              <strong>{formatCLP(salePreview.total)}</strong>
+              Monto neto: <strong>{formatCLP(salePreview.neto)}</strong> — IVA
+              (19%): <strong>{formatCLP(salePreview.iva)}</strong> — Total con
+              IVA: <strong>{formatCLP(salePreview.total)}</strong>
             </Alert>
           </Stack>
         </DialogContent>
@@ -1400,9 +1414,10 @@ export function SalesPage() {
           <Stack spacing={2.2} sx={{ mt: 1 }}>
             {selectedSale ? (
               <Alert severity="info" variant="outlined">
-                Total venta: <strong>{formatCLP(selectedSale.total)}</strong> —
-                Neto: <strong>{formatCLP(selectedSale.valor_neto)}</strong> —
-                IVA: <strong>{formatCLP(selectedSale.iva)}</strong>
+                Monto neto:{" "}
+                <strong>{formatCLP(selectedSale.valor_neto)}</strong> — IVA
+                (19%): <strong>{formatCLP(selectedSale.iva)}</strong> — Total
+                con IVA: <strong>{formatCLP(selectedSale.total)}</strong>
               </Alert>
             ) : null}
 

@@ -1,4 +1,13 @@
-import type { ReactNode } from "react";
+import CategoryIcon from "@mui/icons-material/Category";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
+import SearchIcon from "@mui/icons-material/Search";
+import TuneIcon from "@mui/icons-material/Tune";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+
+import { colors } from "../../../theme/colors";
+import { MetricCard } from "../../../components/MetricCard";
+import { SectionCard } from "../../../components/SectionCard";
 import {
   Box,
   Button,
@@ -8,29 +17,27 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
-import CategoryIcon from "@mui/icons-material/Category";
-import Inventory2Icon from "@mui/icons-material/Inventory2";
-import LocalShippingIcon from "@mui/icons-material/LocalShipping";
-import SearchIcon from "@mui/icons-material/Search";
-import TuneIcon from "@mui/icons-material/Tune";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
-import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
-import { MetricCard } from "../../../components/MetricCard";
-import { SectionCard } from "../../../components/SectionCard";
-import { SmartDataGrid } from "../../../components/SmartDataGrid";
+
+import {
+  SerkanDataGrid,
+  type SerkanGridPaginationModel,
+  type SerkanGridSortModel,
+} from "../../../components/SerkanDataGrid";
+
+import type { ColDef } from "ag-grid-community";
+import type { ReactNode } from "react";
 import type {
   Category,
   InventorySummary,
   Product,
   ProductStockStatus,
 } from "../../../services/inventoryService";
-import { colors } from "../../../theme/colors";
 
 type InventoryCatalogSectionProps = {
   inventorySummary: InventorySummary;
   products: Product[];
   categories: Category[];
-  columns: GridColDef[];
+  columns: ColDef<Product>[];
   loading: boolean;
 
   searchTerm: string;
@@ -56,11 +63,14 @@ type InventoryCatalogSectionProps = {
 
   onClearProductFilters: () => void;
 
-  productPaginationModel: GridPaginationModel;
+  productPaginationModel: SerkanGridPaginationModel;
   onProductPaginationModelChange: (
-    nextPaginationModel: GridPaginationModel,
+    nextPaginationModel: SerkanGridPaginationModel,
   ) => void;
   productRowCount: number;
+
+  productSortModel: SerkanGridSortModel;
+  onProductSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
 
   onOpenCategoryManager: () => void;
 
@@ -111,6 +121,8 @@ export function InventoryCatalogSection({
   onProductPaginationModelChange,
   productRowCount,
   onOpenCategoryManager,
+  productSortModel,
+  onProductSortModelChange,
   feedbackSlot,
 }: InventoryCatalogSectionProps) {
   return (
@@ -343,17 +355,17 @@ export function InventoryCatalogSection({
           </Button>
         }
       >
-        <SmartDataGrid
+        <SerkanDataGrid
+          gridKey="inventory.products"
+          ariaLabel="Catálogo de productos de inventario"
           rows={products}
           columns={columns}
           loading={loading}
-          paginationMode="server"
           paginationModel={productPaginationModel}
           onPaginationModelChange={onProductPaginationModelChange}
           rowCount={productRowCount}
-          rowNumberOffset={
-            productPaginationModel.page * productPaginationModel.pageSize
-          }
+          sortModel={productSortModel}
+          onSortModelChange={onProductSortModelChange}
         />
       </SectionCard>
     </>

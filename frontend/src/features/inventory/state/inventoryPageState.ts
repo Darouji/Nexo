@@ -82,6 +82,7 @@ export type ProductFilterOverrides = {
   status?: string;
   stockControl?: string;
   stockStatus?: ProductStockStatus | "";
+  ordering?: string;
 };
 
 export type PendingReceiptFilterOverrides = {

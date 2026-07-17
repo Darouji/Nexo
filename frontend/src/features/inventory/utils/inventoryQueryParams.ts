@@ -18,6 +18,7 @@ type ProductQueryState = {
   statusFilter: string;
   stockControlFilter: string;
   stockStatusFilter: ProductStockStatus | "";
+  ordering: string;
   paginationModel: GridPaginationModel;
 };
 
@@ -48,12 +49,13 @@ export function buildProductPageParams(
   const resolvedStatus = filters.status ?? state.statusFilter;
   const resolvedStockControl = filters.stockControl ?? state.stockControlFilter;
   const resolvedStockStatus = filters.stockStatus ?? state.stockStatusFilter;
+  const resolvedOrdering = filters.ordering ?? state.ordering;
   const resolvedPage = filters.page ?? state.paginationModel.page;
   const resolvedPageSize = filters.pageSize ?? state.paginationModel.pageSize;
 
   return {
     search: resolvedSearch,
-    ordering: "categoria__name,modelo",
+    ordering: resolvedOrdering,
     categoria: resolvedCategory ? Number(resolvedCategory) : undefined,
     status: resolvedStatus || undefined,
     controla_stock: parseOptionalBoolean(resolvedStockControl),

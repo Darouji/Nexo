@@ -5,6 +5,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import { Alert, Box, Button } from "@mui/material";
 import { PageHeader } from "../components/PageHeader";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
+import { colors } from "../theme/colors";
 import { getAvailableProductCategoryOptions } from "../features/inventory/categories/categoryOptions";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
@@ -48,9 +49,9 @@ import {
   registerManualStockEntry,
   updateProduct,
 } from "../services/inventoryService";
-import { colors } from "../theme/colors";
 
 import type { GridPaginationModel } from "@mui/x-data-grid";
+import type { SerkanGridSortModel } from "../components/SerkanDataGrid";
 import type {
   AuditOrigin,
   Category,
@@ -110,6 +111,17 @@ export function ProductsPage() {
 
   const [productPaginationModel, setProductPaginationModel] =
     useState<GridPaginationModel>(defaultProductPaginationModel);
+
+  const [productSortModel, setProductSortModel] = useState<SerkanGridSortModel>(
+    {
+      field: "categoria__name",
+      direction: "asc",
+    },
+  );
+
+  const [productOrdering, setProductOrdering] = useState(
+    "categoria__name,modelo",
+  );
 
   const [inventorySummary, setInventorySummary] = useState<InventorySummary>(
     emptyInventorySummary,
@@ -205,6 +217,7 @@ export function ProductsPage() {
           statusFilter,
           stockControlFilter,
           stockStatusFilter,
+          ordering: productOrdering,
           paginationModel: productPaginationModel,
         }),
       );
@@ -268,6 +281,27 @@ export function ProductsPage() {
 
     void loadProducts({
       page: nextPaginationModel.page,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handleProductSortModelChange = (nextSortModel: SerkanGridSortModel) => {
+    const nextOrdering = nextSortModel
+      ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
+      : "categoria__name,modelo";
+
+    const nextPaginationModel = {
+      ...productPaginationModel,
+      page: 0,
+    };
+
+    setProductSortModel(nextSortModel);
+    setProductOrdering(nextOrdering);
+    setProductPaginationModel(nextPaginationModel);
+
+    void loadProducts({
+      ordering: nextOrdering,
+      page: 0,
       pageSize: nextPaginationModel.pageSize,
     });
   };
@@ -1374,6 +1408,8 @@ export function ProductsPage() {
         productPaginationModel={productPaginationModel}
         onProductPaginationModelChange={handleProductPaginationModelChange}
         productRowCount={productRowCount}
+        productSortModel={productSortModel}
+        onProductSortModelChange={handleProductSortModelChange}
         onOpenCategoryManager={handleOpenCategoryManager}
         feedbackSlot={
           <>

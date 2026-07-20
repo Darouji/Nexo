@@ -1,4 +1,4 @@
-import type { GridPaginationModel } from "@mui/x-data-grid";
+import type { SerkanGridPaginationModel } from "../../../components/SerkanDataGrid";
 import type {
   AuditOrigin,
   PendingReceiptStatus,
@@ -19,7 +19,7 @@ type ProductQueryState = {
   stockControlFilter: string;
   stockStatusFilter: ProductStockStatus | "";
   ordering: string;
-  paginationModel: GridPaginationModel;
+  paginationModel: SerkanGridPaginationModel;
 };
 
 type KardexQueryState = {
@@ -27,14 +27,14 @@ type KardexQueryState = {
   movementType: string;
   origin: AuditOrigin | "";
   ordering: string;
-  paginationModel: GridPaginationModel;
+  paginationModel: SerkanGridPaginationModel;
 };
 
 type PendingReceiptQueryState = {
   searchTerm: string;
   statusFilter: PendingReceiptStatus | "";
   ordering: string;
-  paginationModel: GridPaginationModel;
+  paginationModel: SerkanGridPaginationModel;
 };
 
 export function buildProductPageParams(

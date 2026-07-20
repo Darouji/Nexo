@@ -1,4 +1,7 @@
-import type { GridPaginationModel } from "@mui/x-data-grid";
+import type {
+  SerkanGridPaginationModel,
+  SerkanGridSortModel,
+} from "../../../components/SerkanDataGrid";
 import type {
   AuditOrigin,
   Category,
@@ -25,7 +28,9 @@ export type KardexDialogState = {
   product: Product | null;
   movements: KardexMovement[];
   rowCount: number;
-  paginationModel: GridPaginationModel;
+  paginationModel: SerkanGridPaginationModel;
+  sortModel: SerkanGridSortModel;
+  ordering: string;
   loading: boolean;
 };
 
@@ -103,17 +108,22 @@ export type KardexFilterOverrides = {
   pageSize?: number;
 };
 
-export const defaultProductPaginationModel: GridPaginationModel = {
+export const defaultProductPaginationModel: SerkanGridPaginationModel = {
   page: 0,
   pageSize: 25,
 };
 
-export const defaultKardexPaginationModel: GridPaginationModel = {
+export const defaultKardexSortModel: SerkanGridSortModel = {
+  field: "created_at",
+  direction: "desc",
+};
+
+export const defaultKardexPaginationModel: SerkanGridPaginationModel = {
   page: 0,
   pageSize: 10,
 };
 
-export const defaultPendingReceiptPaginationModel: GridPaginationModel = {
+export const defaultPendingReceiptPaginationModel: SerkanGridPaginationModel = {
   page: 0,
   pageSize: 10,
 };
@@ -138,6 +148,8 @@ export const emptyKardexDialog: KardexDialogState = {
   movements: [],
   rowCount: 0,
   paginationModel: defaultKardexPaginationModel,
+  sortModel: defaultKardexSortModel,
+  ordering: "-created_at",
   loading: false,
 };
 

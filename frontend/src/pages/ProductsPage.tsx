@@ -51,8 +51,10 @@ import {
   updateProduct,
 } from "../services/inventoryService";
 
-import type { GridPaginationModel } from "@mui/x-data-grid";
-import type { SerkanGridSortModel } from "../components/SerkanDataGrid";
+import type {
+  SerkanGridPaginationModel,
+  SerkanGridSortModel,
+} from "../components/SerkanDataGrid";
 import type {
   AuditOrigin,
   Category,
@@ -111,7 +113,7 @@ export function ProductsPage() {
   const [productRowCount, setProductRowCount] = useState(0);
 
   const [productPaginationModel, setProductPaginationModel] =
-    useState<GridPaginationModel>(defaultProductPaginationModel);
+    useState<SerkanGridPaginationModel>(defaultProductPaginationModel);
 
   const [productSortModel, setProductSortModel] = useState<SerkanGridSortModel>(
     {
@@ -170,7 +172,7 @@ export function ProductsPage() {
   const [hasLoadedGlobalKardex, setHasLoadedGlobalKardex] = useState(false);
   const [globalKardexRowCount, setGlobalKardexRowCount] = useState(0);
   const [globalKardexPaginationModel, setGlobalKardexPaginationModel] =
-    useState<GridPaginationModel>(defaultKardexPaginationModel);
+    useState<SerkanGridPaginationModel>(defaultKardexPaginationModel);
   const [globalKardexSortModel, setGlobalKardexSortModel] =
     useState<SerkanGridSortModel>({
       field: "created_at",
@@ -189,7 +191,7 @@ export function ProductsPage() {
   const [pendingReceiptsLoading, setPendingReceiptsLoading] = useState(true);
   const [pendingReceiptRowCount, setPendingReceiptRowCount] = useState(0);
   const [pendingReceiptPaginationModel, setPendingReceiptPaginationModel] =
-    useState<GridPaginationModel>(defaultPendingReceiptPaginationModel);
+    useState<SerkanGridPaginationModel>(defaultPendingReceiptPaginationModel);
   const [pendingReceiptSortModel, setPendingReceiptSortModel] =
     useState<SerkanGridSortModel>({
       field: "created_at",
@@ -293,7 +295,7 @@ export function ProductsPage() {
   };
 
   const handleProductPaginationModelChange = (
-    nextPaginationModel: GridPaginationModel,
+    nextPaginationModel: SerkanGridPaginationModel,
   ) => {
     setProductPaginationModel(nextPaginationModel);
 
@@ -358,7 +360,7 @@ export function ProductsPage() {
   };
 
   const handleGlobalKardexPaginationModelChange = (
-    nextPaginationModel: GridPaginationModel,
+    nextPaginationModel: SerkanGridPaginationModel,
   ) => {
     setGlobalKardexPaginationModel(nextPaginationModel);
 
@@ -451,7 +453,7 @@ export function ProductsPage() {
   };
 
   const handlePendingReceiptPaginationModelChange = (
-    nextPaginationModel: GridPaginationModel,
+    nextPaginationModel: SerkanGridPaginationModel,
   ) => {
     setPendingReceiptPaginationModel(nextPaginationModel);
 
@@ -988,7 +990,7 @@ export function ProductsPage() {
 
   const loadProductKardexPage = async (
     product: Product,
-    paginationModel: GridPaginationModel = defaultKardexPaginationModel,
+    paginationModel: SerkanGridPaginationModel = defaultKardexPaginationModel,
   ) => {
     setKardexDialog((current) => ({
       ...current,
@@ -1038,7 +1040,7 @@ export function ProductsPage() {
   };
 
   const handleProductKardexPaginationModelChange = (
-    nextPaginationModel: GridPaginationModel,
+    nextPaginationModel: SerkanGridPaginationModel,
   ) => {
     const product = kardexDialog.product;
 

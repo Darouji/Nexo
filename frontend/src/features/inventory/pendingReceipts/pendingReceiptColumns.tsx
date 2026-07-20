@@ -49,6 +49,13 @@ export function buildPendingReceiptColumns({
 }: PendingReceiptColumnsOptions): ColDef<PendingReceipt>[] {
   return [
     {
+      field: "created_at",
+      colId: "created_at",
+      headerName: "Registrado",
+      width: 175,
+      valueFormatter: (params) => formatDateTime(String(params.value || "")),
+    },
+    {
       field: "producto_modelo",
       colId: "producto__modelo_normalized",
       headerName: "Producto / Modelo",
@@ -81,13 +88,6 @@ export function buildPendingReceiptColumns({
       flex: 0.8,
       sortable: false,
       valueFormatter: (params) => String(params.value || "Sin OC / factura"),
-    },
-    {
-      field: "created_at",
-      colId: "created_at",
-      headerName: "Registrado",
-      width: 175,
-      valueFormatter: (params) => formatDateTime(String(params.value || "")),
     },
     {
       field: "cantidad_original",

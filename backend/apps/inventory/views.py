@@ -2,6 +2,7 @@ from datetime import datetime, time, timedelta
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import (
+    CharField,
     Count,
     ExpressionWrapper,
     F,
@@ -10,7 +11,7 @@ from django.db.models import (
     Sum,
     Value,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, NullIf
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import filters, mixins, status, viewsets
@@ -909,7 +910,9 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
     ]
     ordering_fields = [
         "created_at",
-        "producto__modelo",
+        "producto_modelo_orden",
+        "producto_categoria_orden",
+        "producto_codigo_sap_orden",
         "movement_type",
         "origin",
         "cantidad",
@@ -919,7 +922,36 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
     ordering = ["-created_at"]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = (
+            super()
+            .get_queryset()
+            .annotate(
+                producto_modelo_orden=Coalesce(
+                    NullIf(
+                        F("producto_modelo_snapshot"),
+                        Value(""),
+                    ),
+                    F("producto__modelo"),
+                    output_field=CharField(),
+                ),
+                producto_categoria_orden=Coalesce(
+                    NullIf(
+                        F("producto_categoria_snapshot"),
+                        Value(""),
+                    ),
+                    F("producto__categoria__name"),
+                    output_field=CharField(),
+                ),
+                producto_codigo_sap_orden=Coalesce(
+                    NullIf(
+                        F("producto_codigo_sap_snapshot"),
+                        Value(""),
+                    ),
+                    F("producto__codigo_sap"),
+                    output_field=CharField(),
+                ),
+            )
+        )
         params = self.request.query_params
 
         product_ids = parse_id_values(

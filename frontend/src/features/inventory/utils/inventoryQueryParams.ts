@@ -26,6 +26,7 @@ type KardexQueryState = {
   searchTerm: string;
   movementType: string;
   origin: AuditOrigin | "";
+  ordering: string;
   paginationModel: GridPaginationModel;
 };
 
@@ -73,6 +74,7 @@ export function buildKardexMovementPageParams(
   const resolvedSearch = filters.search ?? state.searchTerm;
   const resolvedMovementType = filters.movementType ?? state.movementType;
   const resolvedOrigin = filters.origin ?? state.origin;
+  const resolvedOrdering = filters.ordering ?? state.ordering;
   const resolvedPage = filters.page ?? state.paginationModel.page;
   const resolvedPageSize = filters.pageSize ?? state.paginationModel.pageSize;
 
@@ -81,7 +83,7 @@ export function buildKardexMovementPageParams(
     movement_type: resolvedMovementType || undefined,
     origin: resolvedOrigin || undefined,
     producto: filters.product,
-    ordering: "-created_at",
+    ordering: resolvedOrdering,
     page: resolvedPage + 1,
     page_size: resolvedPageSize,
   };

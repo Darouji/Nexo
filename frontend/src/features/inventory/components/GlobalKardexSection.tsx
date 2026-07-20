@@ -1,3 +1,5 @@
+import HistoryIcon from "@mui/icons-material/History";
+import SearchIcon from "@mui/icons-material/Search";
 import {
   Alert,
   Button,
@@ -6,11 +8,14 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
-import HistoryIcon from "@mui/icons-material/History";
-import SearchIcon from "@mui/icons-material/Search";
-import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
+import type { ColDef } from "ag-grid-community";
+
+import {
+  SerkanDataGrid,
+  type SerkanGridPaginationModel,
+  type SerkanGridSortModel,
+} from "../../../components/SerkanDataGrid";
 import { SectionCard } from "../../../components/SectionCard";
-import { SmartDataGrid } from "../../../components/SmartDataGrid";
 import type {
   AuditOrigin,
   KardexMovement,
@@ -20,7 +25,7 @@ import { colors } from "../../../theme/colors";
 type GlobalKardexSectionProps = {
   hasLoaded: boolean;
   movements: KardexMovement[];
-  columns: GridColDef[];
+  columns: ColDef<KardexMovement>[];
   loading: boolean;
 
   searchTerm: string;
@@ -35,9 +40,14 @@ type GlobalKardexSectionProps = {
   onSearch: () => void;
   onClearFilters: () => void;
 
-  paginationModel: GridPaginationModel;
-  onPaginationModelChange: (nextPaginationModel: GridPaginationModel) => void;
+  paginationModel: SerkanGridPaginationModel;
+  onPaginationModelChange: (
+    nextPaginationModel: SerkanGridPaginationModel,
+  ) => void;
   rowCount: number;
+
+  sortModel: SerkanGridSortModel;
+  onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
 };
 
 function isAuditOriginFilter(value: string): value is AuditOrigin | "" {
@@ -67,11 +77,13 @@ export function GlobalKardexSection({
   paginationModel,
   onPaginationModelChange,
   rowCount,
+  sortModel,
+  onSortModelChange,
 }: GlobalKardexSectionProps) {
   return (
     <SectionCard
       title="Kardex de Inventario"
-      subtitle="Historial de movimientos de stock."
+      subtitle="Historial cronológico y auditado de los movimientos de stock."
       actions={
         <Button
           variant={hasLoaded ? "outlined" : "contained"}
@@ -96,7 +108,13 @@ export function GlobalKardexSection({
       }
     >
       {!hasLoaded ? (
-        <Stack spacing={2} sx={{ py: 2, alignItems: "flex-start" }}>
+        <Stack
+          spacing={2}
+          sx={{
+            py: 2,
+            alignItems: "flex-start",
+          }}
+        >
           <Alert severity="info" variant="outlined" sx={{ width: "100%" }}>
             El historial global se carga solo cuando se necesita. Esto mantiene
             el acceso a Inventario más rápido sin alterar la trazabilidad ni los
@@ -209,15 +227,17 @@ export function GlobalKardexSection({
             </Button>
           </Stack>
 
-          <SmartDataGrid
+          <SerkanDataGrid
+            gridKey="inventory.global-kardex"
+            ariaLabel="Kardex global de inventario"
             rows={movements}
             columns={columns}
             loading={loading}
-            paginationMode="server"
             paginationModel={paginationModel}
             onPaginationModelChange={onPaginationModelChange}
             rowCount={rowCount}
-            rowNumberOffset={paginationModel.page * paginationModel.pageSize}
+            sortModel={sortModel}
+            onSortModelChange={onSortModelChange}
           />
         </>
       )}

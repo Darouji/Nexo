@@ -18,6 +18,7 @@ import { ProductLifecycleDialog } from "../features/inventory/components/Product
 import { ProductOriginChangeDialog } from "../features/inventory/components/ProductOriginChangeDialog";
 import { StockMovementDialog } from "../features/inventory/components/StockMovementDialog";
 import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
+import { buildGlobalKardexColumns } from "../features/inventory/kardex/globalKardexColumns";
 import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipts/pendingReceiptColumns";
 import { getProductActionMenuPermissions } from "../features/inventory/products/productActionPermissions";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
@@ -170,6 +171,15 @@ export function ProductsPage() {
   const [globalKardexRowCount, setGlobalKardexRowCount] = useState(0);
   const [globalKardexPaginationModel, setGlobalKardexPaginationModel] =
     useState<GridPaginationModel>(defaultKardexPaginationModel);
+  const [globalKardexSortModel, setGlobalKardexSortModel] =
+    useState<SerkanGridSortModel>({
+      field: "created_at",
+      direction: "desc",
+    });
+
+  const [globalKardexOrdering, setGlobalKardexOrdering] =
+    useState("-created_at");
+
   const [globalKardexSearchTerm, setGlobalKardexSearchTerm] = useState("");
   const [globalKardexMovementType, setGlobalKardexMovementType] = useState("");
   const [globalKardexOrigin, setGlobalKardexOrigin] = useState<
@@ -324,6 +334,7 @@ export function ProductsPage() {
           searchTerm: globalKardexSearchTerm,
           movementType: globalKardexMovementType,
           origin: globalKardexOrigin,
+          ordering: globalKardexOrdering,
           paginationModel: globalKardexPaginationModel,
         }),
       );
@@ -353,6 +364,29 @@ export function ProductsPage() {
 
     void loadGlobalKardex({
       page: nextPaginationModel.page,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handleGlobalKardexSortModelChange = (
+    nextSortModel: SerkanGridSortModel,
+  ) => {
+    const nextOrdering = nextSortModel
+      ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
+      : "-created_at";
+
+    const nextPaginationModel = {
+      ...globalKardexPaginationModel,
+      page: 0,
+    };
+
+    setGlobalKardexSortModel(nextSortModel);
+    setGlobalKardexOrdering(nextOrdering);
+    setGlobalKardexPaginationModel(nextPaginationModel);
+
+    void loadGlobalKardex({
+      ordering: nextOrdering,
+      page: 0,
       pageSize: nextPaginationModel.pageSize,
     });
   };
@@ -1279,6 +1313,7 @@ export function ProductsPage() {
   );
 
   const kardexColumns = useMemo(() => buildKardexColumns(), []);
+  const globalKardexColumns = useMemo(() => buildGlobalKardexColumns(), []);
 
   const pendingReceiptColumns = useMemo(
     () =>
@@ -1481,7 +1516,7 @@ export function ProductsPage() {
       <GlobalKardexSection
         hasLoaded={hasLoadedGlobalKardex}
         movements={globalKardexMovements}
-        columns={kardexColumns}
+        columns={globalKardexColumns}
         loading={globalKardexLoading}
         searchTerm={globalKardexSearchTerm}
         onSearchTermChange={setGlobalKardexSearchTerm}
@@ -1494,6 +1529,8 @@ export function ProductsPage() {
         paginationModel={globalKardexPaginationModel}
         onPaginationModelChange={handleGlobalKardexPaginationModelChange}
         rowCount={globalKardexRowCount}
+        sortModel={globalKardexSortModel}
+        onSortModelChange={handleGlobalKardexSortModelChange}
       />
 
       <ProductDialog

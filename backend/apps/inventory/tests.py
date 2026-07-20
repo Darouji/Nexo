@@ -705,6 +705,89 @@ class PendientePorRecibirApiTests(TestCase):
             [pendiente_zeta.pk, pendiente_alfa.pk],
         )
 
+    def test_kardex_ordering_uses_historical_product_snapshots(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        categoria_alfa = Categoria.objects.create(
+            name="Accesorios",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        categoria_zeta = Categoria.objects.create(
+            name="Válvulas",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        producto_alfa = Producto.objects.create(
+            categoria=categoria_alfa,
+            modelo="Alfa histórico",
+            codigo_sap="SAP-100",
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        producto_zeta = Producto.objects.create(
+            categoria=categoria_zeta,
+            modelo="Zeta histórico",
+            codigo_sap="SAP-900",
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        movimiento_alfa = register_manual_entry(
+            producto=producto_alfa,
+            cantidad=2,
+            motivo="Movimiento histórico Alfa.",
+            user=self.admin,
+        )
+
+        movimiento_zeta = register_manual_entry(
+            producto=producto_zeta,
+            cantidad=3,
+            motivo="Movimiento histórico Zeta.",
+            user=self.admin,
+        )
+
+        producto_alfa.modelo = "ZZZ actual"
+        producto_alfa.categoria = categoria_zeta
+        producto_alfa.codigo_sap = "SAP-999"
+        producto_alfa.save()
+
+        producto_zeta.modelo = "AAA actual"
+        producto_zeta.categoria = categoria_alfa
+        producto_zeta.codigo_sap = "SAP-001"
+        producto_zeta.save()
+
+        ordering_cases = [
+            "producto_modelo_orden",
+            "producto_categoria_orden",
+            "producto_codigo_sap_orden",
+        ]
+
+        for ordering in ordering_cases:
+            with self.subTest(ordering=ordering):
+                response = client.get(
+                    "/api/inventory/kardex/",
+                    {"ordering": ordering},
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_200_OK,
+                )
+                self.assertEqual(
+                    [item["id"] for item in response.data["results"]],
+                    [
+                        movimiento_alfa.pk,
+                        movimiento_zeta.pk,
+                    ],
+                )
+
     def test_operational_user_can_create_and_receive_pending_receipt(self):
         client = APIClient()
         client.force_authenticate(user=self.admin)

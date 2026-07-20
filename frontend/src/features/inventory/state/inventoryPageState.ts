@@ -97,6 +97,7 @@ export type KardexFilterOverrides = {
   search?: string;
   movementType?: string;
   origin?: AuditOrigin | "";
+  ordering?: string;
   product?: number;
   page?: number;
   pageSize?: number;

@@ -103,14 +103,14 @@ export function PendingReceiptDialogs({
               />
 
               <TextField
-                label="Orden de compra / referencia"
+                label="OC / Factura"
                 value={createReferencia}
                 onChange={(event) =>
                   onCreateReferenciaChange(event.target.value)
                 }
                 fullWidth
-                placeholder="Ej.: OC-2026-001"
-                helperText="Usa la OC o el identificador que explique el origen de este pendiente."
+                placeholder="Ej.: OC-2026-001 o FAC-2026-001"
+                helperText="Ingresa la orden de compra o la factura asociada al pendiente."
               />
             </Stack>
 

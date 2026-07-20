@@ -617,6 +617,66 @@ class PendientePorRecibirApiTests(TestCase):
             updated_by=self.admin,
         )
 
+    def test_pending_receipts_can_be_ordered_by_product_model_and_sap_code(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        producto_zeta = Producto.objects.create(
+            categoria=self.categoria,
+            modelo="Zeta industrial",
+            codigo_sap="SAP-900",
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        producto_alfa = Producto.objects.create(
+            categoria=self.categoria,
+            modelo="Álfa industrial",
+            codigo_sap="SAP-100",
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        pendiente_zeta = create_pending_receipt(
+            producto=producto_zeta,
+            cantidad=5,
+            referencia="OC-ZETA",
+            motivo="Pendiente para probar ordenamiento.",
+            user=self.admin,
+        )
+
+        pendiente_alfa = create_pending_receipt(
+            producto=producto_alfa,
+            cantidad=3,
+            referencia="OC-ALFA",
+            motivo="Pendiente para probar ordenamiento.",
+            user=self.admin,
+        )
+
+        model_response = client.get(
+            "/api/inventory/pendientes-por-recibir/",
+            {"ordering": "producto__modelo_normalized"},
+        )
+
+        self.assertEqual(model_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["id"] for item in model_response.data["results"]],
+            [pendiente_alfa.pk, pendiente_zeta.pk],
+        )
+
+        sap_response = client.get(
+            "/api/inventory/pendientes-por-recibir/",
+            {"ordering": "-producto__codigo_sap_normalized"},
+        )
+
+        self.assertEqual(sap_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["id"] for item in sap_response.data["results"]],
+            [pendiente_zeta.pk, pendiente_alfa.pk],
+        )
+
     def test_operational_user_can_create_and_receive_pending_receipt(self):
         client = APIClient()
         client.force_authenticate(user=self.admin)

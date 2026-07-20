@@ -1,3 +1,7 @@
+:root {
+  --serkan-root-font-size: 13.6px;
+}
+
 html,
 body,
 #root {
@@ -8,7 +12,7 @@ body,
 }
 
 html {
-  font-size: 16px;
+  font-size: var(--serkan-root-font-size);
   font-family:
     Inter,
     Roboto,

@@ -93,7 +93,7 @@ export function PendingReceiptsSection({
               }
             }}
             fullWidth
-            placeholder="Producto, código SAP, categoría, referencia o motivo"
+            placeholder="Producto, código SAP, categoría, OC, factura o motivo"
             slotProps={{
               input: {
                 startAdornment: (

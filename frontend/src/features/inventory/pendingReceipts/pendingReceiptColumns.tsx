@@ -49,11 +49,13 @@ export function buildPendingReceiptColumns({
 }: PendingReceiptColumnsOptions): ColDef<PendingReceipt>[] {
   return [
     {
-      field: "created_at",
-      colId: "created_at",
-      headerName: "Registrado",
-      width: 175,
-      valueFormatter: (params) => formatDateTime(String(params.value || "")),
+      field: "producto_modelo",
+      colId: "producto__modelo_normalized",
+      headerName: "Producto / Modelo",
+      minWidth: 220,
+      flex: 1,
+      valueFormatter: (params) =>
+        String(params.value || "Sin producto / modelo"),
     },
     {
       field: "producto_categoria",
@@ -65,23 +67,28 @@ export function buildPendingReceiptColumns({
       valueFormatter: (params) => String(params.value || "Sin categoría"),
     },
     {
-      field: "producto_modelo",
-      colId: "producto_modelo",
-      headerName: "Producto / Modelo",
-      minWidth: 220,
-      flex: 1,
-      sortable: false,
-      valueFormatter: (params) =>
-        String(params.value || "Sin producto / modelo"),
-    },
-    {
       field: "producto_codigo_sap",
-      colId: "producto_codigo_sap",
+      colId: "producto__codigo_sap_normalized",
       headerName: "Código SAP",
       minWidth: 150,
-      flex: 0.6,
-      sortable: false,
+      flex: 0.65,
       valueFormatter: (params) => String(params.value || "Sin código"),
+    },
+    {
+      field: "referencia",
+      colId: "referencia",
+      headerName: "OC / Factura",
+      minWidth: 180,
+      flex: 0.8,
+      sortable: false,
+      valueFormatter: (params) => String(params.value || "Sin OC / factura"),
+    },
+    {
+      field: "created_at",
+      colId: "created_at",
+      headerName: "Registrado",
+      width: 175,
+      valueFormatter: (params) => formatDateTime(String(params.value || "")),
     },
     {
       field: "cantidad_original",
@@ -172,15 +179,6 @@ export function buildPendingReceiptColumns({
           </Stack>
         );
       },
-    },
-    {
-      field: "referencia",
-      colId: "referencia",
-      headerName: "OC / Referencia",
-      minWidth: 180,
-      flex: 0.8,
-      sortable: false,
-      valueFormatter: (params) => String(params.value || "Sin referencia"),
     },
     {
       field: "motivo",

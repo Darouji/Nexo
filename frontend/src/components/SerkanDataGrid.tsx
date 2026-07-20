@@ -17,6 +17,10 @@ import { colors } from "../theme/colors";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
+const SERKAN_GRID_FONT_SIZE = 12;
+const SERKAN_GRID_ROW_HEIGHT = 46;
+const SERKAN_GRID_HEADER_HEIGHT = 43;
+
 export type SerkanGridPaginationModel = {
   page: number;
   pageSize: number;
@@ -56,7 +60,7 @@ const serkanGridTheme = themeQuartz.withParams({
   headerBackgroundColor: colors.background.header,
   headerTextColor: colors.text.secondary,
   rowHoverColor: colors.action.hover,
-  fontSize: 14,
+  fontSize: SERKAN_GRID_FONT_SIZE,
   spacing: 8,
 });
 
@@ -241,8 +245,8 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           animateRows={false}
           ensureDomOrder
           enableCellTextSelection
-          rowHeight={54}
-          headerHeight={50}
+          rowHeight={SERKAN_GRID_ROW_HEIGHT}
+          headerHeight={SERKAN_GRID_HEADER_HEIGHT}
           sortingOrder={["asc", "desc", null]}
         />
       </Box>

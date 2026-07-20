@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import SearchIcon from "@mui/icons-material/Search";
 import {
   Alert,
   Box,
@@ -8,10 +8,15 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
+import type { ColDef } from "ag-grid-community";
+import type { Ref } from "react";
+
+import {
+  SerkanDataGrid,
+  type SerkanGridPaginationModel,
+  type SerkanGridSortModel,
+} from "../../../components/SerkanDataGrid";
 import { SectionCard } from "../../../components/SectionCard";
-import { SmartDataGrid } from "../../../components/SmartDataGrid";
 import type {
   PendingReceipt,
   PendingReceiptStatus,
@@ -22,7 +27,7 @@ type PendingReceiptsSectionProps = {
   sectionRef: Ref<HTMLDivElement>;
 
   pendingReceipts: PendingReceipt[];
-  columns: GridColDef[];
+  columns: ColDef<PendingReceipt>[];
   loading: boolean;
 
   searchTerm: string;
@@ -34,9 +39,14 @@ type PendingReceiptsSectionProps = {
   onSearch: () => void;
   onClearFilters: () => void;
 
-  paginationModel: GridPaginationModel;
-  onPaginationModelChange: (nextPaginationModel: GridPaginationModel) => void;
+  paginationModel: SerkanGridPaginationModel;
+  onPaginationModelChange: (
+    nextPaginationModel: SerkanGridPaginationModel,
+  ) => void;
   rowCount: number;
+
+  sortModel: SerkanGridSortModel;
+  onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
 };
 
 export function PendingReceiptsSection({
@@ -53,6 +63,8 @@ export function PendingReceiptsSection({
   paginationModel,
   onPaginationModelChange,
   rowCount,
+  sortModel,
+  onSortModelChange,
 }: PendingReceiptsSectionProps) {
   return (
     <Box ref={sectionRef} sx={{ scrollMarginTop: 24 }}>
@@ -135,15 +147,17 @@ export function PendingReceiptsSection({
           </Button>
         </Stack>
 
-        <SmartDataGrid
+        <SerkanDataGrid
+          gridKey="inventory.pending-receipts"
+          ariaLabel="Pendientes por recibir de inventario"
           rows={pendingReceipts}
           columns={columns}
           loading={loading}
-          paginationMode="server"
           paginationModel={paginationModel}
           onPaginationModelChange={onPaginationModelChange}
           rowCount={rowCount}
-          rowNumberOffset={paginationModel.page * paginationModel.pageSize}
+          sortModel={sortModel}
+          onSortModelChange={onSortModelChange}
         />
       </SectionCard>
     </Box>

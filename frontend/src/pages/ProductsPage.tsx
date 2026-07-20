@@ -180,6 +180,14 @@ export function ProductsPage() {
   const [pendingReceiptRowCount, setPendingReceiptRowCount] = useState(0);
   const [pendingReceiptPaginationModel, setPendingReceiptPaginationModel] =
     useState<GridPaginationModel>(defaultPendingReceiptPaginationModel);
+  const [pendingReceiptSortModel, setPendingReceiptSortModel] =
+    useState<SerkanGridSortModel>({
+      field: "created_at",
+      direction: "desc",
+    });
+
+  const [pendingReceiptOrdering, setPendingReceiptOrdering] =
+    useState("-created_at");
   const [pendingReceiptSearchTerm, setPendingReceiptSearchTerm] = useState("");
   const [pendingReceiptStatusFilter, setPendingReceiptStatusFilter] = useState<
     PendingReceiptStatus | ""
@@ -394,6 +402,7 @@ export function ProductsPage() {
         buildPendingReceiptPageParams(filters, {
           searchTerm: pendingReceiptSearchTerm,
           statusFilter: pendingReceiptStatusFilter,
+          ordering: pendingReceiptOrdering,
           paginationModel: pendingReceiptPaginationModel,
         }),
       );
@@ -414,6 +423,29 @@ export function ProductsPage() {
 
     void loadPendingReceipts({
       page: nextPaginationModel.page,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handlePendingReceiptSortModelChange = (
+    nextSortModel: SerkanGridSortModel,
+  ) => {
+    const nextOrdering = nextSortModel
+      ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
+      : "-created_at";
+
+    const nextPaginationModel = {
+      ...pendingReceiptPaginationModel,
+      page: 0,
+    };
+
+    setPendingReceiptSortModel(nextSortModel);
+    setPendingReceiptOrdering(nextOrdering);
+    setPendingReceiptPaginationModel(nextPaginationModel);
+
+    void loadPendingReceipts({
+      ordering: nextOrdering,
+      page: 0,
       pageSize: nextPaginationModel.pageSize,
     });
   };
@@ -1442,6 +1474,8 @@ export function ProductsPage() {
         paginationModel={pendingReceiptPaginationModel}
         onPaginationModelChange={handlePendingReceiptPaginationModelChange}
         rowCount={pendingReceiptRowCount}
+        sortModel={pendingReceiptSortModel}
+        onSortModelChange={handlePendingReceiptSortModelChange}
       />
 
       <GlobalKardexSection

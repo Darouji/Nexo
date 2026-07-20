@@ -88,6 +88,7 @@ export type ProductFilterOverrides = {
 export type PendingReceiptFilterOverrides = {
   search?: string;
   status?: PendingReceiptStatus | "";
+  ordering?: string;
   page?: number;
   pageSize?: number;
 };

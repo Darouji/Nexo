@@ -32,6 +32,7 @@ type KardexQueryState = {
 type PendingReceiptQueryState = {
   searchTerm: string;
   statusFilter: PendingReceiptStatus | "";
+  ordering: string;
   paginationModel: GridPaginationModel;
 };
 
@@ -92,11 +93,12 @@ export function buildPendingReceiptPageParams(
 ) {
   const resolvedSearch = filters.search ?? state.searchTerm;
   const resolvedStatus = filters.status ?? state.statusFilter;
+  const resolvedOrdering = filters.ordering ?? state.ordering;
   const resolvedPage = filters.page ?? state.paginationModel.page;
   const resolvedPageSize = filters.pageSize ?? state.paginationModel.pageSize;
 
   return {
-    ordering: "-created_at",
+    ordering: resolvedOrdering,
     search: resolvedSearch,
     estado: resolvedStatus || undefined,
     page: resolvedPage + 1,

@@ -1,15 +1,14 @@
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import DeleteIcon from "@mui/icons-material/Delete";
-
-import { formatDateTime, formatNumber } from "../utils/inventoryFormatters";
 import { Button, Chip, Stack, Typography } from "@mui/material";
-import { colors } from "../../../theme/colors";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
 
-import type { GridColDef } from "@mui/x-data-grid";
 import type {
   PendingReceipt,
   PendingReceiptStatus,
 } from "../../../services/inventoryService";
+import { colors } from "../../../theme/colors";
+import { formatDateTime, formatNumber } from "../utils/inventoryFormatters";
 
 type PendingReceiptOperationMode = "RECIBIR" | "CANCELAR";
 
@@ -40,112 +39,173 @@ function getPendingReceiptStatusColor(status: PendingReceiptStatus) {
   return colors.text.muted;
 }
 
+const numericCellStyle = {
+  textAlign: "right" as const,
+  fontVariantNumeric: "tabular-nums",
+};
+
 export function buildPendingReceiptColumns({
   onOpenPendingReceiptOperationDialog,
-}: PendingReceiptColumnsOptions): GridColDef[] {
+}: PendingReceiptColumnsOptions): ColDef<PendingReceipt>[] {
   return [
     {
       field: "created_at",
+      colId: "created_at",
       headerName: "Registrado",
-      width: 160,
-      renderCell: (params) => formatDateTime(String(params.value || "")),
+      width: 175,
+      valueFormatter: (params) => formatDateTime(String(params.value || "")),
     },
     {
       field: "producto_categoria",
+      colId: "producto_categoria",
       headerName: "Categoría",
-      minWidth: 150,
+      minWidth: 165,
       flex: 0.7,
+      sortable: false,
+      valueFormatter: (params) => String(params.value || "Sin categoría"),
     },
     {
       field: "producto_modelo",
-      headerName: "Producto",
-      minWidth: 210,
+      colId: "producto_modelo",
+      headerName: "Producto / Modelo",
+      minWidth: 220,
       flex: 1,
+      sortable: false,
+      valueFormatter: (params) =>
+        String(params.value || "Sin producto / modelo"),
     },
     {
       field: "producto_codigo_sap",
+      colId: "producto_codigo_sap",
       headerName: "Código SAP",
-      minWidth: 145,
+      minWidth: 150,
       flex: 0.6,
-      renderCell: (params) => params.value || "Sin código",
+      sortable: false,
+      valueFormatter: (params) => String(params.value || "Sin código"),
     },
     {
       field: "cantidad_original",
+      colId: "cantidad_original",
       headerName: "Original",
-      width: 105,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
+      width: 115,
+      cellStyle: numericCellStyle,
+      valueFormatter: (params) => formatNumber(Number(params.value || 0)),
     },
     {
       field: "cantidad_recibida",
+      colId: "cantidad_recibida",
       headerName: "Recibida",
-      width: 110,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
+      width: 120,
+      cellStyle: numericCellStyle,
+      valueFormatter: (params) => formatNumber(Number(params.value || 0)),
     },
     {
       field: "cantidad_cancelada",
+      colId: "cantidad_cancelada",
       headerName: "Cancelada",
-      width: 115,
-      type: "number",
-      renderCell: (params) => formatNumber(Number(params.value || 0)),
+      width: 125,
+      cellStyle: numericCellStyle,
+      valueFormatter: (params) => formatNumber(Number(params.value || 0)),
     },
     {
       field: "cantidad_pendiente",
+      colId: "cantidad_pendiente",
       headerName: "Pendiente",
-      width: 115,
-      type: "number",
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 900 }}>
-          {formatNumber(Number(params.value || 0))}
-        </Typography>
+      width: 125,
+      sortable: false,
+      cellStyle: numericCellStyle,
+      cellRenderer: (params: ICellRendererParams<PendingReceipt, number>) => (
+        <Stack
+          sx={{
+            height: "100%",
+            justifyContent: "center",
+            alignItems: "flex-end",
+          }}
+        >
+          <Typography
+            component="span"
+            sx={{
+              fontWeight: 900,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {formatNumber(Number(params.value || 0))}
+          </Typography>
+        </Stack>
       ),
     },
     {
       field: "estado",
+      colId: "estado",
       headerName: "Estado",
-      width: 155,
-      renderCell: (params) => {
-        const pendingReceipt = params.row as PendingReceipt;
+      width: 165,
+      cellRenderer: (
+        params: ICellRendererParams<PendingReceipt, PendingReceiptStatus>,
+      ) => {
+        const pendingReceipt = params.data;
+
+        if (!pendingReceipt) {
+          return null;
+        }
+
         const color = getPendingReceiptStatusColor(pendingReceipt.estado);
 
         return (
-          <Chip
-            label={pendingReceipt.estado_display}
-            size="small"
+          <Stack
             sx={{
-              color,
-              bgcolor: colors.surface.soft,
-              borderColor: color,
-              border: "1px solid",
-              fontWeight: 800,
+              height: "100%",
+              justifyContent: "center",
+              alignItems: "flex-start",
             }}
-          />
+          >
+            <Chip
+              label={pendingReceipt.estado_display}
+              size="small"
+              sx={{
+                color,
+                bgcolor: colors.surface.soft,
+                borderColor: color,
+                border: "1px solid",
+                fontWeight: 800,
+              }}
+            />
+          </Stack>
         );
       },
     },
     {
       field: "referencia",
-      headerName: "OC / referencia",
-      minWidth: 170,
+      colId: "referencia",
+      headerName: "OC / Referencia",
+      minWidth: 180,
       flex: 0.8,
-      renderCell: (params) => params.value || "Sin referencia",
+      sortable: false,
+      valueFormatter: (params) => String(params.value || "Sin referencia"),
     },
     {
       field: "motivo",
+      colId: "motivo",
       headerName: "Motivo",
-      minWidth: 250,
+      minWidth: 260,
       flex: 1.2,
-      renderCell: (params) => params.value || "Sin motivo",
+      sortable: false,
+      valueFormatter: (params) => String(params.value || "Sin motivo"),
     },
     {
-      field: "actions",
+      colId: "actions",
       headerName: "Acciones",
-      width: 240,
+      width: 260,
+      minWidth: 260,
       sortable: false,
-      filterable: false,
-      renderCell: (params) => {
-        const pendingReceipt = params.row as PendingReceipt;
+      filter: false,
+      resizable: false,
+      suppressMovable: true,
+      cellRenderer: (params: ICellRendererParams<PendingReceipt, unknown>) => {
+        const pendingReceipt = params.data;
+
+        if (!pendingReceipt) {
+          return null;
+        }
 
         const canOperate =
           pendingReceipt.cantidad_pendiente > 0 &&
@@ -153,7 +213,14 @@ export function buildPendingReceiptColumns({
             pendingReceipt.estado === "PARCIAL");
 
         return (
-          <Stack direction="row" spacing={1}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              height: "100%",
+              alignItems: "center",
+            }}
+          >
             <Button
               size="small"
               variant="outlined"

@@ -83,6 +83,7 @@ import {
 } from "../features/inventory/products/productFormModel";
 import {
   defaultKardexPaginationModel,
+  defaultKardexSortModel,
   defaultPendingReceiptPaginationModel,
   defaultProductPaginationModel,
   emptyInventorySummary,
@@ -991,19 +992,23 @@ export function ProductsPage() {
   const loadProductKardexPage = async (
     product: Product,
     paginationModel: SerkanGridPaginationModel = defaultKardexPaginationModel,
+    ordering = "-created_at",
+    sortModel: SerkanGridSortModel = defaultKardexSortModel,
   ) => {
     setKardexDialog((current) => ({
       ...current,
       open: true,
       product,
       paginationModel,
+      sortModel,
+      ordering,
       loading: true,
     }));
 
     try {
       const movementsPage = await fetchKardexMovementsPage({
         producto: product.id,
-        ordering: "-created_at",
+        ordering,
         page: paginationModel.page + 1,
         page_size: paginationModel.pageSize,
       });
@@ -1015,6 +1020,8 @@ export function ProductsPage() {
         movements: movementsPage.results,
         rowCount: movementsPage.count,
         paginationModel,
+        sortModel,
+        ordering,
         loading: false,
       }));
     } catch (error: unknown) {
@@ -1027,6 +1034,8 @@ export function ProductsPage() {
         movements: [],
         rowCount: 0,
         paginationModel,
+        sortModel,
+        ordering,
         loading: false,
       }));
     }
@@ -1053,7 +1062,45 @@ export function ProductsPage() {
       paginationModel: nextPaginationModel,
     }));
 
-    void loadProductKardexPage(product, nextPaginationModel);
+    void loadProductKardexPage(
+      product,
+      nextPaginationModel,
+      kardexDialog.ordering,
+      kardexDialog.sortModel,
+    );
+  };
+
+  const handleProductKardexSortModelChange = (
+    nextSortModel: SerkanGridSortModel,
+  ) => {
+    const product = kardexDialog.product;
+
+    if (!product) {
+      return;
+    }
+
+    const nextOrdering = nextSortModel
+      ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
+      : "-created_at";
+
+    const nextPaginationModel = {
+      ...kardexDialog.paginationModel,
+      page: 0,
+    };
+
+    setKardexDialog((current) => ({
+      ...current,
+      paginationModel: nextPaginationModel,
+      sortModel: nextSortModel,
+      ordering: nextOrdering,
+    }));
+
+    void loadProductKardexPage(
+      product,
+      nextPaginationModel,
+      nextOrdering,
+      nextSortModel,
+    );
   };
 
   const closeKardexDialog = () => {
@@ -1633,6 +1680,8 @@ export function ProductsPage() {
         rowCount={kardexDialog.rowCount}
         paginationModel={kardexDialog.paginationModel}
         onPaginationModelChange={handleProductKardexPaginationModelChange}
+        sortModel={kardexDialog.sortModel}
+        onSortModelChange={handleProductKardexSortModelChange}
         onClose={closeKardexDialog}
       />
 

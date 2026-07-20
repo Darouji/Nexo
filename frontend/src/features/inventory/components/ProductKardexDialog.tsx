@@ -7,8 +7,13 @@ import {
   DialogTitle,
   Stack,
 } from "@mui/material";
-import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
-import { SmartDataGrid } from "../../../components/SmartDataGrid";
+import type { ColDef } from "ag-grid-community";
+
+import {
+  SerkanDataGrid,
+  type SerkanGridPaginationModel,
+  type SerkanGridSortModel,
+} from "../../../components/SerkanDataGrid";
 import type {
   KardexMovement,
   Product,
@@ -18,11 +23,18 @@ type ProductKardexDialogProps = {
   open: boolean;
   product: Product | null;
   movements: KardexMovement[];
-  columns: GridColDef[];
+  columns: ColDef<KardexMovement>[];
   loading: boolean;
   rowCount: number;
-  paginationModel: GridPaginationModel;
-  onPaginationModelChange: (nextPaginationModel: GridPaginationModel) => void;
+
+  paginationModel: SerkanGridPaginationModel;
+  onPaginationModelChange: (
+    nextPaginationModel: SerkanGridPaginationModel,
+  ) => void;
+
+  sortModel: SerkanGridSortModel;
+  onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
+
   onClose: () => void;
 };
 
@@ -35,10 +47,12 @@ export function ProductKardexDialog({
   rowCount,
   paginationModel,
   onPaginationModelChange,
+  sortModel,
+  onSortModelChange,
   onClose,
 }: ProductKardexDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xl">
       <DialogTitle>
         Kardex del producto
         {product ? `: ${product.modelo}` : ""}
@@ -47,19 +61,28 @@ export function ProductKardexDialog({
       <DialogContent>
         <Stack spacing={2.2} sx={{ mt: 1 }}>
           <Alert severity="info" variant="outlined">
-            Historial real de movimientos de stock. Cada registro muestra
-            cantidad, stock anterior, stock posterior, motivo, operador y fecha.
+            Historial cronológico y auditado del producto. Los datos de modelo,
+            categoría y código SAP corresponden a la información histórica
+            registrada en cada movimiento.
           </Alert>
 
-          <SmartDataGrid
+          <SerkanDataGrid
+            gridKey={`inventory.product-kardex.${product?.id ?? "closed"}`}
+            ariaLabel={
+              product
+                ? `Kardex del producto ${product.modelo}`
+                : "Kardex individual del producto"
+            }
             rows={movements}
             columns={columns}
             loading={loading}
-            paginationMode="server"
             paginationModel={paginationModel}
             onPaginationModelChange={onPaginationModelChange}
             rowCount={rowCount}
-            rowNumberOffset={paginationModel.page * paginationModel.pageSize}
+            sortModel={sortModel}
+            onSortModelChange={onSortModelChange}
+            height={520}
+            minHeight={360}
           />
         </Stack>
       </DialogContent>

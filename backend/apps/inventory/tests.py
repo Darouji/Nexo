@@ -617,12 +617,26 @@ class PendientePorRecibirApiTests(TestCase):
             updated_by=self.admin,
         )
 
-    def test_pending_receipts_can_be_ordered_by_product_model_and_sap_code(self):
+    def test_pending_receipts_can_be_ordered_by_product_category_and_sap_code(
+        self,
+    ):
         client = APIClient()
         client.force_authenticate(user=self.admin)
 
+        categoria_alfa = Categoria.objects.create(
+            name="Accesorios",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        categoria_zeta = Categoria.objects.create(
+            name="Válvulas",
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
         producto_zeta = Producto.objects.create(
-            categoria=self.categoria,
+            categoria=categoria_zeta,
             modelo="Zeta industrial",
             codigo_sap="SAP-900",
             controla_stock=True,
@@ -631,7 +645,7 @@ class PendientePorRecibirApiTests(TestCase):
         )
 
         producto_alfa = Producto.objects.create(
-            categoria=self.categoria,
+            categoria=categoria_alfa,
             modelo="Álfa industrial",
             codigo_sap="SAP-100",
             controla_stock=True,
@@ -663,6 +677,20 @@ class PendientePorRecibirApiTests(TestCase):
         self.assertEqual(model_response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             [item["id"] for item in model_response.data["results"]],
+            [pendiente_alfa.pk, pendiente_zeta.pk],
+        )
+
+        category_response = client.get(
+            "/api/inventory/pendientes-por-recibir/",
+            {"ordering": "producto__categoria__name_normalized"},
+        )
+
+        self.assertEqual(
+            category_response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            [item["id"] for item in category_response.data["results"]],
             [pendiente_alfa.pk, pendiente_zeta.pk],
         )
 

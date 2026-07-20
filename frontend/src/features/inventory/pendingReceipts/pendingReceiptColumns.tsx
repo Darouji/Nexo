@@ -59,11 +59,10 @@ export function buildPendingReceiptColumns({
     },
     {
       field: "producto_categoria",
-      colId: "producto_categoria",
+      colId: "producto__categoria__name_normalized",
       headerName: "Categoría",
       minWidth: 165,
       flex: 0.7,
-      sortable: false,
       valueFormatter: (params) => String(params.value || "Sin categoría"),
     },
     {

@@ -760,6 +760,7 @@ class PendientePorRecibirViewSet(
         "created_at",
         "updated_at",
         "producto__modelo_normalized",
+        "producto__categoria__name_normalized",
         "producto__codigo_sap_normalized",
         "cantidad_original",
         "cantidad_recibida",

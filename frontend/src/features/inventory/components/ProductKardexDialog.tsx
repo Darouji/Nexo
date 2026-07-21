@@ -67,7 +67,7 @@ export function ProductKardexDialog({
           </Alert>
 
           <SerkanDataGrid
-            gridKey={`inventory.product-kardex.${product?.id ?? "closed"}`}
+            gridKey="inventory.product-kardex"
             ariaLabel={
               product
                 ? `Kardex del producto ${product.modelo}`

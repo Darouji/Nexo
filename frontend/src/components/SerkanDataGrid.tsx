@@ -1,19 +1,31 @@
-import { useMemo } from "react";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import { AgGridReact } from "ag-grid-react";
+import { colors } from "../theme/colors";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import {
+  clearSerkanGridLayout,
+  persistSerkanGridLayout,
+  restoreSerkanGridLayout,
+} from "./serkanGridLayoutStorage";
+
 import {
   Box,
+  Button,
   LinearProgress,
   TablePagination,
   Typography,
+  Stack,
 } from "@mui/material";
+
 import {
   AllCommunityModule,
   ModuleRegistry,
   themeQuartz,
   type ColDef,
+  type GridApi,
   type SortChangedEvent,
 } from "ag-grid-community";
-import { AgGridReact } from "ag-grid-react";
-import { colors } from "../theme/colors";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -33,6 +45,11 @@ export type SerkanGridSortModel = {
 
 type IdentifiableRow = {
   id: number | string;
+};
+
+type ColumnLayoutEvent<TRow extends IdentifiableRow> = {
+  api: GridApi<TRow>;
+  finished?: boolean;
 };
 
 type SerkanDataGridProps<TRow extends IdentifiableRow> = {
@@ -149,6 +166,99 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     return [rowNumberColumn, ...configuredColumns];
   }, [columns, paginationModel.page, paginationModel.pageSize, sortModel]);
 
+  const gridApiRef = useRef<GridApi<TRow> | null>(null);
+
+  const isApplyingStoredLayoutRef = useRef(false);
+
+  const [hasSavedLayout, setHasSavedLayout] = useState(false);
+
+  const layoutColumnIds = useMemo(
+    () =>
+      columns
+        .map((column) => String(column.colId ?? column.field ?? ""))
+        .filter(Boolean),
+    [columns],
+  );
+
+  const releaseLayoutMutationLock = useCallback(() => {
+    globalThis.setTimeout(() => {
+      isApplyingStoredLayoutRef.current = false;
+    }, 0);
+  }, []);
+
+  const restoreStoredLayout = useCallback(
+    (api: GridApi<TRow>) => {
+      isApplyingStoredLayoutRef.current = true;
+
+      const restored = restoreSerkanGridLayout(api, gridKey, layoutColumnIds);
+
+      setHasSavedLayout(restored);
+      releaseLayoutMutationLock();
+    },
+    [gridKey, layoutColumnIds, releaseLayoutMutationLock],
+  );
+
+  useEffect(() => {
+    const api = gridApiRef.current;
+
+    if (api) {
+      restoreStoredLayout(api);
+    }
+  }, [restoreStoredLayout]);
+
+  const handleColumnLayoutChanged = useCallback(
+    (event: ColumnLayoutEvent<TRow>) => {
+      if (isApplyingStoredLayoutRef.current) {
+        return;
+      }
+
+      if (typeof event.finished === "boolean" && !event.finished) {
+        return;
+      }
+
+      const persisted = persistSerkanGridLayout(
+        event.api,
+        gridKey,
+        layoutColumnIds,
+      );
+
+      if (persisted) {
+        setHasSavedLayout(true);
+      }
+    },
+    [gridKey, layoutColumnIds],
+  );
+
+  const handleResetColumnLayout = useCallback(() => {
+    const api = gridApiRef.current;
+
+    if (!api) {
+      return;
+    }
+
+    isApplyingStoredLayoutRef.current = true;
+
+    clearSerkanGridLayout(gridKey);
+    api.resetColumnState();
+
+    api.applyColumnState({
+      state: sortModel
+        ? [
+            {
+              colId: sortModel.field,
+              sort: sortModel.direction,
+            },
+          ]
+        : [],
+      defaultState: {
+        sort: null,
+      },
+    });
+
+    setHasSavedLayout(false);
+    releaseLayoutMutationLock();
+  }, [gridKey, releaseLayoutMutationLock, sortModel]);
+
   const defaultColDef = useMemo<ColDef<TRow>>(
     () => ({
       sortable: Boolean(onSortModelChange),
@@ -233,15 +343,24 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         <AgGridReact<TRow>
           theme={serkanGridTheme}
           onGridReady={(event) => {
+            gridApiRef.current = event.api;
+
             event.api.setGridAriaProperty("label", ariaLabel);
+
+            restoreStoredLayout(event.api);
           }}
           rowData={rows}
           columnDefs={resolvedColumns}
           defaultColDef={defaultColDef}
           getRowId={(params) => String(params.data.id)}
           onSortChanged={onSortModelChange ? handleSortChanged : undefined}
+          onColumnMoved={handleColumnLayoutChanged}
+          onColumnResized={handleColumnLayoutChanged}
+          onColumnVisible={handleColumnLayoutChanged}
+          onColumnPinned={handleColumnLayoutChanged}
           noRowsOverlayComponent={NoRowsOverlay}
           suppressMultiSort
+          suppressDragLeaveHidesColumns
           animateRows={false}
           ensureDomOrder
           enableCellTextSelection
@@ -251,35 +370,66 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         />
       </Box>
 
-      <TablePagination
-        component="div"
-        count={rowCount}
-        page={safePage}
-        rowsPerPage={paginationModel.pageSize}
-        rowsPerPageOptions={[10, 25, 50, 100]}
-        onPageChange={(_, nextPage) =>
-          onPaginationModelChange({
-            ...paginationModel,
-            page: nextPage,
-          })
-        }
-        onRowsPerPageChange={(event) =>
-          onPaginationModelChange({
-            page: 0,
-            pageSize: Number(event.target.value),
-          })
-        }
-        labelRowsPerPage="Filas por página:"
-        labelDisplayedRows={({ from, to, count }) =>
-          `${from}–${to} de ${count}`
-        }
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
         sx={{
           flexShrink: 0,
-          color: colors.text.secondary,
+          alignItems: {
+            xs: "stretch",
+            sm: "center",
+          },
           borderTop: `1px solid ${colors.border.light}`,
           bgcolor: colors.background.header,
         }}
-      />
+      >
+        <Button
+          size="small"
+          variant="text"
+          startIcon={<RestartAltIcon />}
+          onClick={handleResetColumnLayout}
+          disabled={!hasSavedLayout}
+          sx={{
+            alignSelf: {
+              xs: "flex-start",
+              sm: "center",
+            },
+            ml: { sm: 1.5 },
+            color: colors.text.secondary,
+            fontWeight: 700,
+          }}
+        >
+          Restablecer columnas
+        </Button>
+
+        <TablePagination
+          component="div"
+          count={rowCount}
+          page={safePage}
+          rowsPerPage={paginationModel.pageSize}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+          onPageChange={(_, nextPage) =>
+            onPaginationModelChange({
+              ...paginationModel,
+              page: nextPage,
+            })
+          }
+          onRowsPerPageChange={(event) =>
+            onPaginationModelChange({
+              page: 0,
+              pageSize: Number(event.target.value),
+            })
+          }
+          labelRowsPerPage="Filas por página:"
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} de ${count}`
+          }
+          sx={{
+            ml: { sm: "auto" },
+            color: colors.text.secondary,
+            bgcolor: "transparent",
+          }}
+        />
+      </Stack>
     </Box>
   );
 }

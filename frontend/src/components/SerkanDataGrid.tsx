@@ -114,6 +114,18 @@ function areSortModelsEqual(
   );
 }
 
+function toInitialLayoutColumn<TRow>(column: ColDef<TRow>): ColDef<TRow> {
+  const { width, flex, hide, pinned, ...columnDefinition } = column;
+
+  return {
+    ...columnDefinition,
+    initialWidth: column.initialWidth ?? width,
+    initialFlex: column.initialFlex ?? flex ?? undefined,
+    initialHide: column.initialHide ?? hide ?? undefined,
+    initialPinned: column.initialPinned ?? pinned ?? undefined,
+  };
+}
+
 export function SerkanDataGrid<TRow extends IdentifiableRow>({
   gridKey,
   ariaLabel,
@@ -173,9 +185,9 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       },
     };
 
-    const configuredColumns = columns.map((column) => ({
-      ...column,
-    }));
+    const configuredColumns = columns.map((column) =>
+      toInitialLayoutColumn(column),
+    );
 
     return [rowNumberColumn, ...configuredColumns];
   }, [columns]);

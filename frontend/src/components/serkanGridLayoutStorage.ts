@@ -1,7 +1,7 @@
 import type { ColumnState, GridApi } from "ag-grid-community";
 
 const STORAGE_PREFIX = "serkan:grid-layout";
-const STORAGE_SCHEMA_VERSION = 1;
+const STORAGE_SCHEMA_VERSION = 2;
 
 const INTERNAL_COLUMN_IDS = new Set(["__row_number__"]);
 

@@ -753,6 +753,8 @@ class PendientePorRecibirApiTests(TestCase):
             user=self.admin,
         )
 
+        producto_alfa.refresh_from_db()
+        producto_zeta.refresh_from_db()
         producto_alfa.modelo = "ZZZ actual"
         producto_alfa.categoria = categoria_zeta
         producto_alfa.codigo_sap = "SAP-999"

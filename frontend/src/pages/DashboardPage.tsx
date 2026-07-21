@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Typography } from "@mui/material";
 import { AppLayout } from "../layouts/AppLayout";
 import { HomePage } from "./HomePage";
@@ -91,6 +92,44 @@ const sectionAccessRules: Record<string, SectionAccessRule> = {
   },
 };
 
+const sectionPaths: Record<string, string> = {
+  Inicio: "/inicio",
+  Usuarios: "/usuarios",
+  Colaboradores: "/colaboradores",
+  "Entidades comerciales": "/entidades-comerciales",
+  Inventario: "/inventario",
+  "Ventas / Ingresos": "/ventas",
+  "Compras / Egresos": "/compras",
+  "Importaciones Excel": "/importaciones",
+  Documentos: "/documentos",
+  Estadísticas: "/estadisticas",
+  Auditoría: "/auditoria",
+};
+
+const pathSections = Object.fromEntries(
+  Object.entries(sectionPaths).map(([section, path]) => [path, section]),
+) as Record<string, string>;
+
+function normalizePathname(pathname: string) {
+  const normalizedPath = pathname.replace(/\/+$/, "");
+
+  return normalizedPath || "/";
+}
+
+function getSectionFromPath(pathname: string) {
+  const normalizedPath = normalizePathname(pathname);
+
+  if (normalizedPath === "/") {
+    return "Inicio";
+  }
+
+  return pathSections[normalizedPath] ?? "Inicio";
+}
+
+function getSectionPath(section: string) {
+  return sectionPaths[section] ?? sectionPaths.Inicio;
+}
+
 function getSectionAccessRule(section: string) {
   return (
     sectionAccessRules[section] ?? {
@@ -101,18 +140,42 @@ function getSectionAccessRule(section: string) {
 }
 
 export function DashboardPage({ user, onLogout }: DashboardPageProps) {
-  const [activeSection, setActiveSection] = useState("Inicio");
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const activeSection = getSectionFromPath(location.pathname);
+
+  const activeSectionPath = getSectionPath(activeSection);
+
   const accessRule = getSectionAccessRule(activeSection);
+
+  useEffect(() => {
+    const currentPath = normalizePathname(location.pathname);
+
+    if (currentPath !== activeSectionPath) {
+      navigate(activeSectionPath, {
+        replace: true,
+      });
+    }
+  }, [activeSectionPath, location.pathname, navigate]);
+
+  const handleSectionChange = (section: string) => {
+    navigate(getSectionPath(section));
+  };
 
   const handleLogout = async () => {
     await logout();
+    navigate("/inicio", {
+      replace: true,
+    });
+
     onLogout();
   };
 
   const renderContent = () => {
     switch (activeSection) {
       case "Inicio":
-        return <HomePage user={user} onSectionChange={setActiveSection} />;
+        return <HomePage user={user} onSectionChange={handleSectionChange} />;
 
       case "Usuarios":
         return <UsersPage currentUser={user} />;
@@ -157,7 +220,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
     <AppLayout
       user={user}
       activeSection={activeSection}
-      onSectionChange={setActiveSection}
+      onSectionChange={handleSectionChange}
       onLogout={handleLogout}
     >
       <PermissionGate
@@ -167,7 +230,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
         fallback={
           <PermissionDeniedState
             moduleLabel={activeSection}
-            onBack={() => setActiveSection("Inicio")}
+            onBack={() => handleSectionChange("Inicio")}
           />
         }
       >

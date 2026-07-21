@@ -128,6 +128,22 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   sortModel,
   onSortModelChange,
 }: SerkanDataGridProps<TRow>) {
+  const gridApiRef = useRef<GridApi<TRow> | null>(null);
+
+  const paginationModelRef = useRef(paginationModel);
+
+  const isApplyingStoredLayoutRef = useRef(false);
+
+  const [hasSavedLayout, setHasSavedLayout] = useState(false);
+
+  const layoutColumnIds = useMemo(
+    () =>
+      columns
+        .map((column) => String(column.colId ?? column.field ?? ""))
+        .filter(Boolean),
+    [columns],
+  );
+
   const resolvedColumns = useMemo<ColDef<TRow>[]>(() => {
     const rowNumberColumn: ColDef<TRow> = {
       colId: "__row_number__",
@@ -147,44 +163,51 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         fontVariantNumeric: "tabular-nums",
       },
       valueGetter: (params) => {
+        const currentPagination = paginationModelRef.current;
+
         const rowIndex = params.node?.rowIndex ?? 0;
 
-        return paginationModel.page * paginationModel.pageSize + rowIndex + 1;
+        return (
+          currentPagination.page * currentPagination.pageSize + rowIndex + 1
+        );
       },
     };
 
-    const configuredColumns = columns.map((column) => {
-      const columnId = String(column.colId ?? column.field ?? "");
-      const isSorted = Boolean(sortModel) && sortModel?.field === columnId;
-
-      return {
-        ...column,
-        sort: isSorted ? sortModel?.direction : null,
-      };
-    });
+    const configuredColumns = columns.map((column) => ({
+      ...column,
+    }));
 
     return [rowNumberColumn, ...configuredColumns];
-  }, [columns, paginationModel.page, paginationModel.pageSize, sortModel]);
-
-  const gridApiRef = useRef<GridApi<TRow> | null>(null);
-
-  const isApplyingStoredLayoutRef = useRef(false);
-
-  const [hasSavedLayout, setHasSavedLayout] = useState(false);
-
-  const layoutColumnIds = useMemo(
-    () =>
-      columns
-        .map((column) => String(column.colId ?? column.field ?? ""))
-        .filter(Boolean),
-    [columns],
-  );
+  }, [columns]);
 
   const releaseLayoutMutationLock = useCallback(() => {
-    globalThis.setTimeout(() => {
-      isApplyingStoredLayoutRef.current = false;
-    }, 0);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        isApplyingStoredLayoutRef.current = false;
+      });
+    });
   }, []);
+
+  const applyControlledSort = useCallback(
+    (api: GridApi<TRow>) => {
+      api.applyColumnState({
+        state: sortModel
+          ? [
+              {
+                colId: sortModel.field,
+                sort: sortModel.direction,
+                sortIndex: 0,
+              },
+            ]
+          : [],
+        defaultState: {
+          sort: null,
+          sortIndex: null,
+        },
+      });
+    },
+    [sortModel],
+  );
 
   const restoreStoredLayout = useCallback(
     (api: GridApi<TRow>) => {
@@ -192,19 +215,34 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
 
       const restored = restoreSerkanGridLayout(api, gridKey, layoutColumnIds);
 
+      applyControlledSort(api);
       setHasSavedLayout(restored);
       releaseLayoutMutationLock();
     },
-    [gridKey, layoutColumnIds, releaseLayoutMutationLock],
+    [applyControlledSort, gridKey, layoutColumnIds, releaseLayoutMutationLock],
   );
 
   useEffect(() => {
     const api = gridApiRef.current;
 
-    if (api) {
-      restoreStoredLayout(api);
+    if (!api) {
+      return;
     }
-  }, [restoreStoredLayout]);
+
+    applyControlledSort(api);
+  }, [applyControlledSort]);
+
+  useEffect(() => {
+    paginationModelRef.current = {
+      page: paginationModel.page,
+      pageSize: paginationModel.pageSize,
+    };
+
+    gridApiRef.current?.refreshCells({
+      columns: ["__row_number__"],
+      force: true,
+    });
+  }, [paginationModel.page, paginationModel.pageSize]);
 
   const handleColumnLayoutChanged = useCallback(
     (event: ColumnLayoutEvent<TRow>) => {
@@ -240,24 +278,11 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
 
     clearSerkanGridLayout(gridKey);
     api.resetColumnState();
-
-    api.applyColumnState({
-      state: sortModel
-        ? [
-            {
-              colId: sortModel.field,
-              sort: sortModel.direction,
-            },
-          ]
-        : [],
-      defaultState: {
-        sort: null,
-      },
-    });
+    applyControlledSort(api);
 
     setHasSavedLayout(false);
     releaseLayoutMutationLock();
-  }, [gridKey, releaseLayoutMutationLock, sortModel]);
+  }, [applyControlledSort, gridKey, releaseLayoutMutationLock]);
 
   const defaultColDef = useMemo<ColDef<TRow>>(
     () => ({
@@ -360,6 +385,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           onColumnPinned={handleColumnLayoutChanged}
           noRowsOverlayComponent={NoRowsOverlay}
           suppressMultiSort
+          maintainColumnOrder
           suppressDragLeaveHidesColumns
           animateRows={false}
           ensureDomOrder

@@ -527,22 +527,6 @@ export function ProductDialog({
             minRows={2}
           />
 
-          <TextField
-            label="Stock mínimo"
-            type="number"
-            value={productForm.stock_critico}
-            onChange={(event) =>
-              updateFormField("stock_critico", event.target.value)
-            }
-            fullWidth
-            disabled={productForm.origen === "SERVICIO"}
-            helperText={
-              productForm.origen === "SERVICIO"
-                ? "Los servicios no manejan stock mínimo."
-                : undefined
-            }
-          />
-
           <FormControlLabel
             control={
               <Checkbox
@@ -560,6 +544,22 @@ export function ProductDialog({
               />
             }
             label="Este producto maneja inventario y genera Kardex"
+          />
+
+          <TextField
+            label="Stock mínimo"
+            type="number"
+            value={productForm.stock_critico}
+            onChange={(event) =>
+              updateFormField("stock_critico", event.target.value)
+            }
+            fullWidth
+            disabled={productForm.origen === "SERVICIO"}
+            helperText={
+              productForm.origen === "SERVICIO"
+                ? "Los servicios no manejan stock mínimo."
+                : undefined
+            }
           />
 
           {productForm.controla_stock && !editingProduct ? (

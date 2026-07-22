@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Box, Chip, Stack, Typography } from "@mui/material";
 import { colors } from "../theme/colors";
 
-type PageHeaderProps = {
+export type PageHeaderProps = {
   title: string;
   subtitle?: string;
   eyebrow?: string;

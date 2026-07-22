@@ -1,4 +1,5 @@
 from datetime import datetime, time, timedelta
+import json
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import (
@@ -25,6 +26,7 @@ from apps.accounts.permissions import (
     IsOperativoGlobal,
 )
 from apps.core.models import AuditOrigin, BaseStatus
+from apps.core.grid_registry import apply_grid_filters
 
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
@@ -66,6 +68,12 @@ from .services import (
     register_manual_entry,
     rename_category,
 )
+from .exports import (
+    build_product_export_response,
+    record_product_export,
+    resolve_export_columns,
+)
+from .grid_definitions import PRODUCT_GRID_DEFINITION
 
 
 def raise_drf_validation_error(error):
@@ -83,6 +91,25 @@ def split_csv_param(value):
         return []
 
     return [item.strip() for item in str(value).split(",") if item.strip()]
+
+
+def parse_grid_filters_param(value):
+    if value in (None, ""):
+        return []
+
+    if len(str(value)) > 10000:
+        raise DRFValidationError(
+            {"grid_filters": "La definición de filtros es demasiado extensa."}
+        )
+
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raise DRFValidationError(
+            {"grid_filters": "Los filtros no contienen JSON válido."}
+        )
+
+    return parsed
 
 
 def parse_bool_param(value, param_name):
@@ -397,6 +424,19 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
     ]
     ordering = ["categoria__name", "modelo"]
 
+    def get_permissions(self):
+        if self.action == "export":
+            mode = self.request.query_params.get("mode", "view")
+            permission_classes = [
+                IsAuthenticated,
+                IsOperativoGlobal
+                if mode == "official"
+                else IsConsultaOrOperativoGlobal,
+            ]
+            return [permission() for permission in permission_classes]
+
+        return super().get_permissions()
+
     @action(detail=False, methods=["get"], url_path="resumen")
     def resumen(self, request):
         productos_activos = Producto.objects.filter(
@@ -571,7 +611,48 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
                 stock_actual__lte=F("stock_critico"),
             )
 
-        return queryset
+        grid_filters = parse_grid_filters_param(params.get("grid_filters"))
+        return apply_grid_filters(
+            queryset,
+            PRODUCT_GRID_DEFINITION,
+            grid_filters,
+        )
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        mode = request.query_params.get("mode", "view")
+        export_format = request.query_params.get("file_format", "xlsx")
+
+        if mode not in {"view", "official"}:
+            raise DRFValidationError(
+                {"mode": "Use view para la vista u official para el esquema oficial."}
+            )
+        if export_format not in {"xlsx", "csv"}:
+            raise DRFValidationError({"file_format": "Use xlsx o csv."})
+
+        requested_columns = split_csv_param(request.query_params.get("columns"))
+        columns = resolve_export_columns(
+            mode=mode,
+            requested_columns=requested_columns,
+        )
+        queryset = self.filter_queryset(self.get_queryset()).select_related("categoria")
+        products = list(queryset[:5000])
+
+        record_product_export(
+            request=getattr(request, "_request", request),
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+            row_count=len(products),
+        )
+        self._skip_activity_audit(request)
+
+        return build_product_export_response(
+            queryset=products,
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+        )
 
     def destroy(self, request, *args, **kwargs):
         return Response(

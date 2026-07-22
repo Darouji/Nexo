@@ -71,18 +71,6 @@ function parseColumnState(value: unknown): PersistedColumnState | null {
   return columnState;
 }
 
-function haveSameColumnDefinitions(
-  currentColumnIds: string[],
-  storedColumnIds: string[],
-) {
-  return (
-    currentColumnIds.length === storedColumnIds.length &&
-    currentColumnIds.every(
-      (columnId, index) => columnId === storedColumnIds[index],
-    )
-  );
-}
-
 function readStoredGridLayout(gridKey: string): PersistedGridLayout | null {
   if (typeof window === "undefined") {
     return null;
@@ -159,18 +147,17 @@ export function restoreSerkanGridLayout<TRow>(
     return false;
   }
 
-  if (
-    !haveSameColumnDefinitions(
-      columnDefinitionIds,
-      storedLayout.columnDefinitionIds,
-    )
-  ) {
-    clearSerkanGridLayout(gridKey);
+  const currentColumnIds = new Set(columnDefinitionIds);
+  const knownColumns = storedLayout.columns.filter((column) =>
+    currentColumnIds.has(column.colId),
+  );
+
+  if (knownColumns.length === 0) {
     return false;
   }
 
   return api.applyColumnState({
-    state: storedLayout.columns,
+    state: knownColumns,
     applyOrder: true,
   });
 }

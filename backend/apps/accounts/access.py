@@ -139,6 +139,12 @@ def build_module_permissions(user):
             can_update=False,
             can_delete=False,
         ),
+        "grid_labels": module_permission(
+            can_view=can_read,
+            can_create=False,
+            can_update=can_manage,
+            can_delete=False,
+        ),
     }
 
 

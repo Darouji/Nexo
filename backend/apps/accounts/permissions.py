@@ -100,6 +100,28 @@ class CanManageUsers(BasePermission):
         )
 
 
+class CanManageGlobalGridLabels(BasePermission):
+    """
+    Capacidad administrativa para renombrar etiquetas globales de columnas.
+
+    El cambio es organizacional y se refleja para todos los usuarios. Nunca
+    representa un alias personal ni modifica el campo técnico.
+    """
+
+    message = "No tiene permisos para renombrar columnas globalmente."
+
+    def has_permission(self, request, view):
+        return user_has_role(
+            request.user,
+            [
+                UserRole.ADMINISTRADOR,
+                UserRole.RRHH,
+                UserRole.INFORMATICO,
+                UserRole.FINANZAS_COMERCIAL,
+            ],
+        )
+
+
 class IsOperativoGlobal(BasePermission):
     """
     Rol de gestión interna global.

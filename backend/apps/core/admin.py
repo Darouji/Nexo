@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     AuditLog,
     ColumnDisplayName,
+    GridPreference,
     RecordAlert,
     RecordChangeLog,
     SavedView,
@@ -117,3 +118,17 @@ class SavedViewAdmin(admin.ModelAdmin):
     ]
     list_filter = ["module", "model_name", "is_default", "status"]
     search_fields = ["user__username", "module", "model_name", "name"]
+
+
+@admin.register(GridPreference)
+class GridPreferenceAdmin(admin.ModelAdmin):
+    list_display = [
+        "user",
+        "grid_key",
+        "definition_version",
+        "revision",
+        "updated_at",
+    ]
+    list_filter = ["grid_key", "definition_version"]
+    search_fields = ["user__username", "grid_key"]
+    readonly_fields = ["created_at", "updated_at"]

@@ -1,4 +1,4 @@
-name: Backend CI
+name: SERKAN CI
 
 on:
   push:
@@ -63,3 +63,34 @@ jobs:
 
       - name: Check static files collection
         run: python manage.py collectstatic --noinput --dry-run
+
+  frontend:
+    name: React frontend checks
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Test frontend
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build

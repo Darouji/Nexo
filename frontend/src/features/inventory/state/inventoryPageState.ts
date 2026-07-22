@@ -1,5 +1,6 @@
 import type {
   SerkanGridPaginationModel,
+  SerkanGridFilter,
   SerkanGridSortModel,
 } from "../../../components/SerkanDataGrid";
 import type {
@@ -88,6 +89,7 @@ export type ProductFilterOverrides = {
   stockControl?: string;
   stockStatus?: ProductStockStatus | "";
   ordering?: string;
+  columnFilters?: SerkanGridFilter[];
 };
 
 export type PendingReceiptFilterOverrides = {

@@ -4,6 +4,7 @@ import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import DownloadIcon from "@mui/icons-material/Download";
 
 import { colors } from "../../../theme/colors";
 import { MetricCard } from "../../../components/MetricCard";
@@ -21,6 +22,7 @@ import {
 import {
   SerkanDataGrid,
   type SerkanGridPaginationModel,
+  type SerkanGridFilter,
   type SerkanGridSortModel,
 } from "../../../components/SerkanDataGrid";
 
@@ -71,6 +73,14 @@ type InventoryCatalogSectionProps = {
 
   productSortModel: SerkanGridSortModel;
   onProductSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
+  onProductColumnFiltersChange: (filters: SerkanGridFilter[]) => void;
+  productFilterResetKey: number;
+  onVisibleColumnsChange: (fieldKeys: string[]) => void;
+
+  exporting: boolean;
+  canExportOfficial: boolean;
+  onExportView: () => void;
+  onExportOfficial: () => void;
 
   onOpenCategoryManager: () => void;
 
@@ -123,6 +133,13 @@ export function InventoryCatalogSection({
   onOpenCategoryManager,
   productSortModel,
   onProductSortModelChange,
+  onProductColumnFiltersChange,
+  productFilterResetKey,
+  onVisibleColumnsChange,
+  exporting,
+  canExportOfficial,
+  onExportView,
+  onExportOfficial,
   feedbackSlot,
 }: InventoryCatalogSectionProps) {
   return (
@@ -342,21 +359,44 @@ export function InventoryCatalogSection({
         title="Catálogo de productos"
         subtitle="Stock actual, stock mínimo, unidades por recibir, Kardex y acciones operativas."
         actions={
-          <Button
-            variant="outlined"
-            startIcon={<CategoryIcon />}
-            onClick={onOpenCategoryManager}
-            sx={{
-              color: colors.text.primary,
-              borderColor: colors.border.medium,
-            }}
-          >
-            Gestionar categorías
-          </Button>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={onExportView}
+              disabled={exporting}
+            >
+              Exportar vista
+            </Button>
+
+            {canExportOfficial ? (
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={onExportOfficial}
+                disabled={exporting}
+              >
+                Exportación oficial
+              </Button>
+            ) : null}
+
+            <Button
+              variant="outlined"
+              startIcon={<CategoryIcon />}
+              onClick={onOpenCategoryManager}
+              sx={{
+                color: colors.text.primary,
+                borderColor: colors.border.medium,
+              }}
+            >
+              Gestionar categorías
+            </Button>
+          </Stack>
         }
       >
         <SerkanDataGrid
           gridKey="inventory.products"
+          serverManaged
           ariaLabel="Catálogo de productos de inventario"
           rows={products}
           columns={columns}
@@ -366,6 +406,9 @@ export function InventoryCatalogSection({
           rowCount={productRowCount}
           sortModel={productSortModel}
           onSortModelChange={onProductSortModelChange}
+          onFilterModelChange={onProductColumnFiltersChange}
+          filterResetKey={productFilterResetKey}
+          onVisibleColumnsChange={onVisibleColumnsChange}
         />
       </SectionCard>
     </>

@@ -208,7 +208,9 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = env_list(
     "DJANGO_CORS_ALLOWED_ORIGINS",
-    default=["http://localhost:5173"],
+    # Vite puede abrirse tanto con localhost como con 127.0.0.1.
+    # Ambos son orígenes distintos para los navegadores.
+    default=["http://localhost:5173", "http://127.0.0.1:5173"],
 )
 
 CSRF_TRUSTED_ORIGINS = env_list(

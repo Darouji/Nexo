@@ -504,3 +504,63 @@ class SavedView(BaseModel):
 
     def __str__(self):
         return f"{self.user} - {self.module}.{self.model_name} - {self.name}"
+
+
+class GridPreference(models.Model):
+    """
+    Diseño visual estable de una grilla, aislado por usuario.
+
+    No almacena filtros, búsqueda ni ordenamiento de la tarea actual. Esos
+    criterios pertenecen a SavedView cuando el usuario decide guardarlos de
+    forma explícita.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="grid_preferences",
+        verbose_name="Usuario",
+    )
+    grid_key = models.CharField(
+        max_length=160,
+        db_index=True,
+        verbose_name="Clave estable de grilla",
+    )
+    definition_version = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Versión de definición",
+    )
+    revision = models.PositiveIntegerField(
+        default=1,
+        verbose_name="Revisión optimista",
+    )
+    config = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Diseño visual estable",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Última actualización",
+    )
+
+    class Meta:
+        verbose_name = "Preferencia de grilla"
+        verbose_name_plural = "Preferencias de grilla"
+        ordering = ["user", "grid_key"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "grid_key"],
+                name="unique_grid_preference_by_user_key",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["user", "updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user} - {self.grid_key} (r{self.revision})"

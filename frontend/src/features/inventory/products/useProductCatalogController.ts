@@ -1,0 +1,272 @@
+import axios from "axios";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import type {
+  SerkanGridFilter,
+  SerkanGridPaginationModel,
+  SerkanGridSortModel,
+} from "../../../components/SerkanDataGrid";
+import { getApiErrorMessage } from "../../../services/api";
+import {
+  fetchProductsPage,
+  type Product,
+  type ProductStockStatus,
+} from "../../../services/inventoryService";
+import {
+  defaultProductPaginationModel,
+  type ProductFilterOverrides,
+} from "../state/inventoryPageState";
+import { buildProductPageParams } from "../utils/inventoryQueryParams";
+
+
+type ProductCatalogControllerOptions = {
+  onError: (message: string) => void;
+};
+
+
+export function useProductCatalogController({
+  onError,
+}: ProductCatalogControllerOptions) {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [rowCount, setRowCount] = useState(0);
+  const [paginationModel, setPaginationModel] =
+    useState<SerkanGridPaginationModel>(defaultProductPaginationModel);
+  const [sortModel, setSortModel] = useState<SerkanGridSortModel>({
+    field: "categoria__name",
+    direction: "asc",
+  });
+  const [ordering, setOrdering] = useState("categoria__name,modelo");
+  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [filterResetKey, setFilterResetKey] = useState(0);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ACTIVO");
+  const [stockControlFilter, setStockControlFilter] = useState("");
+  const [stockStatusFilter, setStockStatusFilter] = useState<
+    ProductStockStatus | ""
+  >("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const requestSequenceRef = useRef(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const loadProducts = useCallback(
+    async (
+      searchOrFilters: string | ProductFilterOverrides = searchTerm,
+    ) => {
+      abortControllerRef.current?.abort();
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+      const requestSequence = ++requestSequenceRef.current;
+
+      try {
+        setLoading(true);
+        onError("");
+
+        const data = await fetchProductsPage(
+          buildProductPageParams(searchOrFilters, {
+            searchTerm,
+            categoryFilter,
+            statusFilter,
+            stockControlFilter,
+            stockStatusFilter,
+            ordering,
+            paginationModel,
+            columnFilters,
+          }),
+          abortController.signal,
+        );
+
+        if (requestSequence !== requestSequenceRef.current) {
+          return;
+        }
+
+        setProducts(data.results);
+        setRowCount(data.count);
+      } catch (error: unknown) {
+        if (!axios.isCancel(error)) {
+          onError(getApiErrorMessage(error));
+        }
+      } finally {
+        if (requestSequence === requestSequenceRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [
+      categoryFilter,
+      columnFilters,
+      onError,
+      ordering,
+      paginationModel,
+      searchTerm,
+      statusFilter,
+      stockControlFilter,
+      stockStatusFilter,
+    ],
+  );
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    const requestSequence = ++requestSequenceRef.current;
+
+    void fetchProductsPage(
+      {
+        search: "",
+        ordering: "categoria__name,modelo",
+        status: "ACTIVO",
+        page: 1,
+        page_size: defaultProductPaginationModel.pageSize,
+      },
+      abortController.signal,
+    )
+      .then((data) => {
+        if (requestSequence === requestSequenceRef.current) {
+          setProducts(data.results);
+          setRowCount(data.count);
+          onError("");
+        }
+      })
+      .catch((error: unknown) => {
+        if (!axios.isCancel(error)) {
+          onError(getApiErrorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (requestSequence === requestSequenceRef.current) {
+          setLoading(false);
+        }
+      });
+
+    return () => abortController.abort();
+  }, [onError]);
+
+  const loadFirstPage = useCallback(
+    (filters: ProductFilterOverrides = {}) => {
+      const nextPaginationModel = { ...paginationModel, page: 0 };
+      setPaginationModel(nextPaginationModel);
+      void loadProducts({
+        ...filters,
+        page: 0,
+        pageSize: nextPaginationModel.pageSize,
+      });
+    },
+    [loadProducts, paginationModel],
+  );
+
+  const changePagination = useCallback(
+    (nextPaginationModel: SerkanGridPaginationModel) => {
+      setPaginationModel(nextPaginationModel);
+      void loadProducts({
+        page: nextPaginationModel.page,
+        pageSize: nextPaginationModel.pageSize,
+      });
+    },
+    [loadProducts],
+  );
+
+  const changeSort = useCallback(
+    (nextSortModel: SerkanGridSortModel) => {
+      const nextOrdering = nextSortModel
+        ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
+        : "categoria__name,modelo";
+      const nextPaginationModel = { ...paginationModel, page: 0 };
+
+      setSortModel(nextSortModel);
+      setOrdering(nextOrdering);
+      setPaginationModel(nextPaginationModel);
+      void loadProducts({
+        ordering: nextOrdering,
+        page: 0,
+        pageSize: nextPaginationModel.pageSize,
+      });
+    },
+    [loadProducts, paginationModel],
+  );
+
+  const changeColumnFilters = useCallback(
+    (nextFilters: SerkanGridFilter[]) => {
+      const nextPaginationModel = { ...paginationModel, page: 0 };
+
+      setColumnFilters(nextFilters);
+      setPaginationModel(nextPaginationModel);
+      void loadProducts({
+        columnFilters: nextFilters,
+        page: 0,
+        pageSize: nextPaginationModel.pageSize,
+      });
+    },
+    [loadProducts, paginationModel],
+  );
+
+  const clearFilters = useCallback(() => {
+    setSearchTerm("");
+    setCategoryFilter("");
+    setStatusFilter("ACTIVO");
+    setStockControlFilter("");
+    setStockStatusFilter("");
+    setFiltersOpen(false);
+    setColumnFilters([]);
+    setFilterResetKey((current) => current + 1);
+    loadFirstPage({
+      search: "",
+      category: "",
+      status: "ACTIVO",
+      stockControl: "",
+      stockStatus: "",
+      columnFilters: [],
+    });
+  }, [loadFirstPage]);
+
+  const activeFiltersCount = useMemo(
+    () =>
+      [
+        categoryFilter,
+        statusFilter === "ACTIVO" ? "" : statusFilter,
+        stockControlFilter,
+        stockStatusFilter,
+      ].filter(Boolean).length + columnFilters.length,
+    [
+      categoryFilter,
+      columnFilters.length,
+      statusFilter,
+      stockControlFilter,
+      stockStatusFilter,
+    ],
+  );
+
+  return {
+    products,
+    rowCount,
+    paginationModel,
+    sortModel,
+    ordering,
+    columnFilters,
+    filterResetKey,
+    visibleColumns,
+    setVisibleColumns,
+    searchTerm,
+    setSearchTerm,
+    categoryFilter,
+    setCategoryFilter,
+    statusFilter,
+    setStatusFilter,
+    stockControlFilter,
+    setStockControlFilter,
+    stockStatusFilter,
+    setStockStatusFilter,
+    filtersOpen,
+    setFiltersOpen,
+    loading,
+    activeFiltersCount,
+    loadProducts,
+    loadFirstPage,
+    changePagination,
+    changeSort,
+    changeColumnFilters,
+    clearFilters,
+  };
+}

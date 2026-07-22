@@ -8,8 +8,28 @@ from .views import (
     omnibox_search,
     record_change_history,
 )
+from .grid_views import (
+    GlobalColumnLabelView,
+    GridDefinitionView,
+    GridPreferenceView,
+)
 
 urlpatterns = [
+    path(
+        "grid/definitions/<str:grid_key>/",
+        GridDefinitionView.as_view(),
+        name="grid-definition",
+    ),
+    path(
+        "grid/preferences/<str:grid_key>/",
+        GridPreferenceView.as_view(),
+        name="grid-preference",
+    ),
+    path(
+        "grid/labels/<str:grid_key>/<str:field_key>/",
+        GlobalColumnLabelView.as_view(),
+        name="global-grid-column-label",
+    ),
     path("health/", health_check, name="health-check"),
     path("health/full/", full_health_check, name="full-health-check"),
     path("search/", omnibox_search, name="global-search"),

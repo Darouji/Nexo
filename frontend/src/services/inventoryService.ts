@@ -195,6 +195,7 @@ export type ProductListParams = {
   controla_stock?: boolean;
   stock_status?: CsvParam<ProductStockStatus>;
   stock_critico?: boolean;
+  grid_filters?: string;
 };
 
 export type ProductPageParams = ProductListParams & {
@@ -537,14 +538,19 @@ export async function fetchProducts(params: ProductListParams = {}) {
       controla_stock: toBooleanParam(params.controla_stock),
       stock_status: toCsv(params.stock_status),
       stock_critico: toBooleanParam(params.stock_critico),
+      grid_filters: params.grid_filters,
     },
   });
 
   return extractResults(response.data);
 }
 
-export async function fetchProductsPage(params: ProductPageParams = {}) {
+export async function fetchProductsPage(
+  params: ProductPageParams = {},
+  signal?: AbortSignal,
+) {
   const response = await api.get<ProductListResponse>("/inventory/productos/", {
+    signal,
     params: {
       search: params.search?.trim() || undefined,
       ordering: params.ordering || "categoria__name,modelo",
@@ -554,12 +560,52 @@ export async function fetchProductsPage(params: ProductPageParams = {}) {
       controla_stock: toBooleanParam(params.controla_stock),
       stock_status: toCsv(params.stock_status),
       stock_critico: toBooleanParam(params.stock_critico),
+      grid_filters: params.grid_filters,
       page: params.page,
       page_size: params.page_size,
     },
   });
 
   return toPaginatedResponse(response.data);
+}
+
+export async function exportProducts(
+  params: ProductPageParams & {
+    mode: "view" | "official";
+    file_format: "xlsx" | "csv";
+    columns?: string[];
+  },
+) {
+  const response = await api.get<Blob>("/inventory/productos/export/", {
+    responseType: "blob",
+    params: {
+      search: params.search?.trim() || undefined,
+      ordering: params.ordering || "categoria__name,modelo",
+      categoria: toCsv(params.categoria),
+      category: toCsv(params.category),
+      status: toCsv(params.status),
+      controla_stock: toBooleanParam(params.controla_stock),
+      stock_status: toCsv(params.stock_status),
+      stock_critico: toBooleanParam(params.stock_critico),
+      grid_filters: params.grid_filters,
+      mode: params.mode,
+      file_format: params.file_format,
+      columns: params.columns?.join(",") || undefined,
+    },
+  });
+
+  const contentDisposition = response.headers["content-disposition"];
+  const filenameMatch =
+    typeof contentDisposition === "string"
+      ? contentDisposition.match(/filename="?([^";]+)"?/i)
+      : null;
+
+  return {
+    blob: response.data,
+    filename:
+      filenameMatch?.[1] ||
+      `serkan_catalogo_productos_${params.mode}.${params.file_format}`,
+  };
 }
 
 export async function fetchInventorySummary() {

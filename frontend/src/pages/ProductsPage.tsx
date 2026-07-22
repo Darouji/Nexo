@@ -2,8 +2,8 @@ import AddIcon from "@mui/icons-material/Add";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
-import { Alert, Box, Button } from "@mui/material";
-import { PageHeader } from "../components/PageHeader";
+import { Alert, Button } from "@mui/material";
+import { PageShell } from "../components/PageShell";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
 import { colors } from "../theme/colors";
 import { getAvailableProductCategoryOptions } from "../features/inventory/categories/categoryOptions";
@@ -44,12 +44,13 @@ import {
   fetchInventorySummary,
   fetchKardexMovementsPage,
   fetchPendingReceiptsPage,
-  fetchProductsPage,
+  exportProducts,
   receivePendingReceipt,
   registerInventoryAdjustment,
   registerManualStockEntry,
   updateProduct,
 } from "../services/inventoryService";
+import { getStoredAccess } from "../services/authService";
 
 import type {
   SerkanGridPaginationModel,
@@ -64,8 +65,8 @@ import type {
   PendingReceiptStatus,
   Product,
   ProductLifecycleAction,
-  ProductStockStatus,
 } from "../services/inventoryService";
+import { useProductCatalogController } from "../features/inventory/products/useProductCatalogController";
 
 import {
   useCallback,
@@ -85,7 +86,6 @@ import {
   defaultKardexPaginationModel,
   defaultKardexSortModel,
   defaultPendingReceiptPaginationModel,
-  defaultProductPaginationModel,
   emptyInventorySummary,
   emptyKardexDialog,
   emptyMovementDialog,
@@ -104,46 +104,53 @@ import {
   type PendingReceiptOperationMode,
   type ProductActionMenuState,
   type ProductCategoryDialogState,
-  type ProductFilterOverrides,
   type ProductLifecycleDialogState,
   type ProductOriginDialogState,
 } from "../features/inventory/state/inventoryPageState";
 
 export function ProductsPage() {
-  const [productos, setProductos] = useState<Product[]>([]);
-  const [productRowCount, setProductRowCount] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const {
+    products: productos,
+    rowCount: productRowCount,
+    paginationModel: productPaginationModel,
+    sortModel: productSortModel,
+    ordering: productOrdering,
+    columnFilters: productColumnFilters,
+    filterResetKey: productFilterResetKey,
+    visibleColumns: visibleProductColumns,
+    setVisibleColumns: setVisibleProductColumns,
+    searchTerm,
+    setSearchTerm,
+    categoryFilter,
+    setCategoryFilter,
+    statusFilter,
+    setStatusFilter,
+    stockControlFilter,
+    setStockControlFilter,
+    stockStatusFilter,
+    setStockStatusFilter,
+    filtersOpen,
+    setFiltersOpen,
+    loading,
+    activeFiltersCount: activeProductFiltersCount,
+    loadProducts,
+    loadFirstPage: loadFirstProductPage,
+    changePagination: handleProductPaginationModelChange,
+    changeSort: handleProductSortModelChange,
+    changeColumnFilters: handleProductColumnFiltersChange,
+    clearFilters: clearProductCatalogFilters,
+  } = useProductCatalogController({ onError: setErrorMessage });
 
-  const [productPaginationModel, setProductPaginationModel] =
-    useState<SerkanGridPaginationModel>(defaultProductPaginationModel);
-
-  const [productSortModel, setProductSortModel] = useState<SerkanGridSortModel>(
-    {
-      field: "categoria__name",
-      direction: "asc",
-    },
-  );
-
-  const [productOrdering, setProductOrdering] = useState(
-    "categoria__name,modelo",
-  );
+  const [exportingProducts, setExportingProducts] = useState(false);
 
   const [inventorySummary, setInventorySummary] = useState<InventorySummary>(
     emptyInventorySummary,
   );
   const [categorias, setCategorias] = useState<Category[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ACTIVO");
-  const [stockControlFilter, setStockControlFilter] = useState("");
-  const [stockStatusFilter, setStockStatusFilter] = useState<
-    ProductStockStatus | ""
-  >("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingMovement, setSavingMovement] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
 
@@ -224,34 +231,6 @@ export function ProductsPage() {
     emptyProductActionMenu,
   );
 
-  const loadProducts = async (
-    searchOrFilters: string | ProductFilterOverrides = searchTerm,
-  ) => {
-    try {
-      setLoading(true);
-      setErrorMessage("");
-
-      const data = await fetchProductsPage(
-        buildProductPageParams(searchOrFilters, {
-          searchTerm,
-          categoryFilter,
-          statusFilter,
-          stockControlFilter,
-          stockStatusFilter,
-          ordering: productOrdering,
-          paginationModel: productPaginationModel,
-        }),
-      );
-
-      setProductos(data.results);
-      setProductRowCount(data.count);
-    } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCategoriesChanged = async (message: string) => {
     const updatedCategories = await fetchCategories();
 
@@ -278,53 +257,6 @@ export function ProductsPage() {
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     }
-  };
-
-  const loadFirstProductPage = (filters: ProductFilterOverrides = {}) => {
-    const nextPaginationModel = {
-      ...productPaginationModel,
-      page: 0,
-    };
-
-    setProductPaginationModel(nextPaginationModel);
-
-    void loadProducts({
-      ...filters,
-      page: 0,
-      pageSize: nextPaginationModel.pageSize,
-    });
-  };
-
-  const handleProductPaginationModelChange = (
-    nextPaginationModel: SerkanGridPaginationModel,
-  ) => {
-    setProductPaginationModel(nextPaginationModel);
-
-    void loadProducts({
-      page: nextPaginationModel.page,
-      pageSize: nextPaginationModel.pageSize,
-    });
-  };
-
-  const handleProductSortModelChange = (nextSortModel: SerkanGridSortModel) => {
-    const nextOrdering = nextSortModel
-      ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
-      : "categoria__name,modelo";
-
-    const nextPaginationModel = {
-      ...productPaginationModel,
-      page: 0,
-    };
-
-    setProductSortModel(nextSortModel);
-    setProductOrdering(nextOrdering);
-    setProductPaginationModel(nextPaginationModel);
-
-    void loadProducts({
-      ordering: nextOrdering,
-      page: 0,
-      pageSize: nextPaginationModel.pageSize,
-    });
   };
 
   const loadGlobalKardex = async (filters: KardexFilterOverrides = {}) => {
@@ -525,13 +457,6 @@ export function ProductsPage() {
     let isMounted = true;
 
     Promise.all([
-      fetchProductsPage({
-        search: "",
-        ordering: "categoria__name,modelo",
-        status: "ACTIVO",
-        page: 1,
-        page_size: defaultProductPaginationModel.pageSize,
-      }),
       fetchCategories(),
       fetchPendingReceiptsPage({
         ordering: "-created_at",
@@ -541,13 +466,11 @@ export function ProductsPage() {
       fetchInventorySummary(),
     ])
       .then(
-        ([productsPage, categoriesData, pendingReceiptsData, summaryData]) => {
+        ([categoriesData, pendingReceiptsData, summaryData]) => {
           if (!isMounted) {
             return;
           }
 
-          setProductos(productsPage.results);
-          setProductRowCount(productsPage.count);
           setCategorias(categoriesData);
           setPendingReceipts(pendingReceiptsData.results);
           setPendingReceiptRowCount(pendingReceiptsData.count);
@@ -567,7 +490,6 @@ export function ProductsPage() {
           return;
         }
 
-        setLoading(false);
         setPendingReceiptsLoading(false);
       });
 
@@ -575,13 +497,6 @@ export function ProductsPage() {
       isMounted = false;
     };
   }, []);
-
-  const activeProductFiltersCount = [
-    categoryFilter,
-    statusFilter === "ACTIVO" ? "" : statusFilter,
-    stockControlFilter,
-    stockStatusFilter,
-  ].filter(Boolean).length;
 
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
@@ -1411,25 +1326,63 @@ export function ProductsPage() {
   };
 
   const handleClearProductFilters = () => {
-    setSearchTerm("");
-    setCategoryFilter("");
-    setStatusFilter("ACTIVO");
-    setStockControlFilter("");
-    setStockStatusFilter("");
-    setFiltersOpen(false);
-
-    loadFirstProductPage({
-      search: "",
-      category: "",
-      status: "ACTIVO",
-      stockControl: "",
-      stockStatus: "",
-    });
+    clearProductCatalogFilters();
   };
 
   const handleOpenCategoryManager = () => {
     setCategoryManagerOpen(true);
   };
+
+  const handleExportProducts = async (mode: "view" | "official") => {
+    try {
+      setExportingProducts(true);
+      setErrorMessage("");
+
+      const queryParams = buildProductPageParams(
+        {},
+        {
+          searchTerm,
+          categoryFilter,
+          statusFilter,
+          stockControlFilter,
+          stockStatusFilter,
+          ordering: productOrdering,
+          paginationModel: productPaginationModel,
+          columnFilters: productColumnFilters,
+        },
+      );
+
+      const { blob, filename } = await exportProducts({
+        ...queryParams,
+        mode,
+        file_format: "xlsx",
+        columns: mode === "view" ? visibleProductColumns : undefined,
+      });
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const downloadLink = document.createElement("a");
+      downloadLink.href = downloadUrl;
+      downloadLink.download = filename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+
+      setSuccessMessage(
+        mode === "official"
+          ? "Exportación oficial generada correctamente."
+          : "La vista actual se exportó correctamente.",
+      );
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error, "No se pudo exportar el catálogo."));
+    } finally {
+      setExportingProducts(false);
+    }
+  };
+
+  const canExportOfficial = Boolean(
+    getStoredAccess()?.permissions?.grid_labels?.can_update,
+  );
 
   const handleOpenProductFromCategoryManager = (
     product: Product,
@@ -1458,8 +1411,7 @@ export function ProductsPage() {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <PageHeader
+    <PageShell
         title="Inventario de Productos"
         subtitle="Módulo central del sistema: productos, categorías, stock actual, stock mínimo, unidades por recibir y movimientos Kardex."
         eyebrow="Inventario y Kardex"
@@ -1497,7 +1449,7 @@ export function ProductsPage() {
             </Button>
           </>
         }
-      />
+    >
 
       <InventoryCatalogSection
         inventorySummary={inventorySummary}
@@ -1526,6 +1478,13 @@ export function ProductsPage() {
         productRowCount={productRowCount}
         productSortModel={productSortModel}
         onProductSortModelChange={handleProductSortModelChange}
+        onProductColumnFiltersChange={handleProductColumnFiltersChange}
+        productFilterResetKey={productFilterResetKey}
+        onVisibleColumnsChange={setVisibleProductColumns}
+        exporting={exportingProducts}
+        canExportOfficial={canExportOfficial}
+        onExportView={() => void handleExportProducts("view")}
+        onExportOfficial={() => void handleExportProducts("official")}
         onOpenCategoryManager={handleOpenCategoryManager}
         feedbackSlot={
           <>
@@ -1787,6 +1746,6 @@ export function ProductsPage() {
         onOpenProductCategoryDialog={openProductCategoryDialog}
         onOpenProductLifecycleDialog={openProductLifecycleDialog}
       />
-    </Box>
+    </PageShell>
   );
 }

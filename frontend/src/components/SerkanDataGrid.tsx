@@ -1,7 +1,20 @@
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import EditIcon from "@mui/icons-material/Edit";
+import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import { AgGridReact } from "ag-grid-react";
 import { colors } from "../theme/colors";
+import { serkanGridLocaleEs } from "./serkanGridLocaleEs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getApiErrorMessage } from "../services/api";
+import {
+  fetchGridDefinition,
+  fetchGridPreference,
+  renameGlobalGridColumn,
+  resetGridPreference,
+  saveGridPreference,
+  type GridDefinition,
+  type GridPreference,
+} from "../services/gridService";
 
 import {
   clearSerkanGridLayout,
@@ -12,8 +25,17 @@ import {
 import {
   Box,
   Button,
+  Alert,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  IconButton,
   LinearProgress,
   TablePagination,
+  TextField,
   Typography,
   Stack,
 } from "@mui/material";
@@ -43,6 +65,13 @@ export type SerkanGridSortModel = {
   direction: "asc" | "desc";
 } | null;
 
+export type SerkanGridFilter = {
+  field: string;
+  operator: string;
+  value: string | number;
+  value_to?: string | number;
+};
+
 type IdentifiableRow = {
   id: number | string;
 };
@@ -54,6 +83,7 @@ type ColumnLayoutEvent<TRow extends IdentifiableRow> = {
 
 type SerkanDataGridProps<TRow extends IdentifiableRow> = {
   gridKey: string;
+  serverManaged?: boolean;
   ariaLabel: string;
   rows: TRow[];
   columns: ColDef<TRow>[];
@@ -67,6 +97,9 @@ type SerkanDataGridProps<TRow extends IdentifiableRow> = {
 
   sortModel?: SerkanGridSortModel;
   onSortModelChange?: (model: SerkanGridSortModel) => void;
+  onFilterModelChange?: (filters: SerkanGridFilter[]) => void;
+  filterResetKey?: number;
+  onVisibleColumnsChange?: (fieldKeys: string[]) => void;
 };
 
 const serkanGridTheme = themeQuartz.withParams({
@@ -128,6 +161,7 @@ function toInitialLayoutColumn<TRow>(column: ColDef<TRow>): ColDef<TRow> {
 
 export function SerkanDataGrid<TRow extends IdentifiableRow>({
   gridKey,
+  serverManaged = false,
   ariaLabel,
   rows,
   columns,
@@ -139,14 +173,30 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   rowCount,
   sortModel,
   onSortModelChange,
+  onFilterModelChange,
+  filterResetKey = 0,
+  onVisibleColumnsChange,
 }: SerkanDataGridProps<TRow>) {
   const gridApiRef = useRef<GridApi<TRow> | null>(null);
 
   const paginationModelRef = useRef(paginationModel);
 
   const isApplyingStoredLayoutRef = useRef(false);
+  const preferenceRef = useRef<GridPreference | null>(null);
+  const preferenceTimerRef = useRef<number | null>(null);
 
   const [hasSavedLayout, setHasSavedLayout] = useState(false);
+  const [definition, setDefinition] = useState<GridDefinition | null>(null);
+  const [columnsDialogOpen, setColumnsDialogOpen] = useState(false);
+  const [renameField, setRenameField] = useState<{
+    fieldKey: string;
+    systemLabel: string;
+    visibleName: string;
+  } | null>(null);
+  const [renameReason, setRenameReason] = useState("");
+  const [gridSettingsError, setGridSettingsError] = useState("");
+  const [savingRename, setSavingRename] = useState(false);
+  const [visibleFieldKeys, setVisibleFieldKeys] = useState<string[]>([]);
 
   const layoutColumnIds = useMemo(
     () =>
@@ -185,12 +235,45 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       },
     };
 
-    const configuredColumns = columns.map((column) =>
-      toInitialLayoutColumn(column),
+    const definitionByKey = new Map(
+      definition?.columns.map((column) => [column.field_key, column]) ?? [],
     );
 
+    const configuredColumns = columns.map((column) => {
+      const initialColumn = toInitialLayoutColumn(column);
+      const fieldKey = String(column.colId ?? column.field ?? "");
+      const metadata = definitionByKey.get(fieldKey);
+
+      if (!metadata) {
+        return initialColumn;
+      }
+
+      return {
+        ...initialColumn,
+        headerName: metadata.visible_name,
+        sortable: metadata.sortable && Boolean(onSortModelChange),
+        filter:
+          metadata.filter_operators.length > 0 && onFilterModelChange
+            ? metadata.data_type === "number"
+              ? "agNumberColumnFilter"
+              : "agTextColumnFilter"
+            : false,
+        filterParams:
+          metadata.filter_operators.length > 0 && onFilterModelChange
+            ? {
+                filterOptions: metadata.filter_operators,
+                maxNumConditions: 1,
+                buttons: ["apply", "reset"],
+                closeOnApply: true,
+              }
+            : undefined,
+        lockVisible: metadata.required || !metadata.hideable,
+        lockPinned: !metadata.pinnable,
+      };
+    });
+
     return [rowNumberColumn, ...configuredColumns];
-  }, [columns]);
+  }, [columns, definition, onFilterModelChange, onSortModelChange]);
 
   const releaseLayoutMutationLock = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -230,8 +313,115 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       applyControlledSort(api);
       setHasSavedLayout(restored);
       releaseLayoutMutationLock();
+      return restored;
     },
     [applyControlledSort, gridKey, layoutColumnIds, releaseLayoutMutationLock],
+  );
+
+  const emitVisibleColumns = useCallback(
+    (api: GridApi<TRow>) => {
+      const visibleColumns = api
+        .getColumnState()
+        .filter(
+          (column) =>
+            column.colId !== "__row_number__" &&
+            column.colId !== "actions" &&
+            !column.hide,
+        )
+        .map((column) => column.colId);
+
+      setVisibleFieldKeys(visibleColumns);
+      onVisibleColumnsChange?.(visibleColumns);
+    },
+    [onVisibleColumnsChange],
+  );
+
+  const applyBackendPreference = useCallback(
+    (api: GridApi<TRow>, preference: GridPreference) => {
+      const knownColumns = new Set(layoutColumnIds);
+      const state = preference.config.columns
+        .filter((column) => knownColumns.has(column.field_key))
+        .map((column) => ({
+          colId: column.field_key,
+          width: column.width,
+          hide: column.hidden,
+          pinned: column.pinned,
+        }));
+
+      if (state.length > 0) {
+        isApplyingStoredLayoutRef.current = true;
+        api.applyColumnState({ state, applyOrder: true });
+        applyControlledSort(api);
+        releaseLayoutMutationLock();
+      }
+
+      if (
+        preference.config.page_size !== paginationModelRef.current.pageSize
+      ) {
+        onPaginationModelChange({
+          page: 0,
+          pageSize: preference.config.page_size,
+        });
+      }
+
+      preferenceRef.current = preference;
+      setHasSavedLayout(preference.revision > 0 || state.length > 0);
+      emitVisibleColumns(api);
+    },
+    [
+      applyControlledSort,
+      emitVisibleColumns,
+      layoutColumnIds,
+      onPaginationModelChange,
+      releaseLayoutMutationLock,
+    ],
+  );
+
+  const persistBackendLayout = useCallback(
+    (api: GridApi<TRow>, pageSize = paginationModelRef.current.pageSize) => {
+      if (!serverManaged || !preferenceRef.current) {
+        return;
+      }
+
+      if (preferenceTimerRef.current !== null) {
+        window.clearTimeout(preferenceTimerRef.current);
+      }
+
+      preferenceTimerRef.current = window.setTimeout(async () => {
+        const currentPreference = preferenceRef.current;
+        if (!currentPreference) {
+          return;
+        }
+
+        try {
+          const savedPreference = await saveGridPreference(
+            currentPreference,
+            api.getColumnState(),
+            pageSize,
+          );
+          preferenceRef.current = savedPreference;
+          setHasSavedLayout(true);
+          setGridSettingsError("");
+        } catch (error: unknown) {
+          setGridSettingsError(
+            getApiErrorMessage(
+              error,
+              "No se pudo guardar la configuración de columnas.",
+            ),
+          );
+        }
+      }, 750);
+    },
+    [serverManaged],
+  );
+
+  useEffect(
+    () => () => {
+      if (preferenceTimerRef.current !== null) {
+        window.clearTimeout(preferenceTimerRef.current);
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -256,6 +446,12 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     });
   }, [paginationModel.page, paginationModel.pageSize]);
 
+  useEffect(() => {
+    if (filterResetKey > 0) {
+      gridApiRef.current?.setFilterModel(null);
+    }
+  }, [filterResetKey]);
+
   const handleColumnLayoutChanged = useCallback(
     (event: ColumnLayoutEvent<TRow>) => {
       if (isApplyingStoredLayoutRef.current) {
@@ -275,8 +471,11 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       if (persisted) {
         setHasSavedLayout(true);
       }
+
+      emitVisibleColumns(event.api);
+      persistBackendLayout(event.api);
     },
-    [gridKey, layoutColumnIds],
+    [emitVisibleColumns, gridKey, layoutColumnIds, persistBackendLayout],
   );
 
   const handleResetColumnLayout = useCallback(() => {
@@ -292,19 +491,51 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     api.resetColumnState();
     applyControlledSort(api);
 
+    if (serverManaged) {
+      void resetGridPreference(gridKey)
+        .then(() => {
+          if (preferenceRef.current) {
+            preferenceRef.current = {
+              ...preferenceRef.current,
+              revision: 0,
+              config: {
+                columns: [],
+                page_size:
+                  definition?.default_page_size ?? paginationModel.pageSize,
+              },
+            };
+          }
+          setGridSettingsError("");
+        })
+        .catch((error: unknown) => {
+          setGridSettingsError(
+            getApiErrorMessage(error, "No se pudo restablecer la grilla."),
+          );
+        });
+    }
+
     setHasSavedLayout(false);
+    emitVisibleColumns(api);
     releaseLayoutMutationLock();
-  }, [applyControlledSort, gridKey, releaseLayoutMutationLock]);
+  }, [
+    applyControlledSort,
+    definition?.default_page_size,
+    emitVisibleColumns,
+    gridKey,
+    paginationModel.pageSize,
+    releaseLayoutMutationLock,
+    serverManaged,
+  ]);
 
   const defaultColDef = useMemo<ColDef<TRow>>(
     () => ({
       sortable: Boolean(onSortModelChange),
       resizable: true,
-      filter: false,
+      filter: Boolean(onFilterModelChange),
       minWidth: 110,
       unSortIcon: true,
     }),
-    [onSortModelChange],
+    [onFilterModelChange, onSortModelChange],
   );
 
   const handleSortChanged = (event: SortChangedEvent<TRow>) => {
@@ -334,6 +565,120 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     onSortModelChange(nextSortModel);
   };
 
+  const handleFilterChanged = () => {
+    if (!onFilterModelChange || !gridApiRef.current) {
+      return;
+    }
+
+    const filterModel = gridApiRef.current.getFilterModel() as Record<
+      string,
+      {
+        type?: string;
+        filter?: string | number;
+        filterTo?: string | number;
+      }
+    >;
+
+    const filters: SerkanGridFilter[] = Object.entries(filterModel)
+      .filter(([, model]) => model.type && model.filter !== undefined)
+      .map(([field, model]) => ({
+        field,
+        operator: String(model.type),
+        value: model.filter as string | number,
+        ...(model.filterTo !== undefined ? { value_to: model.filterTo } : {}),
+      }));
+
+    onFilterModelChange(filters);
+  };
+
+  const handleGridReady = async (api: GridApi<TRow>) => {
+    gridApiRef.current = api;
+    api.setGridAriaProperty("label", ariaLabel);
+
+    const restoredLocalLayout = restoreStoredLayout(api);
+    emitVisibleColumns(api);
+
+    if (!serverManaged) {
+      return;
+    }
+
+    try {
+      const [gridDefinition, preference] = await Promise.all([
+        fetchGridDefinition(gridKey),
+        fetchGridPreference(gridKey),
+      ]);
+
+      setDefinition(gridDefinition);
+      preferenceRef.current = preference;
+
+      if (preference.revision > 0) {
+        applyBackendPreference(api, preference);
+      } else if (restoredLocalLayout) {
+        persistBackendLayout(api);
+      } else {
+        applyBackendPreference(api, preference);
+      }
+
+      setGridSettingsError("");
+    } catch (error: unknown) {
+      setGridSettingsError(
+        getApiErrorMessage(
+          error,
+          "No se pudo cargar la configuración compartida de la grilla.",
+        ),
+      );
+    }
+  };
+
+  const handleRenameColumn = async () => {
+    if (!renameField || !definition) {
+      return;
+    }
+
+    try {
+      setSavingRename(true);
+      const renamed = await renameGlobalGridColumn(
+        gridKey,
+        renameField.fieldKey,
+        renameField.visibleName,
+        renameReason,
+      );
+
+      setDefinition((current) =>
+        current
+          ? {
+              ...current,
+              columns: current.columns.map((column) =>
+                column.field_key === renamed.field_key
+                  ? { ...column, visible_name: renamed.visible_name }
+                  : column,
+              ),
+            }
+          : current,
+      );
+      setRenameField(null);
+      setRenameReason("");
+      setGridSettingsError("");
+      window.requestAnimationFrame(() => gridApiRef.current?.refreshHeader());
+    } catch (error: unknown) {
+      setGridSettingsError(
+        getApiErrorMessage(error, "No se pudo renombrar la columna."),
+      );
+    } finally {
+      setSavingRename(false);
+    }
+  };
+
+  const toggleColumnVisibility = (fieldKey: string, visible: boolean) => {
+    const api = gridApiRef.current;
+    if (!api) {
+      return;
+    }
+
+    api.setColumnsVisible([fieldKey], visible);
+    emitVisibleColumns(api);
+  };
+
   const totalPages = Math.max(
     1,
     Math.ceil(rowCount / paginationModel.pageSize),
@@ -342,7 +687,8 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   const safePage = Math.min(paginationModel.page, totalPages - 1);
 
   return (
-    <Box
+    <>
+      <Box
       data-grid-key={gridKey}
       sx={{
         height,
@@ -379,18 +725,14 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
 
         <AgGridReact<TRow>
           theme={serkanGridTheme}
-          onGridReady={(event) => {
-            gridApiRef.current = event.api;
-
-            event.api.setGridAriaProperty("label", ariaLabel);
-
-            restoreStoredLayout(event.api);
-          }}
+          localeText={serkanGridLocaleEs}
+          onGridReady={(event) => void handleGridReady(event.api)}
           rowData={rows}
           columnDefs={resolvedColumns}
           defaultColDef={defaultColDef}
           getRowId={(params) => String(params.data.id)}
           onSortChanged={onSortModelChange ? handleSortChanged : undefined}
+          onFilterChanged={onFilterModelChange ? handleFilterChanged : undefined}
           onColumnMoved={handleColumnLayoutChanged}
           onColumnResized={handleColumnLayoutChanged}
           onColumnVisible={handleColumnLayoutChanged}
@@ -407,6 +749,16 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           sortingOrder={["asc", "desc", null]}
         />
       </Box>
+
+      {gridSettingsError ? (
+        <Alert
+          severity="warning"
+          onClose={() => setGridSettingsError("")}
+          sx={{ borderRadius: 0 }}
+        >
+          {gridSettingsError}
+        </Alert>
+      ) : null}
 
       <Stack
         direction={{ xs: "column", sm: "row" }}
@@ -439,6 +791,18 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           Restablecer columnas
         </Button>
 
+        {serverManaged && definition ? (
+          <Button
+            size="small"
+            variant="text"
+            startIcon={<ViewColumnIcon />}
+            onClick={() => setColumnsDialogOpen(true)}
+            sx={{ color: colors.text.secondary, fontWeight: 700 }}
+          >
+            Columnas y vista
+          </Button>
+        ) : null}
+
         <TablePagination
           component="div"
           count={rowCount}
@@ -451,12 +815,16 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
               page: nextPage,
             })
           }
-          onRowsPerPageChange={(event) =>
+          onRowsPerPageChange={(event) => {
+            const nextPageSize = Number(event.target.value);
             onPaginationModelChange({
               page: 0,
-              pageSize: Number(event.target.value),
-            })
-          }
+              pageSize: nextPageSize,
+            });
+            if (gridApiRef.current) {
+              persistBackendLayout(gridApiRef.current, nextPageSize);
+            }
+          }}
           labelRowsPerPage="Filas por página:"
           labelDisplayedRows={({ from, to, count }) =>
             `${from}–${to} de ${count}`
@@ -468,6 +836,157 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           }}
         />
       </Stack>
-    </Box>
+      </Box>
+
+      <Dialog
+        open={columnsDialogOpen}
+        onClose={() => setColumnsDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        aria-labelledby={`${gridKey}-columns-title`}
+      >
+        <DialogTitle id={`${gridKey}-columns-title`}>
+          Columnas y vista
+        </DialogTitle>
+        <DialogContent>
+          <Typography
+            variant="body2"
+            sx={{ color: colors.text.secondary, mb: 2 }}
+          >
+            La visibilidad, el orden y el ancho se guardan únicamente para tu
+            usuario. Los nombres sólo pueden cambiarse globalmente con permiso
+            administrativo.
+          </Typography>
+
+          <Stack spacing={0.5}>
+            {definition?.columns.map((column) => (
+              <Stack
+                key={column.field_key}
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: "center", justifyContent: "space-between" }}
+              >
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={
+                        column.required ||
+                        column.field_key === "actions" ||
+                        visibleFieldKeys.includes(column.field_key)
+                      }
+                      disabled={column.required || !column.hideable}
+                      onChange={(event) =>
+                        toggleColumnVisibility(
+                          column.field_key,
+                          event.target.checked,
+                        )
+                      }
+                    />
+                  }
+                  label={column.visible_name}
+                />
+
+                {definition.permissions.can_rename_global &&
+                column.field_key !== "actions" ? (
+                  <IconButton
+                    aria-label={`Renombrar globalmente ${column.visible_name}`}
+                    onClick={() => {
+                      setRenameField({
+                        fieldKey: column.field_key,
+                        systemLabel: column.system_label,
+                        visibleName: column.visible_name,
+                      });
+                      setRenameReason("");
+                      setGridSettingsError("");
+                    }}
+                  >
+                    <EditIcon />
+                  </IconButton>
+                ) : null}
+              </Stack>
+            ))}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setColumnsDialogOpen(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(renameField)}
+        onClose={() => {
+          if (!savingRename) {
+            setRenameField(null);
+            setRenameReason("");
+          }
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Renombrar columna para toda SERKAN</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="warning">
+              El cambio será visible para todos los usuarios. La clave técnica
+              y la exportación oficial no se modificarán.
+            </Alert>
+            <TextField
+              label="Nombre técnico del sistema"
+              value={renameField?.systemLabel ?? ""}
+              disabled
+              fullWidth
+            />
+            <TextField
+              label="Nuevo nombre visible"
+              value={renameField?.visibleName ?? ""}
+              onChange={(event) =>
+                setRenameField((current) =>
+                  current
+                    ? { ...current, visibleName: event.target.value }
+                    : current,
+                )
+              }
+              slotProps={{ htmlInput: { maxLength: 160 } }}
+              autoFocus
+              required
+              fullWidth
+            />
+            <TextField
+              label="Motivo del cambio"
+              value={renameReason}
+              onChange={(event) => setRenameReason(event.target.value)}
+              helperText="El motivo quedará registrado en auditoría."
+              slotProps={{ htmlInput: { maxLength: 500 } }}
+              minRows={2}
+              multiline
+              required
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setRenameField(null);
+              setRenameReason("");
+            }}
+            disabled={savingRename}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleRenameColumn()}
+            disabled={
+              savingRename ||
+              !renameField?.visibleName.trim() ||
+              renameReason.trim().length < 5
+            }
+          >
+            Aplicar globalmente
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }

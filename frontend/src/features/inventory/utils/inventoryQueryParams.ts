@@ -1,4 +1,7 @@
-import type { SerkanGridPaginationModel } from "../../../components/SerkanDataGrid";
+import type {
+  SerkanGridFilter,
+  SerkanGridPaginationModel,
+} from "../../../components/SerkanDataGrid";
 import type {
   AuditOrigin,
   PendingReceiptStatus,
@@ -20,6 +23,7 @@ type ProductQueryState = {
   stockStatusFilter: ProductStockStatus | "";
   ordering: string;
   paginationModel: SerkanGridPaginationModel;
+  columnFilters: SerkanGridFilter[];
 };
 
 type KardexQueryState = {
@@ -54,6 +58,7 @@ export function buildProductPageParams(
   const resolvedOrdering = filters.ordering ?? state.ordering;
   const resolvedPage = filters.page ?? state.paginationModel.page;
   const resolvedPageSize = filters.pageSize ?? state.paginationModel.pageSize;
+  const resolvedColumnFilters = filters.columnFilters ?? state.columnFilters;
 
   return {
     search: resolvedSearch,
@@ -62,6 +67,10 @@ export function buildProductPageParams(
     status: resolvedStatus || undefined,
     controla_stock: parseOptionalBoolean(resolvedStockControl),
     stock_status: resolvedStockStatus || undefined,
+    grid_filters:
+      resolvedColumnFilters.length > 0
+        ? JSON.stringify(resolvedColumnFilters)
+        : undefined,
     page: resolvedPage + 1,
     page_size: resolvedPageSize,
   };

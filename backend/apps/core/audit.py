@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 
+from .audit_targets import build_audit_target_snapshot
 from .models import AuditAction, AuditLog, AuditOrigin, RecordChangeLog
 
 
@@ -116,6 +117,10 @@ def create_business_audit_log(
     )
 
     audit_metadata = dict(metadata or {})
+    audit_metadata.setdefault(
+        "target_snapshot",
+        build_audit_target_snapshot(instance),
+    )
     ip_address = None
     user_agent = ""
 

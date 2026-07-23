@@ -7,6 +7,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
     action_display = serializers.CharField(source="get_action_display", read_only=True)
     origin_display = serializers.CharField(source="get_origin_display", read_only=True)
     actor_name = serializers.SerializerMethodField()
+    target = serializers.SerializerMethodField()
 
     class Meta:
         model = AuditLog
@@ -26,6 +27,7 @@ class AuditLogSerializer(serializers.ModelSerializer):
             "user_agent",
             "reason",
             "metadata",
+            "target",
             "created_at",
         ]
         read_only_fields = fields
@@ -37,6 +39,10 @@ class AuditLogSerializer(serializers.ModelSerializer):
         full_name = obj.actor.get_full_name().strip()
 
         return full_name or obj.actor.username
+
+    def get_target(self, obj):
+        target = obj.metadata.get("target_snapshot")
+        return target if isinstance(target, dict) else None
 
 
 class RecordChangeLogSerializer(serializers.ModelSerializer):

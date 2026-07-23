@@ -81,6 +81,12 @@ class AuthSessionAndSecurityTests(APITestCase):
         self.assertEqual(response.data["access"]["role"], UserRole.ADMINISTRADOR)
         self.assertTrue(response.data["access"]["is_management_role"])
         self.assertTrue(response.data["access"]["is_audit_role"])
+        self.assertTrue(
+            response.data["access"]["capabilities"]["inventory.manage_products"]
+        )
+        self.assertTrue(
+            response.data["access"]["capabilities"]["inventory.export_official"]
+        )
         self.assertIn("permissions", response.data["access"])
         self.assertIn("menu", response.data["access"])
 

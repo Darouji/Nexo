@@ -24,6 +24,35 @@ READ_ROLES = MANAGEMENT_ROLES | READ_ONLY_ROLES
 AUDIT_ROLES = MANAGEMENT_ROLES
 
 
+class InventoryCapability:
+    VIEW = "inventory.view"
+    MANAGE_PRODUCTS = "inventory.manage_products"
+    MANAGE_PRODUCT_LIFECYCLE = "inventory.manage_product_lifecycle"
+    MANAGE_CATEGORIES = "inventory.manage_categories"
+    REGISTER_ENTRY = "inventory.register_entry"
+    ADJUST_STOCK = "inventory.adjust_stock"
+    MANAGE_PENDING_RECEIPTS = "inventory.manage_pending_receipts"
+    EXPORT_VIEW = "inventory.export_view"
+    EXPORT_OFFICIAL = "inventory.export_official"
+    MANAGE_LOCATIONS = "inventory.manage_locations"
+    TRANSFER_STOCK = "inventory.transfer_stock"
+
+
+INVENTORY_CAPABILITY_ROLES = {
+    InventoryCapability.VIEW: READ_ROLES,
+    InventoryCapability.MANAGE_PRODUCTS: MANAGEMENT_ROLES,
+    InventoryCapability.MANAGE_PRODUCT_LIFECYCLE: MANAGEMENT_ROLES,
+    InventoryCapability.MANAGE_CATEGORIES: MANAGEMENT_ROLES,
+    InventoryCapability.REGISTER_ENTRY: MANAGEMENT_ROLES,
+    InventoryCapability.ADJUST_STOCK: MANAGEMENT_ROLES,
+    InventoryCapability.MANAGE_PENDING_RECEIPTS: MANAGEMENT_ROLES,
+    InventoryCapability.EXPORT_VIEW: READ_ROLES,
+    InventoryCapability.EXPORT_OFFICIAL: MANAGEMENT_ROLES,
+    InventoryCapability.MANAGE_LOCATIONS: MANAGEMENT_ROLES,
+    InventoryCapability.TRANSFER_STOCK: MANAGEMENT_ROLES,
+}
+
+
 def is_active_internal_user(user):
     if user is None:
         return False
@@ -54,6 +83,18 @@ def has_read_access(user):
 
 def has_audit_access(user):
     return user_role(user) in AUDIT_ROLES
+
+
+def has_inventory_capability(user, capability):
+    allowed_roles = INVENTORY_CAPABILITY_ROLES.get(capability, set())
+    return user_role(user) in allowed_roles
+
+
+def build_inventory_capabilities(user):
+    return {
+        capability: has_inventory_capability(user, capability)
+        for capability in INVENTORY_CAPABILITY_ROLES
+    }
 
 
 def module_permission(
@@ -252,6 +293,7 @@ def build_access_payload(user):
         "is_management_role": has_management_access(user),
         "is_read_role": has_read_access(user),
         "is_audit_role": has_audit_access(user),
+        "capabilities": build_inventory_capabilities(user),
         "permissions": build_module_permissions(user),
         "menu": build_menu(user),
     }

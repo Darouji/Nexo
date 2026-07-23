@@ -2,6 +2,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from apps.core.models import BaseStatus
 
+from .access import has_inventory_capability
 from .models import UserRole
 
 
@@ -35,6 +36,29 @@ class IsAuthenticatedAndActive(BasePermission):
 
     def has_permission(self, request, view):
         return get_active_user(request.user) is not None
+
+
+class HasInventoryCapability(BasePermission):
+    """Autoriza una capacidad de Inventario declarada por la vista y la acción."""
+
+    message = "No tiene la capacidad necesaria para realizar esta acción de inventario."
+
+    def has_permission(self, request, view):
+        capability_resolver = getattr(
+            view,
+            "get_required_inventory_capability",
+            None,
+        )
+
+        if not callable(capability_resolver):
+            return False
+
+        capability = capability_resolver()
+
+        if not capability:
+            return False
+
+        return has_inventory_capability(request.user, capability)
 
 
 class IsAdministrador(BasePermission):

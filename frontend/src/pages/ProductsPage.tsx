@@ -513,6 +513,7 @@ export function ProductsPage() {
       modelo: product.modelo || "",
       detalle: product.detalle || "",
       codigo_sap: product.codigo_sap || "",
+      codigo_sap_motivo: "",
       origen: product.origen,
       origen_observacion: product.origen_observacion || "",
       stock_critico: String(product.stock_critico ?? 0),
@@ -586,7 +587,10 @@ export function ProductsPage() {
       };
 
       if (editingProduct) {
-        await updateProduct(editingProduct.id, editableProductPayload);
+        await updateProduct(editingProduct.id, {
+          ...editableProductPayload,
+          motivo_codigo_sap: productForm.codigo_sap_motivo.trim() || undefined,
+        });
 
         setSuccessMessage(
           `Producto "${editableProductPayload.modelo}" actualizado correctamente.`,

@@ -1257,6 +1257,157 @@ class ProductCreationAndOriginApiTests(TestCase):
             "El origen es obligatorio al crear un producto.",
         )
 
+    def test_product_creation_rejects_placeholder_sap_codes(self):
+        for index, sap_code in enumerate(["N/A", "SIN SAP", "PENDIENTE", "0000"]):
+            with self.subTest(sap_code=sap_code):
+                response = self.client.post(
+                    "/api/inventory/productos/",
+                    {
+                        "categoria": self.category.pk,
+                        "modelo": f"Producto con SAP ficticio {index}",
+                        "codigo_sap": sap_code,
+                        "origen": ProductOrigin.COMPRADO,
+                        "controla_stock": True,
+                    },
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("codigo_sap", response.data["error"]["details"])
+
+    def test_product_without_inventory_forces_minimum_stock_to_zero(self):
+        response = self.client.post(
+            "/api/inventory/productos/",
+            {
+                "categoria": self.category.pk,
+                "modelo": "Asesoría sin inventario",
+                "codigo_sap": "",
+                "origen": ProductOrigin.COMPRADO,
+                "controla_stock": False,
+                "stock_critico": 15,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        product = Producto.objects.get(pk=response.data["id"])
+
+        self.assertFalse(product.controla_stock)
+        self.assertEqual(product.stock_actual, 0)
+        self.assertEqual(product.stock_critico, 0)
+
+    def test_sap_change_requires_reason_and_is_fully_audited(self):
+        product = Producto.objects.create(
+            categoria=self.category,
+            modelo="Producto con SAP controlado",
+            codigo_sap="SAP-ORIGINAL-001",
+            origen=ProductOrigin.COMPRADO,
+            controla_stock=True,
+            created_by=self.admin,
+            updated_by=self.admin,
+        )
+
+        rejected_response = self.client.patch(
+            f"/api/inventory/productos/{product.pk}/",
+            {"codigo_sap": "SAP-CORREGIDO-001"},
+            format="json",
+        )
+
+        self.assertEqual(
+            rejected_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertIn(
+            "motivo_codigo_sap",
+            rejected_response.data["error"]["details"],
+        )
+
+        rejected_audit = AuditLog.objects.get(
+            object_id=str(product.pk),
+            metadata__path=f"/api/inventory/productos/{product.pk}/",
+            metadata__status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(rejected_audit.metadata["outcome"], "rejected")
+        self.assertEqual(rejected_audit.model_name, "producto")
+        self.assertEqual(
+            rejected_audit.metadata["target_snapshot"]["identifiers"],
+            [
+                {
+                    "key": "modelo",
+                    "label": "Modelo",
+                    "value": "Producto con SAP controlado",
+                },
+                {
+                    "key": "codigo_sap",
+                    "label": "Código SAP",
+                    "value": "SAP-ORIGINAL-001",
+                },
+                {
+                    "key": "categoria",
+                    "label": "Categoría",
+                    "value": "Categoría base de productos",
+                },
+            ],
+        )
+
+        product.refresh_from_db()
+        self.assertEqual(product.codigo_sap, "SAP-ORIGINAL-001")
+
+        reason = "Corrección validada contra el maestro oficial de SAP."
+        accepted_response = self.client.patch(
+            f"/api/inventory/productos/{product.pk}/",
+            {
+                "codigo_sap": "SAP-CORREGIDO-001",
+                "motivo_codigo_sap": reason,
+            },
+            format="json",
+        )
+
+        self.assertEqual(accepted_response.status_code, status.HTTP_200_OK)
+
+        product.refresh_from_db()
+        self.assertEqual(product.codigo_sap, "SAP-CORREGIDO-001")
+        self.assertEqual(product.updated_by, self.admin)
+
+        change_log = RecordChangeLog.objects.get(
+            object_id=str(product.pk),
+            action=AuditAction.EDITAR,
+            field_name="codigo_sap",
+        )
+
+        self.assertEqual(change_log.old_value, "SAP-ORIGINAL-001")
+        self.assertEqual(change_log.new_value, "SAP-CORREGIDO-001")
+        self.assertEqual(change_log.reason, reason)
+        self.assertEqual(change_log.changed_by, self.admin)
+
+        audit_log = AuditLog.objects.get(
+            object_id=str(product.pk),
+            action=AuditAction.EDITAR,
+            metadata__operation="product_details_update",
+        )
+
+        self.assertEqual(audit_log.reason, reason)
+        self.assertEqual(audit_log.actor, self.admin)
+        self.assertTrue(audit_log.metadata["sap_code_changed"])
+        self.assertEqual(
+            audit_log.metadata["previous_sap_code"],
+            "SAP-ORIGINAL-001",
+        )
+        self.assertEqual(
+            audit_log.metadata["new_sap_code"],
+            "SAP-CORREGIDO-001",
+        )
+        self.assertIn(
+            {
+                "field_name": "codigo_sap",
+                "old_value": "SAP-ORIGINAL-001",
+                "new_value": "SAP-CORREGIDO-001",
+            },
+            audit_log.metadata["changes"],
+        )
+
     def test_direct_origin_patch_is_rejected_and_controlled_change_is_audited(self):
         product = Producto.objects.create(
             categoria=self.category,

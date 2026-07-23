@@ -47,6 +47,14 @@ ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS = (
     PendientePorRecibirStatus.PARCIAL,
 )
 
+FORBIDDEN_SAP_CODES = {
+    "n",
+    "na",
+    "sin sap",
+    "pendiente",
+    "0000",
+}
+
 
 class Categoria(BaseModel):
     name = models.CharField(max_length=150, verbose_name="Categoría")
@@ -367,6 +375,30 @@ class Producto(BaseModel):
     def __str__(self):
         return f"{self.categoria.name} - {self.modelo}"
 
+    def get_audit_target_snapshot(self):
+        return {
+            "entity_label": "Producto",
+            "display_name": self.modelo,
+            "internal_id": self.pk,
+            "identifiers": [
+                {
+                    "key": "modelo",
+                    "label": "Modelo",
+                    "value": self.modelo,
+                },
+                {
+                    "key": "codigo_sap",
+                    "label": "Código SAP",
+                    "value": self.codigo_sap,
+                },
+                {
+                    "key": "categoria",
+                    "label": "Categoría",
+                    "value": self.categoria.name,
+                },
+            ],
+        }
+
     @property
     def stock(self):
         return self.stock_actual
@@ -456,6 +488,16 @@ class Producto(BaseModel):
         if self.origen not in ProductOrigin.values:
             raise ValidationError({"origen": "El origen del producto no es válido."})
 
+        if self.codigo_sap_normalized in FORBIDDEN_SAP_CODES:
+            raise ValidationError(
+                {
+                    "codigo_sap": (
+                        "Código SAP es opcional. Déjelo vacío en vez de usar "
+                        "valores ficticios como N/A, SIN SAP, PENDIENTE o 0000."
+                    )
+                }
+            )
+
         if self.origen == ProductOrigin.OTRO and not self.origen_observacion.strip():
             raise ValidationError(
                 {
@@ -476,11 +518,13 @@ class Producto(BaseModel):
                     }
                 )
 
+        if not self.controla_stock:
             if self.stock_actual != 0:
                 raise ValidationError(
                     {
                         "stock_actual": (
-                            "Un producto de tipo SERVICIO no puede tener stock físico."
+                            "Un producto que no controla inventario no puede "
+                            "tener stock físico."
                         )
                     }
                 )
@@ -489,7 +533,8 @@ class Producto(BaseModel):
                 raise ValidationError(
                     {
                         "stock_critico": (
-                            "Un producto de tipo SERVICIO no puede tener stock mínimo."
+                            "Un producto que no controla inventario debe tener "
+                            "stock mínimo igual a cero."
                         )
                     }
                 )
@@ -635,7 +680,10 @@ class Producto(BaseModel):
         if self.origen == ProductOrigin.SERVICIO:
             self.controla_stock = False
             self.stock_critico = 0
-        elif self.origen != ProductOrigin.OTRO:
+        elif not self.controla_stock:
+            self.stock_critico = 0
+
+        if self.origen != ProductOrigin.OTRO:
             self.origen_observacion = ""
 
         self.modelo_normalized = normalize_text(self.modelo)

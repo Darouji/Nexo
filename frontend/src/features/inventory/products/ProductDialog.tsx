@@ -29,6 +29,7 @@ import { colors } from "../../../theme/colors";
 import {
   findCategoryByInputName,
   getProductOriginLabel,
+  isForbiddenSapCode,
   normalizeProductComparisonValue,
   normalizeSapComparisonValue,
   productOriginLabels,
@@ -275,9 +276,20 @@ export function ProductDialog({
     !editingProduct &&
     productForm.origen === "OTRO" &&
     !productForm.origen_observacion.trim();
+  const sapCodeChanged = Boolean(
+    editingProduct &&
+    productForm.codigo_sap.trim() !==
+      String(editingProduct.codigo_sap || "").trim(),
+  );
+  const sapChangeReasonIsMissing =
+    sapCodeChanged && !productForm.codigo_sap_motivo.trim();
+  const sapCodeIsForbidden = isForbiddenSapCode(productForm.codigo_sap);
 
   const hasRequiredFieldErrors =
-    categoryNameIsMissing || modelIsMissing || originObservationIsMissing;
+    categoryNameIsMissing ||
+    modelIsMissing ||
+    originObservationIsMissing ||
+    sapChangeReasonIsMissing;
 
   const hasDuplicateErrors = Boolean(
     duplicateValidation.duplicatedModelProduct ||
@@ -287,6 +299,7 @@ export function ProductDialog({
   const hasBlockingErrors =
     hasRequiredFieldErrors ||
     productCategoryIsUnavailable ||
+    sapCodeIsForbidden ||
     hasDuplicateErrors ||
     duplicateValidation.loading;
 
@@ -310,6 +323,8 @@ export function ProductDialog({
         nextOrigin === "SERVICIO" ? false : current.controla_stock,
       stock_critico: nextOrigin === "SERVICIO" ? "0" : current.stock_critico,
       initial_stock: nextOrigin === "SERVICIO" ? "0" : current.initial_stock,
+      initial_stock_motivo:
+        nextOrigin === "SERVICIO" ? "" : current.initial_stock_motivo,
     }));
   };
 
@@ -331,6 +346,8 @@ export function ProductDialog({
 
   const sapHelperText = duplicateValidation.duplicatedSapProduct
     ? `Ya existe un producto con este código SAP: "${duplicateValidation.duplicatedSapProduct.modelo}".`
+    : sapCodeIsForbidden
+      ? "Código SAP no válido. Déjalo vacío si aún no existe; no uses N/A, SIN SAP, PENDIENTE ni 0000."
     : "Opcional. Si se informa, debe ser único.";
 
   const handleCloseDialog = () => {
@@ -429,6 +446,62 @@ export function ProductDialog({
             }}
           />
 
+          <TextField
+            label="Modelo"
+            value={productForm.modelo}
+            onChange={(event) => updateFormField("modelo", event.target.value)}
+            fullWidth
+            required
+            error={
+              (submitAttempted && modelIsMissing) ||
+              Boolean(duplicateValidation.duplicatedModelProduct)
+            }
+            helperText={modelHelperText}
+          />
+
+          <TextField
+            label="Código SAP"
+            value={productForm.codigo_sap}
+            onChange={(event) =>
+              updateFormField("codigo_sap", event.target.value)
+            }
+            fullWidth
+            error={
+              sapCodeIsForbidden ||
+              Boolean(duplicateValidation.duplicatedSapProduct)
+            }
+            helperText={sapHelperText}
+          />
+
+          {sapCodeChanged ? (
+            <TextField
+              label="Motivo del cambio de Código SAP"
+              value={productForm.codigo_sap_motivo}
+              onChange={(event) =>
+                updateFormField("codigo_sap_motivo", event.target.value)
+              }
+              fullWidth
+              required
+              multiline
+              minRows={2}
+              error={submitAttempted && sapChangeReasonIsMissing}
+              helperText={
+                submitAttempted && sapChangeReasonIsMissing
+                  ? "El motivo es obligatorio para conservar la trazabilidad del Código SAP."
+                  : "El valor anterior, el nuevo valor, el responsable y este motivo quedarán auditados."
+              }
+            />
+          ) : null}
+
+          <TextField
+            label="Detalle"
+            value={productForm.detalle}
+            onChange={(event) => updateFormField("detalle", event.target.value)}
+            fullWidth
+            multiline
+            minRows={2}
+          />
+
           {editingProduct ? (
             <Stack spacing={1.5}>
               <TextField
@@ -469,7 +542,7 @@ export function ProductDialog({
 
               {productForm.origen === "OTRO" ? (
                 <TextField
-                  label="Detalle del origen"
+                  label="Observación de origen"
                   value={productForm.origen_observacion}
                   onChange={(event) =>
                     updateFormField("origen_observacion", event.target.value)
@@ -494,39 +567,6 @@ export function ProductDialog({
             </>
           )}
 
-          <TextField
-            label="Modelo"
-            value={productForm.modelo}
-            onChange={(event) => updateFormField("modelo", event.target.value)}
-            fullWidth
-            required
-            error={
-              (submitAttempted && modelIsMissing) ||
-              Boolean(duplicateValidation.duplicatedModelProduct)
-            }
-            helperText={modelHelperText}
-          />
-
-          <TextField
-            label="Código SAP"
-            value={productForm.codigo_sap}
-            onChange={(event) =>
-              updateFormField("codigo_sap", event.target.value)
-            }
-            fullWidth
-            error={Boolean(duplicateValidation.duplicatedSapProduct)}
-            helperText={sapHelperText}
-          />
-
-          <TextField
-            label="Detalle"
-            value={productForm.detalle}
-            onChange={(event) => updateFormField("detalle", event.target.value)}
-            fullWidth
-            multiline
-            minRows={2}
-          />
-
           <FormControlLabel
             control={
               <Checkbox
@@ -539,27 +579,17 @@ export function ProductDialog({
                     initial_stock: event.target.checked
                       ? current.initial_stock
                       : "0",
+                    initial_stock_motivo: event.target.checked
+                      ? current.initial_stock_motivo
+                      : "",
+                    stock_critico: event.target.checked
+                      ? current.stock_critico
+                      : "0",
                   }))
                 }
               />
             }
             label="Este producto maneja inventario y genera Kardex"
-          />
-
-          <TextField
-            label="Stock mínimo"
-            type="number"
-            value={productForm.stock_critico}
-            onChange={(event) =>
-              updateFormField("stock_critico", event.target.value)
-            }
-            fullWidth
-            disabled={productForm.origen === "SERVICIO"}
-            helperText={
-              productForm.origen === "SERVICIO"
-                ? "Los servicios no manejan stock mínimo."
-                : undefined
-            }
           />
 
           {productForm.controla_stock && !editingProduct ? (
@@ -584,6 +614,19 @@ export function ProductDialog({
                 fullWidth
               />
             </Stack>
+          ) : null}
+
+          {productForm.controla_stock ? (
+            <TextField
+              label="Stock mínimo"
+              type="number"
+              value={productForm.stock_critico}
+              onChange={(event) =>
+                updateFormField("stock_critico", event.target.value)
+              }
+              fullWidth
+              helperText="Último campo de stock; se usa para identificar existencias bajas."
+            />
           ) : null}
         </Stack>
       </DialogContent>

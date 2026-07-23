@@ -4,6 +4,10 @@ import uuid
 from django.contrib.contenttypes.models import ContentType
 from django.utils.deprecation import MiddlewareMixin
 
+from apps.core.audit_targets import (
+    build_audit_target_snapshot,
+    resolve_request_audit_instance,
+)
 from apps.core.models import AuditAction, AuditLog, AuditOrigin
 from apps.core.request_context import reset_request_id, set_request_id
 
@@ -78,11 +82,15 @@ def get_audit_target_data(request):
     instance = getattr(request, "audit_instance", None)
 
     if instance is None or not getattr(instance, "pk", None):
+        instance = resolve_request_audit_instance(request)
+
+    if instance is None or not getattr(instance, "pk", None):
         return {
             "content_type": None,
             "object_id": "",
             "model_name": "",
             "object_repr": request.path,
+            "target_snapshot": None,
         }
 
     content_type = ContentType.objects.get_for_model(
@@ -95,6 +103,7 @@ def get_audit_target_data(request):
         "object_id": str(instance.pk),
         "model_name": instance._meta.model_name,
         "object_repr": str(instance)[:255],
+        "target_snapshot": build_audit_target_snapshot(instance),
     }
 
 
@@ -142,12 +151,25 @@ class ActivityLogMiddleware(MiddlewareMixin):
                 "method": request.method,
                 "path": request.path,
                 "status_code": response.status_code,
+                "outcome": (
+                    "completed"
+                    if 200 <= response.status_code < 400
+                    else "rejected"
+                    if 400 <= response.status_code < 500
+                    else "error"
+                ),
                 "request_id": request_id,
             }
 
             custom_metadata = getattr(request, "audit_metadata", {})
             if isinstance(custom_metadata, dict):
                 metadata.update(custom_metadata)
+
+            if target_data["target_snapshot"]:
+                metadata.setdefault(
+                    "target_snapshot",
+                    target_data["target_snapshot"],
+                )
 
             AuditLog.objects.create(
                 actor=request.user,

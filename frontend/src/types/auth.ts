@@ -50,6 +50,7 @@ export type AccessPayload = {
   is_management_role: boolean;
   is_read_role: boolean;
   is_audit_role: boolean;
+  capabilities?: Record<string, boolean>;
   permissions: Record<string, ModulePermission>;
   menu: AccessMenuItem[];
 };

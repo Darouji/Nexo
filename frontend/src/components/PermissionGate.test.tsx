@@ -30,6 +30,7 @@ function storeAccess(canUpdate: boolean) {
     is_management_role: canUpdate,
     is_read_role: true,
     is_audit_role: canUpdate,
+    capabilities: {},
     menu: [],
     permissions: {
       grid_labels: {

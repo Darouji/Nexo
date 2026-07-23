@@ -21,10 +21,8 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import (
-    IsConsultaOrOperativoGlobal,
-    IsOperativoGlobal,
-)
+from apps.accounts.access import InventoryCapability
+from apps.accounts.permissions import HasInventoryCapability
 from apps.core.models import AuditOrigin, BaseStatus
 from apps.core.grid_registry import apply_grid_filters
 
@@ -216,17 +214,22 @@ def apply_created_at_date_range(queryset, params):
 
 
 class InventoryPermissionMixin:
+    inventory_action_capabilities = {}
+    inventory_default_write_capability = InventoryCapability.MANAGE_PRODUCTS
+
+    def get_required_inventory_capability(self):
+        explicit_capability = self.inventory_action_capabilities.get(self.action)
+
+        if explicit_capability:
+            return explicit_capability
+
+        if self.request.method in ["GET", "HEAD", "OPTIONS"]:
+            return InventoryCapability.VIEW
+
+        return self.inventory_default_write_capability
+
     def get_permissions(self):
-        if self.action in ["list", "retrieve", "resumen"]:
-            permission_classes = [
-                IsAuthenticated,
-                IsConsultaOrOperativoGlobal,
-            ]
-        else:
-            permission_classes = [
-                IsAuthenticated,
-                IsOperativoGlobal,
-            ]
+        permission_classes = [IsAuthenticated, HasInventoryCapability]
 
         return [permission() for permission in permission_classes]
 
@@ -265,6 +268,7 @@ class InventoryPermissionMixin:
 
 
 class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
+    inventory_default_write_capability = InventoryCapability.MANAGE_CATEGORIES
     queryset = (
         Categoria.objects.select_related(
             "merged_into",
@@ -396,6 +400,12 @@ class CategoriaViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
 
 
 class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
+    inventory_action_capabilities = {
+        "destroy": InventoryCapability.MANAGE_PRODUCT_LIFECYCLE,
+        "ciclo_vida": InventoryCapability.MANAGE_PRODUCT_LIFECYCLE,
+        "entrada_manual": InventoryCapability.REGISTER_ENTRY,
+        "ajuste_inventario": InventoryCapability.ADJUST_STOCK,
+    }
     queryset = Producto.objects.select_related("categoria").all()
     serializer_class = ProductoSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
@@ -424,18 +434,15 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
     ]
     ordering = ["categoria__name", "modelo"]
 
-    def get_permissions(self):
+    def get_required_inventory_capability(self):
         if self.action == "export":
-            mode = self.request.query_params.get("mode", "view")
-            permission_classes = [
-                IsAuthenticated,
-                IsOperativoGlobal
-                if mode == "official"
-                else IsConsultaOrOperativoGlobal,
-            ]
-            return [permission() for permission in permission_classes]
+            return (
+                InventoryCapability.EXPORT_OFFICIAL
+                if self.request.query_params.get("mode", "view") == "official"
+                else InventoryCapability.EXPORT_VIEW
+            )
 
-        return super().get_permissions()
+        return super().get_required_inventory_capability()
 
     @action(detail=False, methods=["get"], url_path="resumen")
     def resumen(self, request):
@@ -820,6 +827,9 @@ class PendientePorRecibirViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
+    inventory_default_write_capability = (
+        InventoryCapability.MANAGE_PENDING_RECEIPTS
+    )
     queryset = PendientePorRecibir.objects.select_related(
         "producto",
         "producto__categoria",

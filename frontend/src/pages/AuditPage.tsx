@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import axios from "axios";
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Card,
@@ -20,6 +23,7 @@ import {
   Typography,
 } from "@mui/material";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import LoginIcon from "@mui/icons-material/Login";
 import ManageSearchIcon from "@mui/icons-material/ManageSearch";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -33,6 +37,18 @@ import {
   fetchRecordChangeHistory,
 } from "../services/auditService";
 import type { AuditLog, RecordChangeLog } from "../services/auditService";
+import {
+  getAuditActionLabel,
+  getAuditNarrative,
+  getAuditOriginLabel,
+  getAuditTargetIdentifiers,
+  getAuditTargetLabel,
+  getChangeNarrative,
+  getFieldLabel,
+  getModelLabel,
+  getModuleLabel,
+  isRejectedAuditRequest,
+} from "../features/audit/auditPresentation";
 import { colors } from "../theme/colors";
 
 type RecordSearchForm = {
@@ -321,8 +337,8 @@ export function AuditPage() {
       return logs;
     }
 
-    return logs.filter((log) =>
-      [
+    return logs.filter((log) => {
+      const searchableValues = [
         log.actor_name,
         log.action,
         log.action_display,
@@ -334,8 +350,15 @@ export function AuditPage() {
         log.object_repr,
         log.ip_address,
         log.reason,
-      ].some((value) => normalizeSearch(value).includes(term)),
-    );
+        ...getAuditTargetIdentifiers(log).map(
+          (identifier) => identifier.value,
+        ),
+      ];
+
+      return searchableValues.some((value) =>
+        normalizeSearch(value).includes(term),
+      );
+    });
   }, [logs, searchTerm]);
 
   const summary = useMemo(() => {
@@ -392,6 +415,37 @@ export function AuditPage() {
     }
   }, [recordForm]);
 
+  const handleOpenRecordHistory = async (log: AuditLog) => {
+    const nextRecordForm = {
+      app_label: log.module,
+      model: log.model_name,
+      object_id: log.object_id,
+    };
+
+    setRecordForm(nextRecordForm);
+    setSelectedLog(null);
+
+    try {
+      setLoadingChanges(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
+      const payload = await fetchRecordChangeHistory({
+        ...nextRecordForm,
+        limit: 100,
+      });
+
+      setRecordChanges(payload.results);
+      setSuccessMessage(
+        `Historial cargado: ${payload.count} cambios encontrados.`,
+      );
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setLoadingChanges(false);
+    }
+  };
+
   const auditColumns = useMemo<GridColDef[]>(() => {
     return [
       {
@@ -415,41 +469,29 @@ export function AuditPage() {
         renderCell: (params) => {
           const log = params.row as AuditLog;
 
-          return <ActionChip action={log.action} label={log.action_display} />;
+          return <ActionChip action={log.action} label={getAuditActionLabel(log)} />;
         },
       },
       {
-        field: "module",
-        headerName: "Módulo",
-        minWidth: 150,
-        flex: 0.6,
-        renderCell: (params) => params.value || "Sin módulo",
-      },
-      {
-        field: "model_name",
-        headerName: "Modelo",
-        minWidth: 150,
-        flex: 0.6,
-        renderCell: (params) => params.value || "Sin modelo",
+        field: "summary",
+        headerName: "Qué ocurrió",
+        minWidth: 360,
+        flex: 1.6,
+        sortable: false,
+        renderCell: (params) => getAuditNarrative(params.row as AuditLog),
       },
       {
         field: "object_repr",
         headerName: "Registro",
-        minWidth: 240,
-        flex: 1,
-        renderCell: (params) => params.value || "Sin registro",
+        minWidth: 330,
+        flex: 1.4,
+        renderCell: (params) => getAuditTargetLabel(params.row as AuditLog),
       },
       {
         field: "origin_display",
         headerName: "Origen",
-        width: 145,
-        renderCell: (params) => params.value || "Sin origen",
-      },
-      {
-        field: "ip_address",
-        headerName: "IP",
-        width: 145,
-        renderCell: (params) => params.value || "Sin IP",
+        width: 175,
+        renderCell: (params) => getAuditOriginLabel(params.row as AuditLog),
       },
       {
         field: "actions",
@@ -503,10 +545,10 @@ export function AuditPage() {
       },
       {
         field: "field_name",
-        headerName: "Campo",
+        headerName: "Qué cambió",
         minWidth: 160,
         flex: 0.6,
-        renderCell: (params) => params.value || "Sin campo",
+        renderCell: (params) => getFieldLabel(String(params.value || "")),
       },
       {
         field: "old_value",
@@ -725,9 +767,9 @@ export function AuditPage() {
                   Actividad reciente
                 </Typography>
 
-                <Typography variant="body2" sx={{ color: colors.text.muted }}>
-                  El backend entrega la actividad global reciente filtrable por
-                  módulo y acción.
+              <Typography variant="body2" sx={{ color: colors.text.muted }}>
+                  Resumen claro de la actividad global. Abre el detalle para
+                  ver motivo, valores y metadatos técnicos autorizados.
                 </Typography>
               </Box>
 
@@ -834,14 +876,15 @@ export function AuditPage() {
               </Typography>
 
               <Typography variant="body2" sx={{ color: colors.text.muted }}>
-                Consulta cambios campo a campo indicando app_label, model y
-                object_id.
+                Abre “Ver historial del registro” desde una actividad para
+                cargar este detalle automáticamente. La búsqueda manual queda
+                disponible para casos técnicos.
               </Typography>
             </Box>
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
               <TextField
-                label="App label"
+                label="Módulo técnico"
                 value={recordForm.app_label}
                 onChange={(event) =>
                   setRecordForm((current) => ({
@@ -849,13 +892,13 @@ export function AuditPage() {
                     app_label: event.target.value,
                   }))
                 }
-                placeholder="sales"
+                placeholder="inventory"
                 size="small"
                 fullWidth
               />
 
               <TextField
-                label="Modelo"
+                label="Registro técnico"
                 value={recordForm.model}
                 onChange={(event) =>
                   setRecordForm((current) => ({
@@ -863,13 +906,13 @@ export function AuditPage() {
                     model: event.target.value,
                   }))
                 }
-                placeholder="venta"
+                placeholder="producto"
                 size="small"
                 fullWidth
               />
 
               <TextField
-                label="Object ID"
+                label="ID del registro"
                 value={recordForm.object_id}
                 onChange={(event) =>
                   setRecordForm((current) => ({
@@ -927,11 +970,11 @@ export function AuditPage() {
               <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
                 <ActionChip
                   action={selectedLog.action}
-                  label={selectedLog.action_display}
+                  label={getAuditActionLabel(selectedLog)}
                 />
 
                 <Chip
-                  label={selectedLog.origin_display || selectedLog.origin}
+                  label={getAuditOriginLabel(selectedLog)}
                   size="small"
                   variant="outlined"
                   sx={{
@@ -942,6 +985,19 @@ export function AuditPage() {
                   }}
                 />
               </Stack>
+
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: colors.radius.md,
+                  bgcolor: colors.modules.audit.soft,
+                  border: `1px solid ${colors.modules.audit.border}`,
+                }}
+              >
+                <Typography sx={{ color: colors.text.primary, fontWeight: 800 }}>
+                  {getAuditNarrative(selectedLog)}
+                </Typography>
+              </Box>
 
               <Box
                 sx={{
@@ -984,12 +1040,13 @@ export function AuditPage() {
                     variant="body2"
                     sx={{ color: colors.text.secondary, fontWeight: 800 }}
                   >
-                    Módulo / modelo
+                    Área / tipo de registro
                   </Typography>
 
                   <Typography sx={{ color: colors.text.primary }}>
-                    {selectedLog.module || "Sin módulo"} ·{" "}
-                    {selectedLog.model_name || "Sin modelo"}
+                    {getModuleLabel(selectedLog.module)} ·{" "}
+                    {selectedLog.target?.entity_label ||
+                      getModelLabel(selectedLog.model_name)}
                   </Typography>
                 </Box>
 
@@ -998,31 +1055,20 @@ export function AuditPage() {
                     variant="body2"
                     sx={{ color: colors.text.secondary, fontWeight: 800 }}
                   >
-                    Registro afectado
+                    Registro relacionado
                   </Typography>
 
                   <Typography sx={{ color: colors.text.primary }}>
-                    {selectedLog.object_repr || "Sin registro"}
+                    {getAuditTargetLabel(selectedLog)}
                   </Typography>
 
                   <Typography
                     variant="caption"
                     sx={{ color: colors.text.muted }}
                   >
-                    ID: {selectedLog.object_id || "sin ID"}
-                  </Typography>
-                </Box>
-
-                <Box>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: colors.text.secondary, fontWeight: 800 }}
-                  >
-                    IP
-                  </Typography>
-
-                  <Typography sx={{ color: colors.text.primary }}>
-                    {selectedLog.ip_address || "Sin IP"}
+                    {isRejectedAuditRequest(selectedLog)
+                      ? "La solicitud fue rechazada y el registro no fue modificado."
+                      : "Este es el registro sobre el que se realizó la acción."}
                   </Typography>
                 </Box>
 
@@ -1040,51 +1086,180 @@ export function AuditPage() {
                 </Box>
               </Box>
 
+              {getAuditTargetIdentifiers(selectedLog).length > 0 ? (
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800, mb: 1 }}
+                  >
+                    Identificación del registro
+                  </Typography>
+
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        sm: "repeat(3, minmax(0, 1fr))",
+                      },
+                      gap: 1.5,
+                    }}
+                  >
+                    {getAuditTargetIdentifiers(selectedLog).map((identifier) => (
+                      <Box
+                        key={identifier.key}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: colors.radius.md,
+                          border: `1px solid ${colors.border.light}`,
+                          bgcolor: colors.surface.soft,
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          sx={{ color: colors.text.muted, fontWeight: 800 }}
+                        >
+                          {identifier.label}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: colors.text.primary,
+                            fontWeight: 800,
+                            overflowWrap: "anywhere",
+                          }}
+                        >
+                          {identifier.value}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              ) : null}
+
               <Divider />
 
-              <Box>
-                <Typography
-                  variant="body2"
-                  sx={{ color: colors.text.secondary, fontWeight: 800, mb: 1 }}
-                >
-                  Metadatos
-                </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<ManageSearchIcon />}
+                onClick={() => void handleOpenRecordHistory(selectedLog)}
+                disabled={!selectedLog.module || !selectedLog.model_name || !selectedLog.object_id}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                Ver historial del registro
+              </Button>
 
-                <Box
-                  component="pre"
-                  sx={{
-                    m: 0,
-                    p: 2,
-                    borderRadius: colors.radius.md,
-                    border: `1px solid ${colors.border.light}`,
-                    bgcolor: colors.surface.soft,
-                    color: colors.text.secondary,
-                    overflow: "auto",
-                    fontSize: 13,
-                  }}
-                >
-                  {toReadableJson(selectedLog.metadata)}
-                </Box>
-              </Box>
+              <Accordion
+                disableGutters
+                sx={{
+                  border: `1px solid ${colors.border.light}`,
+                  borderRadius: `${colors.radius.md} !important`,
+                  boxShadow: "none",
+                  "&:before": { display: "none" },
+                }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box>
+                    <Typography sx={{ color: colors.text.primary, fontWeight: 850 }}>
+                      Información técnica
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: colors.text.muted }}>
+                      Visible sólo para perfiles autorizados de auditoría.
+                    </Typography>
+                  </Box>
+                </AccordionSummary>
 
-              <Box>
-                <Typography
-                  variant="body2"
-                  sx={{ color: colors.text.secondary, fontWeight: 800, mb: 1 }}
-                >
-                  User agent
-                </Typography>
+                <AccordionDetails>
+                  <Stack spacing={2}>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          md: "repeat(2, minmax(0, 1fr))",
+                        },
+                        gap: 2,
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="caption" sx={{ color: colors.text.muted }}>
+                          ID interno
+                        </Typography>
+                        <Typography sx={{ color: colors.text.primary }}>
+                          {selectedLog.target?.internal_id ||
+                            selectedLog.object_id ||
+                            "Sin ID"}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: colors.text.muted }}>
+                          IP
+                        </Typography>
+                        <Typography sx={{ color: colors.text.primary }}>
+                          {selectedLog.ip_address || "Sin IP"}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: colors.text.muted }}>
+                          Módulo / modelo técnico
+                        </Typography>
+                        <Typography sx={{ color: colors.text.primary }}>
+                          {selectedLog.module || "-"} · {selectedLog.model_name || "-"}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" sx={{ color: colors.text.muted }}>
+                          Origen técnico
+                        </Typography>
+                        <Typography sx={{ color: colors.text.primary }}>
+                          {selectedLog.origin || "-"}
+                        </Typography>
+                      </Box>
+                    </Box>
 
-                <Typography
-                  variant="body2"
-                  sx={{
-                    color: colors.text.muted,
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {selectedLog.user_agent || "Sin user agent"}
-                </Typography>
-              </Box>
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        sx={{ color: colors.text.secondary, fontWeight: 800, mb: 1 }}
+                      >
+                        Metadatos
+                      </Typography>
+                      <Box
+                        component="pre"
+                        sx={{
+                          m: 0,
+                          p: 2,
+                          borderRadius: colors.radius.md,
+                          border: `1px solid ${colors.border.light}`,
+                          bgcolor: colors.surface.soft,
+                          color: colors.text.secondary,
+                          overflow: "auto",
+                          fontSize: 13,
+                        }}
+                      >
+                        {toReadableJson(selectedLog.metadata)}
+                      </Box>
+                    </Box>
+
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        sx={{ color: colors.text.secondary, fontWeight: 800, mb: 1 }}
+                      >
+                        Navegador / User agent
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: colors.text.muted,
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {selectedLog.user_agent || "Sin user agent"}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </AccordionDetails>
+              </Accordion>
             </Stack>
           ) : null}
         </DialogContent>
@@ -1122,6 +1297,19 @@ export function AuditPage() {
 
               <Box
                 sx={{
+                  p: 2,
+                  borderRadius: colors.radius.md,
+                  bgcolor: colors.modules.audit.soft,
+                  border: `1px solid ${colors.modules.audit.border}`,
+                }}
+              >
+                <Typography sx={{ color: colors.text.primary, fontWeight: 800 }}>
+                  {getChangeNarrative(selectedChange)}
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
                   display: "grid",
                   gridTemplateColumns: {
                     xs: "1fr",
@@ -1139,7 +1327,7 @@ export function AuditPage() {
                   </Typography>
 
                   <Typography sx={{ color: colors.text.primary }}>
-                    {selectedChange.content_type_label} · ID{" "}
+                    {getModelLabel(selectedChange.content_type_label.split(".").at(-1) || "")} · ID{" "}
                     {selectedChange.object_id}
                   </Typography>
                 </Box>
@@ -1166,7 +1354,7 @@ export function AuditPage() {
                   </Typography>
 
                   <Typography sx={{ color: colors.text.primary }}>
-                    {selectedChange.field_name || "Sin campo"}
+                    {getFieldLabel(selectedChange.field_name)}
                   </Typography>
                 </Box>
 

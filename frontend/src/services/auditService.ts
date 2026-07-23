@@ -29,8 +29,22 @@ export interface AuditLog {
   user_agent: string;
   reason: string;
   metadata: Record<string, unknown>;
+  target: AuditTargetSnapshot | null;
   created_at: string;
 }
+
+export type AuditTargetIdentifier = {
+  key: string;
+  label: string;
+  value: string;
+};
+
+export type AuditTargetSnapshot = {
+  entity_label: string;
+  display_name: string;
+  internal_id: string;
+  identifiers: AuditTargetIdentifier[];
+};
 
 export interface RecordChangeLog {
   id: number;

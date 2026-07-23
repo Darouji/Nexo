@@ -1,5 +1,4 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
 from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
@@ -12,7 +11,7 @@ from .models import (
     Producto,
     ProductOrigin,
 )
-from .services import create_product_with_category
+from .services import create_product_with_category, update_product_details
 
 
 class CategoriaSerializer(serializers.ModelSerializer):
@@ -156,6 +155,12 @@ class ProductoSerializer(serializers.ModelSerializer):
         allow_blank=True,
         max_length=255,
     )
+    motivo_codigo_sap = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        max_length=255,
+    )
 
     stock_status = serializers.SerializerMethodField()
     estado_producto = serializers.SerializerMethodField()
@@ -187,6 +192,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             "status",
             "stock_inicial",
             "motivo_stock_inicial",
+            "motivo_codigo_sap",
             "created_at",
             "updated_at",
         ]
@@ -301,6 +307,20 @@ class ProductoSerializer(serializers.ModelSerializer):
                 "Para cambios posteriores use Gestionar inventario."
             )
 
+        if self.instance and "codigo_sap" in self.initial_data:
+            previous_sap_code = str(self.instance.codigo_sap or "").strip()
+            next_sap_code = str(
+                attrs.get("codigo_sap", self.instance.codigo_sap) or ""
+            ).strip()
+
+            if (
+                next_sap_code != previous_sap_code
+                and not str(attrs.get("motivo_codigo_sap", "") or "").strip()
+            ):
+                validation_errors["motivo_codigo_sap"] = (
+                    "El motivo es obligatorio cuando cambia el Código SAP."
+                )
+
         if initial_stock > 0 and not controla_stock:
             validation_errors["stock_inicial"] = (
                 "Un producto que no maneja inventario no puede tener stock inicial."
@@ -321,6 +341,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        validated_data.pop("motivo_codigo_sap", None)
         initial_stock = validated_data.pop("stock_inicial", 0)
 
         initial_stock_reason = str(
@@ -353,16 +374,30 @@ class ProductoSerializer(serializers.ModelSerializer):
         return product
 
     def update(self, instance, validated_data):
-        try:
-            with transaction.atomic():
-                for attribute, value in validated_data.items():
-                    setattr(instance, attribute, value)
+        sap_change_reason = str(
+            validated_data.pop("motivo_codigo_sap", "") or ""
+        ).strip()
+        validated_data.pop("updated_by", None)
 
-                instance.save()
+        request = self.context.get("request")
+        user = request.user if request and request.user.is_authenticated else None
+
+        try:
+            product = update_product_details(
+                producto=instance,
+                product_data=validated_data,
+                motivo_codigo_sap=sap_change_reason,
+                user=user,
+                request=getattr(request, "_request", request),
+            )
         except DjangoValidationError as error:
             raise_serializer_validation_error(error)
 
-        return instance
+        if request:
+            django_request = getattr(request, "_request", request)
+            django_request.skip_activity_audit = True
+
+        return product
 
     @extend_schema_field(OpenApiTypes.INT)
     def get_stock(self, obj):

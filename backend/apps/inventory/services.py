@@ -7,6 +7,7 @@ from apps.core.audit import (
     capture_field_values,
     create_business_audit_log,
     create_record_change_logs_from_snapshot,
+    normalize_audit_value,
 )
 from apps.core.models import AuditAction, AuditOrigin, BaseStatus
 from apps.core.utils import normalize_text
@@ -95,6 +96,33 @@ PRODUCT_ORIGIN_AUDIT_FIELDS = [
     "stock_critico",
     "updated_by",
 ]
+
+PRODUCT_DETAILS_AUDIT_FIELDS = [
+    "modelo",
+    "modelo_normalized",
+    "detalle",
+    "codigo_sap",
+    "codigo_sap_normalized",
+    "stock_critico",
+    "controla_stock",
+    "updated_by",
+]
+
+PRODUCT_EDITABLE_FIELDS = {
+    "modelo",
+    "detalle",
+    "codigo_sap",
+    "stock_critico",
+    "controla_stock",
+}
+
+PRODUCT_DETAILS_HUMAN_AUDIT_FIELDS = {
+    "modelo",
+    "detalle",
+    "codigo_sap",
+    "stock_critico",
+    "controla_stock",
+}
 
 
 def _require_category_reason(motivo):
@@ -719,6 +747,136 @@ def create_product_with_category(
         )
 
     return product
+
+
+def update_product_details(
+    *,
+    producto,
+    product_data,
+    motivo_codigo_sap="",
+    user=None,
+    request=None,
+):
+    """
+    Actualiza la ficha general del producto con bloqueo y auditoría.
+
+    El Código SAP es un identificador sensible: cualquier cambio visible,
+    incluso uno de formato, exige un motivo explícito.
+    """
+
+    if producto is None:
+        raise ValidationError({"producto": "El producto es obligatorio."})
+
+    unexpected_fields = set(product_data) - PRODUCT_EDITABLE_FIELDS
+
+    if unexpected_fields:
+        raise ValidationError(
+            {
+                field_name: (
+                    "Este campo no puede modificarse desde la edición general "
+                    "del producto."
+                )
+                for field_name in sorted(unexpected_fields)
+            }
+        )
+
+    motivo_codigo_sap = str(motivo_codigo_sap or "").strip()
+
+    with transaction.atomic():
+        locked_product = Producto.objects.select_for_update().get(pk=producto.pk)
+
+        if locked_product.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {"status": "Debe reactivar el producto antes de modificar su ficha."}
+            )
+
+        sap_code_provided = "codigo_sap" in product_data
+        previous_sap_code = str(locked_product.codigo_sap or "").strip()
+        next_sap_code = str(
+            product_data.get("codigo_sap", previous_sap_code) or ""
+        ).strip()
+        sap_code_changed = sap_code_provided and next_sap_code != previous_sap_code
+
+        if sap_code_changed and not motivo_codigo_sap:
+            raise ValidationError(
+                {
+                    "motivo_codigo_sap": (
+                        "El motivo es obligatorio cuando cambia el Código SAP."
+                    )
+                }
+            )
+
+        old_values = capture_field_values(
+            locked_product,
+            PRODUCT_DETAILS_AUDIT_FIELDS,
+        )
+
+        for attribute, value in product_data.items():
+            setattr(locked_product, attribute, value)
+
+        locked_product.updated_by = get_operator(user)
+
+        update_fields = list(product_data)
+        update_fields.extend(["updated_by", "updated_at"])
+
+        locked_product.save(update_fields=update_fields)
+
+        changed_fields = [
+            field_name
+            for field_name in PRODUCT_DETAILS_AUDIT_FIELDS
+            if old_values.get(field_name, "")
+            != str(getattr(locked_product, field_name, "") or "")
+        ]
+        human_changes = [
+            {
+                "field_name": field_name,
+                "old_value": old_values.get(field_name, ""),
+                "new_value": normalize_audit_value(
+                    getattr(locked_product, field_name, "")
+                ),
+            }
+            for field_name in PRODUCT_DETAILS_AUDIT_FIELDS
+            if field_name in PRODUCT_DETAILS_HUMAN_AUDIT_FIELDS
+            and old_values.get(field_name, "")
+            != normalize_audit_value(getattr(locked_product, field_name, ""))
+        ]
+
+        audit_reason = (
+            motivo_codigo_sap
+            if sap_code_changed
+            else "Actualización de la ficha general del producto."
+        )
+
+        create_record_change_logs_from_snapshot(
+            instance=locked_product,
+            old_values=old_values,
+            fields=PRODUCT_DETAILS_AUDIT_FIELDS,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=audit_reason,
+            action=AuditAction.EDITAR,
+        )
+
+        create_business_audit_log(
+            instance=locked_product,
+            action=AuditAction.EDITAR,
+            user=user,
+            origin=AuditOrigin.MANUAL,
+            reason=audit_reason,
+            metadata={
+                "operation": "product_details_update",
+                "changed_fields": changed_fields,
+                "changes": human_changes,
+                "sap_code_changed": sap_code_changed,
+                "previous_sap_code": (
+                    previous_sap_code if sap_code_changed else None
+                ),
+                "new_sap_code": next_sap_code if sap_code_changed else None,
+            },
+            request=request,
+        )
+
+    return locked_product
 
 
 def change_product_category(

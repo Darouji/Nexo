@@ -9,6 +9,7 @@ export type ProductFormState = {
   modelo: string;
   detalle: string;
   codigo_sap: string;
+  codigo_sap_motivo: string;
   origen: ProductOrigin;
   origen_observacion: string;
   stock_critico: string;
@@ -22,6 +23,7 @@ export const emptyProductForm: ProductFormState = {
   modelo: "",
   detalle: "",
   codigo_sap: "",
+  codigo_sap_motivo: "",
   origen: "COMPRADO",
   origen_observacion: "",
   stock_critico: "0",
@@ -79,4 +81,16 @@ export function normalizeSapComparisonValue(value: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
+}
+
+const forbiddenSapCodeValues = new Set([
+  "n",
+  "na",
+  "sinsap",
+  "pendiente",
+  "0000",
+]);
+
+export function isForbiddenSapCode(value: string) {
+  return forbiddenSapCodeValues.has(normalizeSapComparisonValue(value));
 }

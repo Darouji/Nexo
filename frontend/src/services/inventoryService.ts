@@ -302,6 +302,7 @@ export type CreateProductPayload = ProductCategorySelection &
 export type UpdateProductPayload = Partial<ProductEditableFields> & {
   categoria?: number;
   categoria_nombre?: string;
+  motivo_codigo_sap?: string;
 };
 
 export type StockMovementPayload = {

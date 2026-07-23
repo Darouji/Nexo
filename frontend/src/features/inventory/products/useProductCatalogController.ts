@@ -7,6 +7,7 @@ import type {
   SerkanGridSortModel,
 } from "../../../components/SerkanDataGrid";
 import { getApiErrorMessage } from "../../../services/api";
+import type { SavedGridViewConfig } from "../../../services/gridService";
 import {
   fetchProductsPage,
   type Product,
@@ -221,6 +222,66 @@ export function useProductCatalogController({
     });
   }, [loadFirstPage]);
 
+  const applyNamedView = useCallback(
+    (config: SavedGridViewConfig) => {
+      const readFilter = (key: string) => {
+        const value = config.filters[key];
+        return typeof value === "string" ? value : "";
+      };
+      const savedColumnFilters = config.filters.column_filters;
+      const nextColumnFilters = Array.isArray(savedColumnFilters)
+        ? (savedColumnFilters as SerkanGridFilter[])
+        : [];
+      const nextSortModel = config.sort;
+      const nextOrdering = nextSortModel
+        ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
+        : "categoria__name,modelo";
+      const nextSearch = readFilter("search");
+      const nextCategory = readFilter("category");
+      const nextStatus = readFilter("status");
+      const nextStockControl = readFilter("stock_control");
+      const nextStockStatus = readFilter(
+        "stock_status",
+      ) as ProductStockStatus | "";
+      const nextPaginationModel = {
+        page: 0,
+        pageSize: config.page_size,
+      };
+
+      setSearchTerm(nextSearch);
+      setCategoryFilter(nextCategory);
+      setStatusFilter(nextStatus);
+      setStockControlFilter(nextStockControl);
+      setStockStatusFilter(nextStockStatus);
+      setColumnFilters(nextColumnFilters);
+      setSortModel(nextSortModel);
+      setOrdering(nextOrdering);
+      setPaginationModel(nextPaginationModel);
+      setFiltersOpen(
+        Boolean(
+          nextCategory ||
+            (nextStatus && nextStatus !== "ACTIVO") ||
+            nextStockControl ||
+            nextStockStatus ||
+            nextColumnFilters.length,
+        ),
+      );
+
+      void loadProducts({
+        search: nextSearch,
+        category: nextCategory,
+        status: nextStatus,
+        stockControl: nextStockControl,
+        stockStatus: nextStockStatus,
+        ordering: nextOrdering,
+        columnFilters: nextColumnFilters,
+        page: 0,
+        pageSize: nextPaginationModel.pageSize,
+      });
+    },
+    [loadProducts],
+  );
+
   const activeFiltersCount = useMemo(
     () =>
       [
@@ -268,5 +329,6 @@ export function useProductCatalogController({
     changeSort,
     changeColumnFilters,
     clearFilters,
+    applyNamedView,
   };
 }

@@ -141,6 +141,7 @@ export function ProductsPage() {
     changeSort: handleProductSortModelChange,
     changeColumnFilters: handleProductColumnFiltersChange,
     clearFilters: clearProductCatalogFilters,
+    applyNamedView: handleApplyProductNamedView,
   } = useProductCatalogController({ onError: setErrorMessage });
 
   const [exportingProducts, setExportingProducts] = useState(false);
@@ -1485,6 +1486,7 @@ export function ProductsPage() {
         onProductColumnFiltersChange={handleProductColumnFiltersChange}
         productFilterResetKey={productFilterResetKey}
         onVisibleColumnsChange={setVisibleProductColumns}
+        onProductNamedViewApply={handleApplyProductNamedView}
         exporting={exportingProducts}
         canExportOfficial={canExportOfficial}
         onExportView={() => void handleExportProducts("view")}

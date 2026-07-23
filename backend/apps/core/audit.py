@@ -94,6 +94,28 @@ def create_record_change_logs_from_snapshot(
     return logs
 
 
+def serialize_audit_changes(change_logs, *, include_fields=None):
+    """
+    Convierte cambios de registro en un contrato JSON estable para la UI.
+
+    ``RecordChangeLog`` conserva la trazabilidad detallada. Esta representación
+    resumida permite que la actividad global explique el antes y el después sin
+    tener que correlacionar registros por fecha o por ID interno.
+    """
+
+    allowed_fields = set(include_fields) if include_fields is not None else None
+
+    return [
+        {
+            "field_name": change.field_name,
+            "old_value": change.old_value,
+            "new_value": change.new_value,
+        }
+        for change in change_logs
+        if allowed_fields is None or change.field_name in allowed_fields
+    ]
+
+
 def create_business_audit_log(
     *,
     instance,

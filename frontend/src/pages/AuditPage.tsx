@@ -41,6 +41,7 @@ import {
   getAuditActionLabel,
   getAuditNarrative,
   getAuditOriginLabel,
+  getAuditReadableChanges,
   getAuditTargetIdentifiers,
   getAuditTargetLabel,
   getChangeNarrative,
@@ -998,6 +999,80 @@ export function AuditPage() {
                   {getAuditNarrative(selectedLog)}
                 </Typography>
               </Box>
+
+              {!isRejectedAuditRequest(selectedLog) &&
+              getAuditReadableChanges(selectedLog).length > 0 ? (
+                <Box>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: colors.text.secondary, fontWeight: 800, mb: 1 }}
+                  >
+                    Cambios realizados
+                  </Typography>
+
+                  <Stack spacing={1.25}>
+                    {getAuditReadableChanges(selectedLog).map(
+                      (change, index) => (
+                        <Box
+                          key={`${change.fieldName}-${index}`}
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: {
+                              xs: "1fr",
+                              md: "minmax(150px, 0.7fr) minmax(0, 1fr) minmax(0, 1fr)",
+                            },
+                            gap: 1.5,
+                            p: 1.5,
+                            borderRadius: colors.radius.md,
+                            border: `1px solid ${colors.border.light}`,
+                            bgcolor: colors.surface.soft,
+                          }}
+                        >
+                          <Box>
+                            <Typography
+                              variant="caption"
+                              sx={{ color: colors.text.muted, fontWeight: 800 }}
+                            >
+                              Qué cambió
+                            </Typography>
+                            <Typography
+                              sx={{ color: colors.text.primary, fontWeight: 800 }}
+                            >
+                              {change.fieldLabel}
+                            </Typography>
+                          </Box>
+
+                          <Box>
+                            <Typography
+                              variant="caption"
+                              sx={{ color: colors.text.muted, fontWeight: 800 }}
+                            >
+                              Antes
+                            </Typography>
+                            <Typography sx={{ color: colors.text.primary }}>
+                              {change.oldValue}
+                            </Typography>
+                          </Box>
+
+                          <Box>
+                            <Typography
+                              variant="caption"
+                              sx={{ color: colors.text.muted, fontWeight: 800 }}
+                            >
+                              Después
+                            </Typography>
+                            <Typography
+                              sx={{ color: colors.text.primary, fontWeight: 800 }}
+                            >
+                              {change.newValue}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      ),
+                    )}
+                  </Stack>
+                </Box>
+              ) : null}
 
               <Box
                 sx={{

@@ -43,6 +43,32 @@ export type GridPreference = {
   };
 };
 
+export type SavedGridViewConfig = GridPreference["config"] & {
+  definition_version: number;
+  sort: {
+    field: string;
+    direction: "asc" | "desc";
+  } | null;
+  filters: Record<string, string | SerkanStoredGridFilter[]>;
+};
+
+export type SerkanStoredGridFilter = {
+  field: string;
+  operator: string;
+  value: string | number;
+  value_to?: string | number;
+};
+
+export type SavedGridView = {
+  id: number;
+  grid_key: string;
+  name: string;
+  is_default: boolean;
+  config: SavedGridViewConfig;
+  created_at: string;
+  updated_at: string;
+};
+
 export async function fetchGridDefinition(gridKey: string) {
   const response = await api.get<GridDefinition>(
     `/grid/definitions/${encodeURIComponent(gridKey)}/`,
@@ -91,6 +117,34 @@ export async function saveGridPreference(
 
 export async function resetGridPreference(gridKey: string) {
   await api.delete(`/grid/preferences/${encodeURIComponent(gridKey)}/`);
+}
+
+export async function fetchSavedGridViews(gridKey: string) {
+  const response = await api.get<SavedGridView[]>(
+    `/grid/views/${encodeURIComponent(gridKey)}/`,
+  );
+  return response.data;
+}
+
+export async function createSavedGridView(
+  gridKey: string,
+  payload: {
+    name: string;
+    is_default: boolean;
+    config: Omit<SavedGridViewConfig, "definition_version">;
+  },
+) {
+  const response = await api.post<SavedGridView>(
+    `/grid/views/${encodeURIComponent(gridKey)}/`,
+    payload,
+  );
+  return response.data;
+}
+
+export async function deleteSavedGridView(gridKey: string, viewId: number) {
+  await api.delete(
+    `/grid/views/${encodeURIComponent(gridKey)}/${viewId}/`,
+  );
 }
 
 export async function renameGlobalGridColumn(

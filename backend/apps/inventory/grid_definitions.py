@@ -13,6 +13,13 @@ PRODUCT_GRID_DEFINITION = GridDefinition(
     model_name="producto",
     version=1,
     default_page_size=25,
+    saved_filter_keys=(
+        "search",
+        "category",
+        "status",
+        "stock_control",
+        "stock_status",
+    ),
     columns=(
         GridColumnDefinition(
             key="modelo",

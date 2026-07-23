@@ -56,6 +56,28 @@ FORBIDDEN_SAP_CODES = {
 }
 
 
+def build_product_audit_identifiers(*, modelo, codigo_sap, categoria):
+    """Identificadores de negocio compartidos para auditoría de Inventario."""
+
+    return [
+        {
+            "key": "modelo",
+            "label": "Modelo",
+            "value": modelo,
+        },
+        {
+            "key": "codigo_sap",
+            "label": "Código SAP",
+            "value": codigo_sap,
+        },
+        {
+            "key": "categoria",
+            "label": "Categoría",
+            "value": categoria,
+        },
+    ]
+
+
 class Categoria(BaseModel):
     name = models.CharField(max_length=150, verbose_name="Categoría")
     name_normalized = models.CharField(
@@ -120,6 +142,20 @@ class Categoria(BaseModel):
 
     def __str__(self):
         return self.name
+
+    def get_audit_target_snapshot(self):
+        return {
+            "entity_label": "Categoría",
+            "display_name": self.name,
+            "internal_id": self.pk,
+            "identifiers": [
+                {
+                    "key": "categoria",
+                    "label": "Categoría",
+                    "value": self.name,
+                }
+            ],
+        }
 
     @property
     def is_merged(self):
@@ -380,23 +416,11 @@ class Producto(BaseModel):
             "entity_label": "Producto",
             "display_name": self.modelo,
             "internal_id": self.pk,
-            "identifiers": [
-                {
-                    "key": "modelo",
-                    "label": "Modelo",
-                    "value": self.modelo,
-                },
-                {
-                    "key": "codigo_sap",
-                    "label": "Código SAP",
-                    "value": self.codigo_sap,
-                },
-                {
-                    "key": "categoria",
-                    "label": "Categoría",
-                    "value": self.categoria.name,
-                },
-            ],
+            "identifiers": build_product_audit_identifiers(
+                modelo=self.modelo,
+                codigo_sap=self.codigo_sap,
+                categoria=self.categoria.name,
+            ),
         }
 
     @property
@@ -785,6 +809,18 @@ class PendientePorRecibir(BaseModel):
             f"{self.cantidad_pendiente}/{self.cantidad_original}"
         )
 
+    def get_audit_target_snapshot(self):
+        return {
+            "entity_label": "Pendiente por recibir",
+            "display_name": f"Pendiente por recibir de {self.producto.modelo}",
+            "internal_id": self.pk,
+            "identifiers": build_product_audit_identifiers(
+                modelo=self.producto.modelo,
+                codigo_sap=self.producto.codigo_sap,
+                categoria=self.producto.categoria.name,
+            ),
+        }
+
     @property
     def cantidad_pendiente(self):
         return self.cantidad_original - self.cantidad_recibida - self.cantidad_cancelada
@@ -955,6 +991,26 @@ class MovimientoKardex(BaseModel):
         producto_modelo = self.producto_modelo_snapshot or self.producto.modelo
 
         return f"{producto_modelo} | {self.movement_type} | {self.cantidad}"
+
+    def get_audit_target_snapshot(self):
+        modelo = self.producto_modelo_snapshot or self.producto.modelo
+        codigo_sap = (
+            self.producto_codigo_sap_snapshot or self.producto.codigo_sap
+        )
+        categoria = (
+            self.producto_categoria_snapshot or self.producto.categoria.name
+        )
+
+        return {
+            "entity_label": "Movimiento de Kardex",
+            "display_name": f"Movimiento de Kardex de {modelo}",
+            "internal_id": self.pk,
+            "identifiers": build_product_audit_identifiers(
+                modelo=modelo,
+                codigo_sap=codigo_sap,
+                categoria=categoria,
+            ),
+        }
 
     def clean(self):
         super().clean()

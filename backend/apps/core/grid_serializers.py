@@ -7,6 +7,22 @@ class GridPreferenceWriteSerializer(serializers.Serializer):
     config = serializers.JSONField()
 
 
+class SavedViewWriteSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=120, trim_whitespace=True)
+    is_default = serializers.BooleanField(default=False)
+    config = serializers.JSONField()
+
+
+class SavedViewResponseSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    grid_key = serializers.CharField()
+    name = serializers.CharField()
+    is_default = serializers.BooleanField()
+    config = serializers.JSONField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()
+
+
 class GlobalColumnLabelWriteSerializer(serializers.Serializer):
     visible_name = serializers.CharField(max_length=160, trim_whitespace=True)
     reason = serializers.CharField(

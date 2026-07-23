@@ -12,6 +12,8 @@ from .grid_views import (
     GlobalColumnLabelView,
     GridDefinitionView,
     GridPreferenceView,
+    SavedViewCollectionView,
+    SavedViewDetailView,
 )
 
 urlpatterns = [
@@ -24,6 +26,16 @@ urlpatterns = [
         "grid/preferences/<str:grid_key>/",
         GridPreferenceView.as_view(),
         name="grid-preference",
+    ),
+    path(
+        "grid/views/<str:grid_key>/",
+        SavedViewCollectionView.as_view(),
+        name="saved-grid-view-list",
+    ),
+    path(
+        "grid/views/<str:grid_key>/<int:view_id>/",
+        SavedViewDetailView.as_view(),
+        name="saved-grid-view-detail",
     ),
     path(
         "grid/labels/<str:grid_key>/<str:field_key>/",

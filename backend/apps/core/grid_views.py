@@ -1,4 +1,5 @@
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -20,14 +21,27 @@ from .grid_serializers import (
     GridDefinitionResponseSerializer,
     GridPreferenceResponseSerializer,
     GridPreferenceWriteSerializer,
+    SavedViewResponseSerializer,
+    SavedViewWriteSerializer,
 )
 from .grid_services import (
+    create_saved_view,
+    list_saved_views,
     rename_global_column,
     save_grid_preference,
     serialize_grid_definition,
     serialize_grid_preference,
+    serialize_saved_view,
+    update_saved_view,
 )
-from .models import GridPreference
+from .models import BaseStatus, GridPreference, SavedView
+
+
+def skip_personal_preference_audit(request):
+    """Evita que ajustes visuales personales contaminen la auditoría de negocio."""
+
+    django_request = getattr(request, "_request", request)
+    django_request.skip_activity_audit = True
 
 
 class GridDefinitionView(APIView):
@@ -108,6 +122,7 @@ class GridPreferenceView(APIView):
                 )
             raise
 
+        skip_personal_preference_audit(request)
         return Response(serialize_grid_preference(preference, definition))
 
     @extend_schema(
@@ -122,6 +137,91 @@ class GridPreferenceView(APIView):
             user=request.user,
             grid_key=definition.key,
         ).delete()
+        skip_personal_preference_audit(request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class SavedViewCollectionView(APIView):
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+
+    @extend_schema(
+        tags=["Grid"],
+        summary="Listar vistas personales nombradas",
+        responses=SavedViewResponseSerializer(many=True),
+    )
+    def get(self, request, grid_key):
+        definition = get_grid_definition(grid_key)
+        views = list_saved_views(user=request.user, definition=definition)
+        return Response(
+            [serialize_saved_view(view, definition) for view in views]
+        )
+
+    @extend_schema(
+        tags=["Grid"],
+        summary="Guardar una vista personal con nombre",
+        request=SavedViewWriteSerializer,
+        responses={201: SavedViewResponseSerializer},
+    )
+    def post(self, request, grid_key):
+        definition = get_grid_definition(grid_key)
+        serializer = SavedViewWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        view = create_saved_view(
+            user=request.user,
+            definition=definition,
+            **serializer.validated_data,
+        )
+        skip_personal_preference_audit(request)
+        return Response(
+            serialize_saved_view(view, definition),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SavedViewDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsAuthenticatedAndActive]
+
+    def get_owned_view(self, request, definition, view_id):
+        return get_object_or_404(
+            SavedView,
+            pk=view_id,
+            user=request.user,
+            module=definition.module,
+            model_name=definition.model_name,
+            status=BaseStatus.ACTIVO,
+        )
+
+    @extend_schema(
+        tags=["Grid"],
+        summary="Actualizar una vista personal",
+        request=SavedViewWriteSerializer,
+        responses=SavedViewResponseSerializer,
+    )
+    def put(self, request, grid_key, view_id):
+        definition = get_grid_definition(grid_key)
+        view = self.get_owned_view(request, definition, view_id)
+        serializer = SavedViewWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated_view = update_saved_view(
+            view=view,
+            user=request.user,
+            definition=definition,
+            **serializer.validated_data,
+        )
+        skip_personal_preference_audit(request)
+        return Response(serialize_saved_view(updated_view, definition))
+
+    @extend_schema(
+        tags=["Grid"],
+        summary="Eliminar una vista personal",
+        request=None,
+        responses={204: None},
+    )
+    def delete(self, request, grid_key, view_id):
+        definition = get_grid_definition(grid_key)
+        view = self.get_owned_view(request, definition, view_id)
+        view.delete()
+        skip_personal_preference_audit(request)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

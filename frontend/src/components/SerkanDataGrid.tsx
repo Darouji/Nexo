@@ -1,6 +1,8 @@
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import EditIcon from "@mui/icons-material/Edit";
 import ViewColumnIcon from "@mui/icons-material/ViewColumn";
+import BookmarkAddIcon from "@mui/icons-material/BookmarkAdd";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { AgGridReact } from "ag-grid-react";
 import { colors } from "../theme/colors";
 import { serkanGridLocaleEs } from "./serkanGridLocaleEs";
@@ -9,11 +11,16 @@ import { getApiErrorMessage } from "../services/api";
 import {
   fetchGridDefinition,
   fetchGridPreference,
+  fetchSavedGridViews,
+  createSavedGridView,
+  deleteSavedGridView,
   renameGlobalGridColumn,
   resetGridPreference,
   saveGridPreference,
   type GridDefinition,
   type GridPreference,
+  type SavedGridView,
+  type SavedGridViewConfig,
 } from "../services/gridService";
 
 import {
@@ -34,6 +41,7 @@ import {
   FormControlLabel,
   IconButton,
   LinearProgress,
+  MenuItem,
   TablePagination,
   TextField,
   Typography,
@@ -100,6 +108,8 @@ type SerkanDataGridProps<TRow extends IdentifiableRow> = {
   onFilterModelChange?: (filters: SerkanGridFilter[]) => void;
   filterResetKey?: number;
   onVisibleColumnsChange?: (fieldKeys: string[]) => void;
+  namedViewFilters?: Record<string, string>;
+  onNamedViewApply?: (config: SavedGridViewConfig) => void;
 };
 
 const serkanGridTheme = themeQuartz.withParams({
@@ -147,6 +157,41 @@ function areSortModelsEqual(
   );
 }
 
+function toSerkanGridFilters(
+  filterModel: Record<
+    string,
+    {
+      type?: string;
+      filter?: string | number;
+      filterTo?: string | number;
+    }
+  >,
+): SerkanGridFilter[] {
+  return Object.entries(filterModel)
+    .filter(([, model]) => model.type && model.filter !== undefined)
+    .map(([field, model]) => ({
+      field,
+      operator: String(model.type),
+      value: model.filter as string | number,
+      ...(model.filterTo !== undefined ? { value_to: model.filterTo } : {}),
+    }));
+}
+
+function toAgGridFilterModel(filters: SerkanGridFilter[]) {
+  return Object.fromEntries(
+    filters.map((filter) => [
+      filter.field,
+      {
+        type: filter.operator,
+        filter: filter.value,
+        ...(filter.value_to !== undefined
+          ? { filterTo: filter.value_to }
+          : {}),
+      },
+    ]),
+  );
+}
+
 function toInitialLayoutColumn<TRow>(column: ColDef<TRow>): ColDef<TRow> {
   const { width, flex, hide, pinned, ...columnDefinition } = column;
 
@@ -176,6 +221,8 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   onFilterModelChange,
   filterResetKey = 0,
   onVisibleColumnsChange,
+  namedViewFilters = {},
+  onNamedViewApply,
 }: SerkanDataGridProps<TRow>) {
   const gridApiRef = useRef<GridApi<TRow> | null>(null);
 
@@ -197,6 +244,11 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   const [gridSettingsError, setGridSettingsError] = useState("");
   const [savingRename, setSavingRename] = useState(false);
   const [visibleFieldKeys, setVisibleFieldKeys] = useState<string[]>([]);
+  const [savedViews, setSavedViews] = useState<SavedGridView[]>([]);
+  const [selectedSavedViewId, setSelectedSavedViewId] = useState("");
+  const [newSavedViewName, setNewSavedViewName] = useState("");
+  const [newSavedViewIsDefault, setNewSavedViewIsDefault] = useState(false);
+  const [savingNamedView, setSavingNamedView] = useState(false);
 
   const layoutColumnIds = useMemo(
     () =>
@@ -539,7 +591,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   );
 
   const handleSortChanged = (event: SortChangedEvent<TRow>) => {
-    if (!onSortModelChange) {
+    if (!onSortModelChange || isApplyingStoredLayoutRef.current) {
       return;
     }
 
@@ -566,29 +618,132 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   };
 
   const handleFilterChanged = () => {
-    if (!onFilterModelChange || !gridApiRef.current) {
+    if (
+      !onFilterModelChange ||
+      !gridApiRef.current ||
+      isApplyingStoredLayoutRef.current
+    ) {
       return;
     }
 
-    const filterModel = gridApiRef.current.getFilterModel() as Record<
-      string,
-      {
-        type?: string;
-        filter?: string | number;
-        filterTo?: string | number;
+    onFilterModelChange(
+      toSerkanGridFilters(gridApiRef.current.getFilterModel()),
+    );
+  };
+
+  const applyNamedView = useCallback(
+    (view: SavedGridView) => {
+      const api = gridApiRef.current;
+      if (!api) {
+        return;
       }
-    >;
 
-    const filters: SerkanGridFilter[] = Object.entries(filterModel)
-      .filter(([, model]) => model.type && model.filter !== undefined)
-      .map(([field, model]) => ({
-        field,
-        operator: String(model.type),
-        value: model.filter as string | number,
-        ...(model.filterTo !== undefined ? { value_to: model.filterTo } : {}),
-      }));
+      isApplyingStoredLayoutRef.current = true;
+      api.applyColumnState({
+        state: view.config.columns.map((column) => ({
+          colId: column.field_key,
+          width: column.width,
+          hide: column.hidden,
+          pinned: column.pinned,
+        })),
+        applyOrder: true,
+      });
 
-    onFilterModelChange(filters);
+      const columnFilters = Array.isArray(view.config.filters.column_filters)
+        ? (view.config.filters.column_filters as SerkanGridFilter[])
+        : [];
+      api.setFilterModel(toAgGridFilterModel(columnFilters));
+      emitVisibleColumns(api);
+      setSelectedSavedViewId(String(view.id));
+      onNamedViewApply?.(view.config);
+      releaseLayoutMutationLock();
+    },
+    [emitVisibleColumns, onNamedViewApply, releaseLayoutMutationLock],
+  );
+
+  const handleCreateNamedView = async () => {
+    const api = gridApiRef.current;
+    const normalizedName = newSavedViewName.trim();
+
+    if (!api || !normalizedName) {
+      setGridSettingsError("Escribe un nombre para guardar la vista.");
+      return;
+    }
+
+    try {
+      setSavingNamedView(true);
+      const columnFilters = toSerkanGridFilters(api.getFilterModel());
+      const savedView = await createSavedGridView(gridKey, {
+        name: normalizedName,
+        is_default: newSavedViewIsDefault,
+        config: {
+          columns: api
+            .getColumnState()
+            .filter((column) => column.colId !== "__row_number__")
+            .map((column) => ({
+              field_key: column.colId,
+              ...(typeof column.width === "number"
+                ? { width: column.width }
+                : {}),
+              hidden: Boolean(column.hide),
+              pinned:
+                column.pinned === "left" || column.pinned === "right"
+                  ? column.pinned
+                  : null,
+            })),
+          page_size: paginationModelRef.current.pageSize,
+          sort: sortModel || null,
+          filters: {
+            ...namedViewFilters,
+            column_filters: columnFilters,
+          },
+        },
+      });
+
+      setSavedViews((current) => {
+        const next = newSavedViewIsDefault
+          ? current.map((view) => ({ ...view, is_default: false }))
+          : current;
+        return [savedView, ...next].sort(
+          (left, right) =>
+            Number(right.is_default) - Number(left.is_default) ||
+            left.name.localeCompare(right.name, "es"),
+        );
+      });
+      setSelectedSavedViewId(String(savedView.id));
+      setNewSavedViewName("");
+      setNewSavedViewIsDefault(false);
+      setGridSettingsError("");
+    } catch (error: unknown) {
+      setGridSettingsError(
+        getApiErrorMessage(error, "No se pudo guardar la vista personal."),
+      );
+    } finally {
+      setSavingNamedView(false);
+    }
+  };
+
+  const handleDeleteNamedView = async () => {
+    const viewId = Number(selectedSavedViewId);
+    if (!viewId) {
+      return;
+    }
+
+    try {
+      setSavingNamedView(true);
+      await deleteSavedGridView(gridKey, viewId);
+      setSavedViews((current) =>
+        current.filter((view) => view.id !== viewId),
+      );
+      setSelectedSavedViewId("");
+      setGridSettingsError("");
+    } catch (error: unknown) {
+      setGridSettingsError(
+        getApiErrorMessage(error, "No se pudo eliminar la vista personal."),
+      );
+    } finally {
+      setSavingNamedView(false);
+    }
   };
 
   const handleGridReady = async (api: GridApi<TRow>) => {
@@ -603,12 +758,14 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     }
 
     try {
-      const [gridDefinition, preference] = await Promise.all([
+      const [gridDefinition, preference, personalViews] = await Promise.all([
         fetchGridDefinition(gridKey),
         fetchGridPreference(gridKey),
+        fetchSavedGridViews(gridKey),
       ]);
 
       setDefinition(gridDefinition);
+      setSavedViews(personalViews);
       preferenceRef.current = preference;
 
       if (preference.revision > 0) {
@@ -617,6 +774,11 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         persistBackendLayout(api);
       } else {
         applyBackendPreference(api, preference);
+      }
+
+      const defaultView = personalViews.find((view) => view.is_default);
+      if (defaultView) {
+        applyNamedView(defaultView);
       }
 
       setGridSettingsError("");
@@ -857,6 +1019,114 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
             usuario. Los nombres sólo pueden cambiarse globalmente con permiso
             administrativo.
           </Typography>
+
+          <Box
+            sx={{
+              p: 1.5,
+              mb: 2,
+              border: `1px solid ${colors.border.light}`,
+              borderRadius: colors.radius.md,
+              bgcolor: colors.surface.soft,
+            }}
+          >
+            <Typography
+              sx={{ color: colors.text.primary, fontWeight: 850, mb: 0.5 }}
+            >
+              Mis vistas personales
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ color: colors.text.secondary, mb: 1.5 }}
+            >
+              Guarda filtros, orden, columnas y filas por página. Sólo tú
+              puedes ver estas vistas.
+            </Typography>
+
+            <Stack spacing={1.25}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                <TextField
+                  select
+                  size="small"
+                  label="Vista guardada"
+                  value={selectedSavedViewId}
+                  onChange={(event) =>
+                    setSelectedSavedViewId(event.target.value)
+                  }
+                  fullWidth
+                >
+                  <MenuItem value="">
+                    {savedViews.length > 0
+                      ? "Selecciona una vista"
+                      : "Todavía no tienes vistas"}
+                  </MenuItem>
+                  {savedViews.map((view) => (
+                    <MenuItem key={view.id} value={String(view.id)}>
+                      {view.name}
+                      {view.is_default ? " · Predeterminada" : ""}
+                    </MenuItem>
+                  ))}
+                </TextField>
+
+                <Button
+                  variant="outlined"
+                  disabled={!selectedSavedViewId || savingNamedView}
+                  onClick={() => {
+                    const selected = savedViews.find(
+                      (view) => String(view.id) === selectedSavedViewId,
+                    );
+                    if (selected) {
+                      applyNamedView(selected);
+                      setColumnsDialogOpen(false);
+                    }
+                  }}
+                >
+                  Aplicar
+                </Button>
+
+                <IconButton
+                  aria-label="Eliminar vista personal seleccionada"
+                  disabled={!selectedSavedViewId || savingNamedView}
+                  onClick={() => void handleDeleteNamedView()}
+                  sx={{ color: colors.status.error }}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </Stack>
+
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                <TextField
+                  size="small"
+                  label="Nombre de la nueva vista"
+                  value={newSavedViewName}
+                  onChange={(event) => setNewSavedViewName(event.target.value)}
+                  slotProps={{ htmlInput: { maxLength: 120 } }}
+                  fullWidth
+                />
+
+                <Button
+                  variant="contained"
+                  startIcon={<BookmarkAddIcon />}
+                  disabled={!newSavedViewName.trim() || savingNamedView}
+                  onClick={() => void handleCreateNamedView()}
+                  sx={{ minWidth: 150 }}
+                >
+                  Guardar actual
+                </Button>
+              </Stack>
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={newSavedViewIsDefault}
+                    onChange={(event) =>
+                      setNewSavedViewIsDefault(event.target.checked)
+                    }
+                  />
+                }
+                label="Abrir esta vista automáticamente"
+              />
+            </Stack>
+          </Box>
 
           <Stack spacing={0.5}>
             {definition?.columns.map((column) => (

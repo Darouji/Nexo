@@ -43,6 +43,7 @@ class GridDefinition:
     default_page_size: int = 25
     allowed_page_sizes: tuple[int, ...] = (10, 25, 50, 100)
     official_export_columns: tuple[str, ...] = field(default_factory=tuple)
+    saved_filter_keys: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def column_map(self) -> dict[str, GridColumnDefinition]:
@@ -175,6 +176,186 @@ def normalize_grid_config(
     return {
         "columns": normalized_columns,
         "page_size": page_size,
+    }
+
+
+def normalize_saved_view_config(
+    definition: GridDefinition,
+    raw_config: Any,
+) -> dict[str, Any]:
+    """Valida una vista personal sin permitir campos ajenos a la grilla."""
+
+    layout = normalize_grid_config(
+        definition,
+        raw_config,
+        reject_unknown=True,
+    )
+
+    raw_sort = raw_config.get("sort")
+    normalized_sort = None
+
+    if raw_sort is not None:
+        if not isinstance(raw_sort, dict):
+            raise ValidationError({"config": {"sort": "Debe ser un objeto."}})
+
+        sort_field = str(raw_sort.get("field") or "").strip()
+        direction = str(raw_sort.get("direction") or "").strip().lower()
+        column = definition.column_map.get(sort_field)
+
+        if column is None or not column.sortable:
+            raise ValidationError(
+                {"config": {"sort": {"field": "La columna no permite ordenar."}}}
+            )
+
+        if direction not in {"asc", "desc"}:
+            raise ValidationError(
+                {"config": {"sort": {"direction": "Use asc o desc."}}}
+            )
+
+        normalized_sort = {
+            "field": sort_field,
+            "direction": direction,
+        }
+
+    raw_filters = raw_config.get("filters", {})
+    if not isinstance(raw_filters, dict):
+        raise ValidationError({"config": {"filters": "Debe ser un objeto."}})
+
+    allowed_filter_keys = set(definition.saved_filter_keys)
+    unknown_filter_keys = set(raw_filters) - allowed_filter_keys - {
+        "column_filters"
+    }
+    if unknown_filter_keys:
+        raise ValidationError(
+            {
+                "config": {
+                    "filters": (
+                        "Contiene filtros no permitidos: "
+                        + ", ".join(sorted(unknown_filter_keys))
+                        + "."
+                    )
+                }
+            }
+        )
+
+    normalized_filters = {}
+    for key in definition.saved_filter_keys:
+        value = raw_filters.get(key, "")
+        if value is None:
+            value = ""
+        if not isinstance(value, (str, int, bool)):
+            raise ValidationError(
+                {"config": {"filters": {key: "El valor no es válido."}}}
+            )
+
+        normalized_value = str(value).strip()
+        if len(normalized_value) > 300:
+            raise ValidationError(
+                {"config": {"filters": {key: "Máximo 300 caracteres."}}}
+            )
+        normalized_filters[key] = normalized_value
+
+    raw_column_filters = raw_filters.get("column_filters", [])
+    if not isinstance(raw_column_filters, list):
+        raise ValidationError(
+            {"config": {"filters": {"column_filters": "Debe ser una lista."}}}
+        )
+    if len(raw_column_filters) > 20:
+        raise ValidationError(
+            {
+                "config": {
+                    "filters": {
+                        "column_filters": "No se permiten más de 20 filtros."
+                    }
+                }
+            }
+        )
+
+    normalized_column_filters = []
+    for index, raw_filter in enumerate(raw_column_filters):
+        if not isinstance(raw_filter, dict):
+            raise ValidationError(
+                {
+                    "config": {
+                        "filters": {
+                            "column_filters": {index: "Debe ser un objeto."}
+                        }
+                    }
+                }
+            )
+
+        field_key = str(raw_filter.get("field") or "").strip()
+        operator = str(raw_filter.get("operator") or "").strip()
+        column = definition.column_map.get(field_key)
+
+        if (
+            column is None
+            or not column.query_field
+            or operator not in column.filter_operators
+        ):
+            raise ValidationError(
+                {
+                    "config": {
+                        "filters": {
+                            "column_filters": {
+                                index: "El filtro o su operador no están permitidos."
+                            }
+                        }
+                    }
+                }
+            )
+
+        value = raw_filter.get("value")
+        value_to = raw_filter.get("value_to")
+
+        if column.data_type == "number":
+            try:
+                value = int(value)
+                if value_to not in (None, ""):
+                    value_to = int(value_to)
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    {
+                        "config": {
+                            "filters": {
+                                "column_filters": {
+                                    index: "El filtro requiere números enteros."
+                                }
+                            }
+                        }
+                    }
+                )
+        else:
+            value = str(value or "").strip()
+            if not value or len(value) > 300:
+                raise ValidationError(
+                    {
+                        "config": {
+                            "filters": {
+                                "column_filters": {
+                                    index: "El texto debe tener entre 1 y 300 caracteres."
+                                }
+                            }
+                        }
+                    }
+                )
+
+        normalized_filter = {
+            "field": field_key,
+            "operator": operator,
+            "value": value,
+        }
+        if value_to not in (None, ""):
+            normalized_filter["value_to"] = value_to
+        normalized_column_filters.append(normalized_filter)
+
+    normalized_filters["column_filters"] = normalized_column_filters
+
+    return {
+        **layout,
+        "sort": normalized_sort,
+        "filters": normalized_filters,
+        "definition_version": definition.version,
     }
 
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { AuditLog } from "../../services/auditService";
 import {
   getAuditNarrative,
+  getAuditReadableChanges,
   getAuditTargetLabel,
 } from "./auditPresentation";
 
@@ -83,7 +84,57 @@ describe("presentación humana de auditoría", () => {
     };
 
     expect(getAuditNarrative(completedAudit)).toContain(
-      "Modelo: “Alternador 24V” → “Alternador 25V”",
+      "cambió Modelo de “Alternador 24V” a “Alternador 25V”",
+    );
+    expect(getAuditReadableChanges(completedAudit)).toEqual([
+      {
+        fieldName: "modelo",
+        fieldLabel: "Modelo",
+        oldValue: "Alternador 24V",
+        newValue: "Alternador 25V",
+      },
+    ]);
+  });
+
+  it("traduce códigos y valores booleanos a lenguaje cotidiano", () => {
+    const lifecycleAudit: AuditLog = {
+      ...rejectedProductAudit,
+      action: "CAMBIAR_ESTADO",
+      action_display: "Cambiar estado",
+      metadata: {
+        operation: "product_lifecycle_change",
+        changes: [
+          {
+            field_name: "descontinuado",
+            old_value: "False",
+            new_value: "True",
+          },
+        ],
+      },
+    };
+
+    expect(getAuditNarrative(lifecycleAudit)).toContain(
+      "cambió Producto descontinuado de “No” a “Sí”",
+    );
+  });
+
+  it("explica un movimiento de Kardex con cantidad y saldo", () => {
+    const kardexAudit: AuditLog = {
+      ...rejectedProductAudit,
+      action: "AJUSTE_INVENTARIO",
+      action_display: "Ajuste de inventario",
+      model_name: "movimientokardex",
+      metadata: {
+        operation: "kardex_movement",
+        movement_type: "AJUSTE_INVENTARIO",
+        quantity: -2,
+        stock_before: 10,
+        stock_after: 8,
+      },
+    };
+
+    expect(getAuditNarrative(kardexAudit)).toBe(
+      "Fabián registró ajuste de inventario por -2 unidad(es) para Modelo: Alternador 24V · Código SAP: ALT-24V · Categoría: Electricidad. El stock cambió de 10 a 8.",
     );
   });
 });

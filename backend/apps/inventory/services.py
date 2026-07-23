@@ -7,7 +7,7 @@ from apps.core.audit import (
     capture_field_values,
     create_business_audit_log,
     create_record_change_logs_from_snapshot,
-    normalize_audit_value,
+    serialize_audit_changes,
 )
 from apps.core.models import AuditAction, AuditOrigin, BaseStatus
 from apps.core.utils import normalize_text
@@ -230,7 +230,7 @@ def rename_category(
                 }
             ) from error
 
-        create_record_change_logs_from_snapshot(
+        change_logs = create_record_change_logs_from_snapshot(
             instance=locked_category,
             old_values=old_values,
             fields=CATEGORY_RENAME_AUDIT_FIELDS,
@@ -253,6 +253,10 @@ def rename_category(
                 "description_changed": (
                     description_provided
                     and old_values["description"] != locked_category.description
+                ),
+                "changes": serialize_audit_changes(
+                    change_logs,
+                    include_fields={"name", "description"},
                 ),
             },
             request=request,
@@ -827,27 +831,13 @@ def update_product_details(
             if old_values.get(field_name, "")
             != str(getattr(locked_product, field_name, "") or "")
         ]
-        human_changes = [
-            {
-                "field_name": field_name,
-                "old_value": old_values.get(field_name, ""),
-                "new_value": normalize_audit_value(
-                    getattr(locked_product, field_name, "")
-                ),
-            }
-            for field_name in PRODUCT_DETAILS_AUDIT_FIELDS
-            if field_name in PRODUCT_DETAILS_HUMAN_AUDIT_FIELDS
-            and old_values.get(field_name, "")
-            != normalize_audit_value(getattr(locked_product, field_name, ""))
-        ]
-
         audit_reason = (
             motivo_codigo_sap
             if sap_code_changed
             else "Actualización de la ficha general del producto."
         )
 
-        create_record_change_logs_from_snapshot(
+        change_logs = create_record_change_logs_from_snapshot(
             instance=locked_product,
             old_values=old_values,
             fields=PRODUCT_DETAILS_AUDIT_FIELDS,
@@ -866,7 +856,10 @@ def update_product_details(
             metadata={
                 "operation": "product_details_update",
                 "changed_fields": changed_fields,
-                "changes": human_changes,
+                "changes": serialize_audit_changes(
+                    change_logs,
+                    include_fields=PRODUCT_DETAILS_HUMAN_AUDIT_FIELDS,
+                ),
                 "sap_code_changed": sap_code_changed,
                 "previous_sap_code": (
                     previous_sap_code if sap_code_changed else None
@@ -1001,6 +994,13 @@ def change_product_category(
                 "previous_category_name": previous_category.name,
                 "new_category_id": locked_destination_category.pk,
                 "new_category_name": locked_destination_category.name,
+                "changes": [
+                    {
+                        "field_name": "categoria",
+                        "old_value": previous_category.name,
+                        "new_value": locked_destination_category.name,
+                    }
+                ],
             },
             request=request,
         )
@@ -1073,7 +1073,7 @@ def change_product_origin(
             ]
         )
 
-        create_record_change_logs_from_snapshot(
+        change_logs = create_record_change_logs_from_snapshot(
             instance=locked_product,
             old_values=old_values,
             fields=PRODUCT_ORIGIN_AUDIT_FIELDS,
@@ -1093,6 +1093,15 @@ def change_product_origin(
                 "operation": "product_origin_change",
                 "previous_origin": previous_origin,
                 "new_origin": locked_product.origen,
+                "changes": serialize_audit_changes(
+                    change_logs,
+                    include_fields={
+                        "origen",
+                        "origen_observacion",
+                        "controla_stock",
+                        "stock_critico",
+                    },
+                ),
             },
             request=request,
         )
@@ -1507,7 +1516,7 @@ def change_product_lifecycle(
             ]
         )
 
-        create_record_change_logs_from_snapshot(
+        change_logs = create_record_change_logs_from_snapshot(
             instance=locked_product,
             old_values=old_values,
             fields=PRODUCT_LIFECYCLE_AUDIT_FIELDS,
@@ -1530,6 +1539,10 @@ def change_product_lifecycle(
                 "new_status": locked_product.status,
                 "previous_discontinued": old_values["descontinuado"],
                 "new_discontinued": str(locked_product.descontinuado),
+                "changes": serialize_audit_changes(
+                    change_logs,
+                    include_fields={"status", "descontinuado"},
+                ),
             },
             request=request,
         )
@@ -1702,7 +1715,7 @@ def receive_pending_receipt(
             ]
         )
 
-        create_record_change_logs_from_snapshot(
+        change_logs = create_record_change_logs_from_snapshot(
             instance=locked_pending_receipt,
             old_values=old_values,
             fields=PENDING_RECEIPT_AUDIT_FIELDS,
@@ -1730,6 +1743,14 @@ def receive_pending_receipt(
                 "pending_after": (locked_pending_receipt.cantidad_pendiente),
                 "previous_status": old_values.get("estado", ""),
                 "new_status": locked_pending_receipt.estado,
+                "changes": serialize_audit_changes(
+                    change_logs,
+                    include_fields={
+                        "cantidad_recibida",
+                        "cantidad_pendiente",
+                        "estado",
+                    },
+                ),
             },
             request=request,
         )
@@ -1802,7 +1823,7 @@ def cancel_pending_receipt(
             ]
         )
 
-        create_record_change_logs_from_snapshot(
+        change_logs = create_record_change_logs_from_snapshot(
             instance=locked_pending_receipt,
             old_values=old_values,
             fields=PENDING_RECEIPT_AUDIT_FIELDS,
@@ -1829,6 +1850,14 @@ def cancel_pending_receipt(
                 "pending_after": (locked_pending_receipt.cantidad_pendiente),
                 "previous_status": old_values.get("estado", ""),
                 "new_status": locked_pending_receipt.estado,
+                "changes": serialize_audit_changes(
+                    change_logs,
+                    include_fields={
+                        "cantidad_cancelada",
+                        "cantidad_pendiente",
+                        "estado",
+                    },
+                ),
             },
             request=request,
         )

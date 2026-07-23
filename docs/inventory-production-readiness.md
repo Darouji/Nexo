@@ -40,6 +40,9 @@ privacidad y operación descrito en la Fase 8.
 - La identidad legible de un producto en auditoría conserva una foto del modelo,
   Código SAP y categoría al momento del evento. El ID interno permanece como
   referencia técnica secundaria y no sustituye esos identificadores de negocio.
+- La actividad de Inventario explica cada modificación con campo, valor anterior
+  y valor nuevo en lenguaje cotidiano. Kardex, recepciones y operaciones de
+  ciclo de vida incluyen además una explicación específica de la operación.
 - La decisión sobre vender stock remanente de un producto descontinuado se
   resolverá al integrar Ventas.
 - Compras, Ventas e Importaciones referenciarán Inventario mediante servicios
@@ -59,6 +62,11 @@ maestro.
   ajustes, pendientes y exportación oficial.
 - Auditoría de cambios sensibles con actor, motivo, valores y request ID.
 - Vistas personales nombradas sobre el núcleo transversal.
+
+Estado actual: las vistas personales nombradas están disponibles en el Catálogo.
+Cada usuario puede guardar, aplicar y eliminar sus propias vistas, marcar una
+como predeterminada y conservar búsqueda, filtros, orden, columnas y tamaño de
+página sin modificar la experiencia de los demás usuarios.
 
 ### 2. Ubicaciones y custodia
 

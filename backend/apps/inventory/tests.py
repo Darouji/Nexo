@@ -824,6 +824,26 @@ class PendientePorRecibirApiTests(TestCase):
             create_audits[0].metadata.get("operation"),
             "pending_receipt_create",
         )
+        self.assertEqual(
+            create_audits[0].metadata["target_snapshot"]["identifiers"],
+            [
+                {
+                    "key": "modelo",
+                    "label": "Modelo",
+                    "value": "Llave de torque",
+                },
+                {
+                    "key": "codigo_sap",
+                    "label": "Código SAP",
+                    "value": "",
+                },
+                {
+                    "key": "categoria",
+                    "label": "Categoría",
+                    "value": "Herramientas",
+                },
+            ],
+        )
 
         receive_response = client.post(
             (f"/api/inventory/pendientes-por-recibir/{pending_receipt_id}/recibir/"),
@@ -871,6 +891,19 @@ class PendientePorRecibirApiTests(TestCase):
                 "pending_receipt_receive",
             },
         )
+        receive_audit = next(
+            audit
+            for audit in pending_audits
+            if audit.metadata.get("operation") == "pending_receipt_receive"
+        )
+        self.assertIn(
+            {
+                "field_name": "cantidad_recibida",
+                "old_value": "0",
+                "new_value": "4",
+            },
+            receive_audit.metadata["changes"],
+        )
 
         kardex_audits = list(
             AuditLog.objects.filter(
@@ -883,6 +916,10 @@ class PendientePorRecibirApiTests(TestCase):
         self.assertEqual(
             kardex_audits[0].metadata.get("operation"),
             "kardex_movement",
+        )
+        self.assertEqual(
+            kardex_audits[0].metadata["target_snapshot"]["identifiers"],
+            create_audits[0].metadata["target_snapshot"]["identifiers"],
         )
 
     def test_consulta_user_cannot_create_pending_receipt(self):
@@ -1455,11 +1492,25 @@ class ProductCreationAndOriginApiTests(TestCase):
             "Producto adquirido por canal especial.",
         )
 
-        self.assertTrue(
-            AuditLog.objects.filter(
-                object_id=str(product.pk),
-                action=AuditAction.CAMBIAR_ORIGEN,
-            ).exists()
+        audit_log = AuditLog.objects.get(
+            object_id=str(product.pk),
+            action=AuditAction.CAMBIAR_ORIGEN,
+            metadata__operation="product_origin_change",
+        )
+        self.assertEqual(
+            audit_log.metadata["changes"],
+            [
+                {
+                    "field_name": "origen",
+                    "old_value": ProductOrigin.COMPRADO,
+                    "new_value": ProductOrigin.OTRO,
+                },
+                {
+                    "field_name": "origen_observacion",
+                    "old_value": "",
+                    "new_value": "Producto adquirido por canal especial.",
+                },
+            ],
         )
 
     def test_product_without_stock_can_change_to_service(self):
@@ -1582,12 +1633,21 @@ class ProductCreationAndOriginApiTests(TestCase):
             ).exists()
         )
 
-        self.assertTrue(
-            AuditLog.objects.filter(
-                object_id=str(product.pk),
-                action=AuditAction.EDITAR,
-                reason="Se corrigió la clasificación del producto.",
-            ).exists()
+        audit_log = AuditLog.objects.get(
+            object_id=str(product.pk),
+            action=AuditAction.EDITAR,
+            reason="Se corrigió la clasificación del producto.",
+            metadata__operation="product_category_change",
+        )
+        self.assertEqual(
+            audit_log.metadata["changes"],
+            [
+                {
+                    "field_name": "categoria",
+                    "old_value": self.category.name,
+                    "new_value": destination_category.name,
+                }
+            ],
         )
 
 

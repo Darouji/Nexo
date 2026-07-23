@@ -34,6 +34,7 @@ import type {
   Product,
   ProductStockStatus,
 } from "../../../services/inventoryService";
+import type { SavedGridViewConfig } from "../../../services/gridService";
 
 type InventoryCatalogSectionProps = {
   inventorySummary: InventorySummary;
@@ -76,6 +77,7 @@ type InventoryCatalogSectionProps = {
   onProductColumnFiltersChange: (filters: SerkanGridFilter[]) => void;
   productFilterResetKey: number;
   onVisibleColumnsChange: (fieldKeys: string[]) => void;
+  onProductNamedViewApply: (config: SavedGridViewConfig) => void;
 
   exporting: boolean;
   canExportOfficial: boolean;
@@ -136,6 +138,7 @@ export function InventoryCatalogSection({
   onProductColumnFiltersChange,
   productFilterResetKey,
   onVisibleColumnsChange,
+  onProductNamedViewApply,
   exporting,
   canExportOfficial,
   onExportView,
@@ -409,6 +412,14 @@ export function InventoryCatalogSection({
           onFilterModelChange={onProductColumnFiltersChange}
           filterResetKey={productFilterResetKey}
           onVisibleColumnsChange={onVisibleColumnsChange}
+          namedViewFilters={{
+            search: searchTerm,
+            category: categoryFilter,
+            status: statusFilter,
+            stock_control: stockControlFilter,
+            stock_status: stockStatusFilter,
+          }}
+          onNamedViewApply={onProductNamedViewApply}
         />
       </SectionCard>
     </>

@@ -137,4 +137,25 @@ describe("presentación humana de auditoría", () => {
       "Fabián registró ajuste de inventario por -2 unidad(es) para Modelo: Alternador 24V · Código SAP: ALT-24V · Categoría: Electricidad. El stock cambió de 10 a 8.",
     );
   });
+
+  it("explica un traslado con producto, ruta, cantidad y total inalterado", () => {
+    const transferAudit: AuditLog = {
+      ...rejectedProductAudit,
+      action: "TRASLADAR",
+      action_display: "Trasladar",
+      model_name: "inventorytransfer",
+      metadata: {
+        operation: "inventory_transfer",
+        quantity: 3,
+        origin_location_name: "Bodega central",
+        destination_location_name: "Faena norte",
+        stock_total_unchanged: 10,
+        evidence_reference: "GD-2026-18",
+      },
+    };
+
+    expect(getAuditNarrative(transferAudit)).toBe(
+      "Fabián trasladó 3 unidad(es) de Modelo: Alternador 24V · Código SAP: ALT-24V · Categoría: Electricidad desde “Bodega central” hasta “Faena norte”. El stock total permaneció en 10. Evidencia: “GD-2026-18”.",
+    );
+  });
 });

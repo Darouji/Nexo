@@ -21,6 +21,7 @@ import {
 } from "@mui/material";
 import type {
   Category,
+  InventoryLocation,
   Product,
   ProductOrigin,
 } from "../../../services/inventoryService";
@@ -41,6 +42,7 @@ type ProductDialogProps = {
   editingProduct: Product | null;
   productForm: ProductFormState;
   categories: Category[];
+  locations: InventoryLocation[];
   savingProduct: boolean;
   onFormChange: Dispatch<SetStateAction<ProductFormState>>;
   onClose: () => void;
@@ -241,6 +243,7 @@ export function ProductDialog({
   editingProduct,
   productForm,
   categories,
+  locations,
   savingProduct,
   onFormChange,
   onClose,
@@ -284,12 +287,18 @@ export function ProductDialog({
   const sapChangeReasonIsMissing =
     sapCodeChanged && !productForm.codigo_sap_motivo.trim();
   const sapCodeIsForbidden = isForbiddenSapCode(productForm.codigo_sap);
+  const initialStockRequiresLocation =
+    !editingProduct &&
+    productForm.controla_stock &&
+    Number(productForm.initial_stock) > 0 &&
+    !productForm.initial_location;
 
   const hasRequiredFieldErrors =
     categoryNameIsMissing ||
     modelIsMissing ||
     originObservationIsMissing ||
-    sapChangeReasonIsMissing;
+    sapChangeReasonIsMissing ||
+    initialStockRequiresLocation;
 
   const hasDuplicateErrors = Boolean(
     duplicateValidation.duplicatedModelProduct ||
@@ -325,6 +334,8 @@ export function ProductDialog({
       initial_stock: nextOrigin === "SERVICIO" ? "0" : current.initial_stock,
       initial_stock_motivo:
         nextOrigin === "SERVICIO" ? "" : current.initial_stock_motivo,
+      initial_location:
+        nextOrigin === "SERVICIO" ? "" : current.initial_location,
     }));
   };
 
@@ -582,6 +593,9 @@ export function ProductDialog({
                     initial_stock_motivo: event.target.checked
                       ? current.initial_stock_motivo
                       : "",
+                    initial_location: event.target.checked
+                      ? current.initial_location
+                      : "",
                     stock_critico: event.target.checked
                       ? current.stock_critico
                       : "0",
@@ -593,7 +607,8 @@ export function ProductDialog({
           />
 
           {productForm.controla_stock && !editingProduct ? (
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+            <Stack spacing={2}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <TextField
                 label="Stock inicial"
                 type="number"
@@ -613,6 +628,30 @@ export function ProductDialog({
                 }
                 fullWidth
               />
+              </Stack>
+
+              <TextField
+                select
+                label="Ubicación del stock inicial"
+                value={productForm.initial_location}
+                onChange={(event) =>
+                  updateFormField("initial_location", event.target.value)
+                }
+                fullWidth
+                required={Number(productForm.initial_stock) > 0}
+                error={submitAttempted && initialStockRequiresLocation}
+                helperText={
+                  initialStockRequiresLocation
+                    ? "Debe indicar dónde se encuentra físicamente el stock inicial."
+                    : "Se exige cuando el stock inicial es mayor que cero."
+                }
+              >
+                {locations.map((location) => (
+                  <MenuItem key={location.id} value={String(location.id)}>
+                    {location.name} — {location.location_type_display}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Stack>
           ) : null}
 

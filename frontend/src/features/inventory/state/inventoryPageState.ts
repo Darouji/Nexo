@@ -22,6 +22,7 @@ export type MovementDialogState = {
   product: Product | null;
   cantidad: string;
   motivo: string;
+  ubicacion: string;
 };
 
 export type KardexDialogState = {
@@ -41,6 +42,7 @@ export type PendingReceiptCreateDialogState = {
   cantidad: string;
   referencia: string;
   motivo: string;
+  ubicacionDestino: string;
 };
 
 export type PendingReceiptOperationMode = "RECIBIR" | "CANCELAR";
@@ -142,6 +144,7 @@ export const emptyMovementDialog: MovementDialogState = {
   product: null,
   cantidad: "",
   motivo: "",
+  ubicacion: "",
 };
 
 export const emptyKardexDialog: KardexDialogState = {
@@ -162,6 +165,7 @@ export const emptyPendingReceiptCreateDialog: PendingReceiptCreateDialogState =
     cantidad: "",
     referencia: "",
     motivo: "",
+    ubicacionDestino: "",
   };
 
 export const emptyPendingReceiptOperationDialog: PendingReceiptOperationDialogState =

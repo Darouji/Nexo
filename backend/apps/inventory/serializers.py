@@ -6,8 +6,12 @@ from apps.core.models import BaseStatus
 
 from .models import (
     Categoria,
+    InventoryLocation,
+    InventoryLocationType,
+    InventoryTransfer,
     MovimientoKardex,
     PendientePorRecibir,
+    ProductLocationBalance,
     Producto,
     ProductOrigin,
 )
@@ -155,6 +159,12 @@ class ProductoSerializer(serializers.ModelSerializer):
         allow_blank=True,
         max_length=255,
     )
+    ubicacion_stock_inicial = serializers.PrimaryKeyRelatedField(
+        queryset=InventoryLocation.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
     motivo_codigo_sap = serializers.CharField(
         write_only=True,
         required=False,
@@ -192,6 +202,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             "status",
             "stock_inicial",
             "motivo_stock_inicial",
+            "ubicacion_stock_inicial",
             "motivo_codigo_sap",
             "created_at",
             "updated_at",
@@ -343,6 +354,10 @@ class ProductoSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop("motivo_codigo_sap", None)
         initial_stock = validated_data.pop("stock_inicial", 0)
+        initial_location = validated_data.pop(
+            "ubicacion_stock_inicial",
+            None,
+        )
 
         initial_stock_reason = str(
             validated_data.pop("motivo_stock_inicial", "") or ""
@@ -361,6 +376,7 @@ class ProductoSerializer(serializers.ModelSerializer):
                 categoria_nombre=categoria_nombre,
                 initial_stock=initial_stock,
                 initial_stock_reason=initial_stock_reason,
+                initial_location=initial_location,
                 user=user,
                 request=getattr(request, "_request", request),
             )
@@ -439,6 +455,7 @@ class MovimientoKardexSerializer(serializers.ModelSerializer):
     )
     origin_display = serializers.CharField(source="get_origin_display", read_only=True)
     reference = serializers.SerializerMethodField()
+    ubicacion_nombre = serializers.SerializerMethodField()
 
     class Meta:
         model = MovimientoKardex
@@ -454,6 +471,8 @@ class MovimientoKardexSerializer(serializers.ModelSerializer):
             "origin_display",
             "operador",
             "operador_nombre",
+            "location",
+            "ubicacion_nombre",
             "cantidad",
             "stock_antes",
             "stock_despues",
@@ -487,6 +506,14 @@ class MovimientoKardexSerializer(serializers.ModelSerializer):
 
         return obj.operador.get_full_name().strip() or obj.operador.username
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_ubicacion_nombre(self, obj):
+        if obj.location_name_snapshot:
+            return obj.location_name_snapshot
+        if obj.location:
+            return obj.location.name
+        return "No informada históricamente"
+
     @extend_schema_field(OpenApiTypes.OBJECT)
     def get_reference(self, obj):
         if not obj.reference_object_id:
@@ -502,6 +529,11 @@ class MovimientoKardexSerializer(serializers.ModelSerializer):
 class ManualStockEntrySerializer(serializers.Serializer):
     cantidad = serializers.IntegerField(min_value=1)
     motivo = serializers.CharField(max_length=255)
+    ubicacion = serializers.PrimaryKeyRelatedField(
+        queryset=InventoryLocation.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     def validate_motivo(self, value):
         value = value.strip()
@@ -515,6 +547,11 @@ class ManualStockEntrySerializer(serializers.Serializer):
 class InventoryAdjustmentSerializer(serializers.Serializer):
     cantidad = serializers.IntegerField()
     motivo = serializers.CharField(max_length=255)
+    ubicacion = serializers.PrimaryKeyRelatedField(
+        queryset=InventoryLocation.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     def validate_cantidad(self, value):
         if value == 0:
@@ -669,6 +706,11 @@ class CategoriaDeleteSerializer(serializers.Serializer):
 
 class CrearPendientePorRecibirSerializer(serializers.Serializer):
     producto = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all())
+    ubicacion_destino = serializers.PrimaryKeyRelatedField(
+        queryset=InventoryLocation.objects.all(),
+        required=False,
+        allow_null=True,
+    )
     cantidad = serializers.IntegerField(min_value=1)
     referencia = serializers.CharField(
         max_length=255,
@@ -731,6 +773,10 @@ class PendientePorRecibirSerializer(serializers.ModelSerializer):
     )
     created_by_nombre = serializers.SerializerMethodField()
     updated_by_nombre = serializers.SerializerMethodField()
+    ubicacion_destino_nombre = serializers.CharField(
+        source="destination_location.name",
+        read_only=True,
+    )
 
     class Meta:
         model = PendientePorRecibir
@@ -740,6 +786,8 @@ class PendientePorRecibirSerializer(serializers.ModelSerializer):
             "producto_modelo",
             "producto_categoria",
             "producto_codigo_sap",
+            "destination_location",
+            "ubicacion_destino_nombre",
             "cantidad_original",
             "cantidad_recibida",
             "cantidad_cancelada",
@@ -771,3 +819,249 @@ class PendientePorRecibirSerializer(serializers.ModelSerializer):
             return ""
 
         return obj.updated_by.get_full_name().strip() or obj.updated_by.username
+
+
+class InventoryLocationSerializer(serializers.ModelSerializer):
+    location_type_display = serializers.CharField(
+        source="get_location_type_display",
+        read_only=True,
+    )
+    custodian_name = serializers.CharField(
+        source="custodian.full_name",
+        read_only=True,
+        default="",
+    )
+    total_units = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = InventoryLocation
+        fields = [
+            "id",
+            "name",
+            "location_type",
+            "location_type_display",
+            "custodian",
+            "custodian_name",
+            "city",
+            "description",
+            "is_regularization",
+            "total_units",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "location_type_display",
+            "custodian_name",
+            "is_regularization",
+            "total_units",
+            "status",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        if {"status", "is_regularization"}.intersection(self.initial_data):
+            raise serializers.ValidationError(
+                {
+                    "status": (
+                        "El estado sólo puede cambiar mediante una operación "
+                        "controlada de ubicación."
+                    )
+                }
+            )
+
+        location_type = attrs.get(
+            "location_type",
+            self.instance.location_type if self.instance else None,
+        )
+        custodian = attrs.get(
+            "custodian",
+            self.instance.custodian if self.instance else None,
+        )
+        if (
+            location_type == InventoryLocationType.DOMICILIO_CUSTODIA
+            and custodian is None
+        ):
+            raise serializers.ValidationError(
+                {
+                    "custodian": (
+                        "Un domicilio bajo custodia debe indicar al "
+                        "colaborador responsable."
+                    )
+                }
+            )
+        if (
+            location_type != InventoryLocationType.DOMICILIO_CUSTODIA
+            and custodian is not None
+        ):
+            raise serializers.ValidationError(
+                {
+                    "custodian": (
+                        "El custodio sólo corresponde a domicilios bajo "
+                        "custodia."
+                    )
+                }
+            )
+        return attrs
+
+    def create(self, validated_data):
+        try:
+            return super().create(validated_data)
+        except DjangoValidationError as error:
+            raise_serializer_validation_error(error)
+
+    def update(self, instance, validated_data):
+        if instance.is_regularization:
+            protected_changes = {
+                field
+                for field in ("name", "location_type", "custodian")
+                if field in validated_data
+                and getattr(instance, field) != validated_data[field]
+            }
+            if protected_changes:
+                raise serializers.ValidationError(
+                    {
+                        field: (
+                            "La identidad de la ubicación histórica de "
+                            "regularización no puede modificarse."
+                        )
+                        for field in protected_changes
+                    }
+                )
+        try:
+            return super().update(instance, validated_data)
+        except DjangoValidationError as error:
+            raise_serializer_validation_error(error)
+
+
+class ProductLocationBalanceSerializer(serializers.ModelSerializer):
+    product_model = serializers.CharField(
+        source="product.modelo",
+        read_only=True,
+    )
+    product_sap_code = serializers.CharField(
+        source="product.codigo_sap",
+        read_only=True,
+    )
+    product_category = serializers.CharField(
+        source="product.categoria.name",
+        read_only=True,
+    )
+    location_name = serializers.CharField(
+        source="location.name",
+        read_only=True,
+    )
+    location_type = serializers.CharField(
+        source="location.location_type",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ProductLocationBalance
+        fields = [
+            "id",
+            "product",
+            "product_model",
+            "product_sap_code",
+            "product_category",
+            "location",
+            "location_name",
+            "location_type",
+            "quantity",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class InventoryTransferSerializer(serializers.ModelSerializer):
+    product_model = serializers.CharField(
+        source="product.modelo",
+        read_only=True,
+    )
+    product_sap_code = serializers.CharField(
+        source="product.codigo_sap",
+        read_only=True,
+    )
+    product_category = serializers.CharField(
+        source="product.categoria.name",
+        read_only=True,
+    )
+    origin_location_name = serializers.CharField(
+        source="origin_location.name",
+        read_only=True,
+    )
+    destination_location_name = serializers.CharField(
+        source="destination_location.name",
+        read_only=True,
+    )
+    responsible_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InventoryTransfer
+        fields = [
+            "id",
+            "product",
+            "product_model",
+            "product_sap_code",
+            "product_category",
+            "origin_location",
+            "origin_location_name",
+            "destination_location",
+            "destination_location_name",
+            "quantity",
+            "responsible",
+            "responsible_name",
+            "reason",
+            "evidence_reference",
+            "transferred_at",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_responsible_name(self, obj):
+        return (
+            obj.responsible.get_full_name().strip()
+            or obj.responsible.username
+        )
+
+
+class InventoryTransferCreateSerializer(serializers.Serializer):
+    product = serializers.PrimaryKeyRelatedField(
+        queryset=Producto.objects.all()
+    )
+    origin_location = serializers.PrimaryKeyRelatedField(
+        queryset=InventoryLocation.objects.all()
+    )
+    destination_location = serializers.PrimaryKeyRelatedField(
+        queryset=InventoryLocation.objects.all()
+    )
+    quantity = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField(max_length=255)
+    evidence_reference = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+    )
+
+    def validate_reason(self, value):
+        value = str(value or "").strip()
+        if not value:
+            raise serializers.ValidationError("El motivo es obligatorio.")
+        return value
+
+
+class InventoryLocationArchiveSerializer(serializers.Serializer):
+    reason = serializers.CharField(max_length=255)
+
+    def validate_reason(self, value):
+        value = str(value or "").strip()
+        if not value:
+            raise serializers.ValidationError(
+                "El motivo del archivado es obligatorio."
+            )
+        return value

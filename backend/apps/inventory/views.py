@@ -29,10 +29,14 @@ from apps.core.grid_registry import apply_grid_filters
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
     Categoria,
+    InventoryLocation,
+    InventoryLocationType,
+    InventoryTransfer,
     KardexMovementType,
     MovimientoKardex,
     PendientePorRecibir,
     PendientePorRecibirStatus,
+    ProductLocationBalance,
     Producto,
     ProductOrigin,
     ProductStockStatus,
@@ -44,10 +48,15 @@ from .serializers import (
     CategoriaSerializer,
     CrearPendientePorRecibirSerializer,
     InventoryAdjustmentSerializer,
+    InventoryLocationArchiveSerializer,
+    InventoryLocationSerializer,
+    InventoryTransferCreateSerializer,
+    InventoryTransferSerializer,
     ManualStockEntrySerializer,
     MovimientoKardexSerializer,
     OperacionPendientePorRecibirSerializer,
     PendientePorRecibirSerializer,
+    ProductLocationBalanceSerializer,
     ProductoCategoriaChangeSerializer,
     ProductoLifecycleActionSerializer,
     ProductoOrigenChangeSerializer,
@@ -65,6 +74,10 @@ from .services import (
     register_inventory_adjustment,
     register_manual_entry,
     rename_category,
+)
+from .location_services import (
+    archive_inventory_location,
+    transfer_inventory,
 )
 from .exports import (
     build_product_export_response,
@@ -774,6 +787,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
                 producto=producto,
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
+                location=serializer.validated_data.get("ubicacion"),
                 user=request.user,
                 request=getattr(request, "_request", request),
             )
@@ -805,6 +819,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
                 producto=producto,
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
+                location=serializer.validated_data.get("ubicacion"),
                 user=request.user,
                 request=getattr(request, "_request", request),
             )
@@ -833,6 +848,7 @@ class PendientePorRecibirViewSet(
     queryset = PendientePorRecibir.objects.select_related(
         "producto",
         "producto__categoria",
+        "destination_location",
         "created_by",
         "updated_by",
     ).all()
@@ -900,6 +916,9 @@ class PendientePorRecibirViewSet(
                 referencia=serializer.validated_data.get(
                     "referencia",
                     "",
+                ),
+                destination_location=serializer.validated_data.get(
+                    "ubicacion_destino"
                 ),
                 user=request.user,
                 request=getattr(request, "_request", request),
@@ -976,11 +995,248 @@ class PendientePorRecibirViewSet(
         )
 
 
+class InventoryLocationViewSet(
+    InventoryPermissionMixin,
+    viewsets.ModelViewSet,
+):
+    inventory_default_write_capability = InventoryCapability.MANAGE_LOCATIONS
+    serializer_class = InventoryLocationSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "name",
+        "name_normalized",
+        "city",
+        "description",
+        "custodian__first_name",
+        "custodian__last_name",
+    ]
+    ordering_fields = [
+        "name",
+        "location_type",
+        "status",
+        "total_units",
+        "created_at",
+        "updated_at",
+    ]
+    ordering = ["name"]
+
+    def get_queryset(self):
+        queryset = (
+            InventoryLocation.objects.select_related("custodian")
+            .annotate(
+                total_units=Coalesce(
+                    Sum("product_balances__quantity"),
+                    Value(0),
+                    output_field=IntegerField(),
+                )
+            )
+            .all()
+        )
+        params = self.request.query_params
+
+        statuses = validate_choice_values(
+            split_csv_param(params.get("status")),
+            {choice[0] for choice in BaseStatus.choices},
+            "status",
+        )
+        if statuses:
+            queryset = queryset.filter(status__in=statuses)
+
+        location_types = split_csv_param(
+            params.get("location_type") or params.get("tipo")
+        )
+        if location_types:
+            validate_choice_values(
+                location_types,
+                set(InventoryLocationType.values),
+                "location_type",
+            )
+            queryset = queryset.filter(location_type__in=location_types)
+
+        return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        return Response(
+            {
+                "detail": (
+                    "Las ubicaciones no se eliminan. Use la acción controlada "
+                    "de archivado."
+                )
+            },
+            status=status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+
+    @action(detail=True, methods=["post"], url_path="archivar")
+    def archivar(self, request, pk=None):
+        serializer = InventoryLocationArchiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            location = archive_inventory_location(
+                location=self.get_object(),
+                reason=serializer.validated_data["reason"],
+                user=request.user,
+                request=getattr(request, "_request", request),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        self._skip_activity_audit(request)
+        return Response(
+            InventoryLocationSerializer(location).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class ProductLocationBalanceViewSet(
+    InventoryPermissionMixin,
+    viewsets.ReadOnlyModelViewSet,
+):
+    serializer_class = ProductLocationBalanceSerializer
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "product__modelo",
+        "product__codigo_sap",
+        "product__categoria__name",
+        "location__name",
+    ]
+    ordering_fields = [
+        "product__modelo_normalized",
+        "location__name_normalized",
+        "quantity",
+        "updated_at",
+    ]
+    ordering = ["product__modelo_normalized", "location__name_normalized"]
+    queryset = ProductLocationBalance.objects.select_related(
+        "product",
+        "product__categoria",
+        "location",
+    ).all()
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+        product_ids = parse_id_values(
+            params.get("product") or params.get("producto"),
+            "producto",
+        )
+        if product_ids:
+            queryset = queryset.filter(product_id__in=product_ids)
+        location_ids = parse_id_values(
+            params.get("location") or params.get("ubicacion"),
+            "ubicacion",
+        )
+        if location_ids:
+            queryset = queryset.filter(location_id__in=location_ids)
+        positive_only = parse_bool_param(
+            params.get("positive_only"),
+            "positive_only",
+        )
+        if positive_only:
+            queryset = queryset.filter(quantity__gt=0)
+        return queryset
+
+
+class InventoryTransferViewSet(
+    InventoryPermissionMixin,
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    inventory_default_write_capability = InventoryCapability.TRANSFER_STOCK
+    inventory_action_capabilities = {
+        "create": InventoryCapability.TRANSFER_STOCK,
+    }
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "product__modelo",
+        "product__codigo_sap",
+        "product__categoria__name",
+        "origin_location__name",
+        "destination_location__name",
+        "reason",
+        "evidence_reference",
+        "responsible__username",
+        "responsible__first_name",
+        "responsible__last_name",
+    ]
+    ordering_fields = [
+        "transferred_at",
+        "product__modelo_normalized",
+        "origin_location__name_normalized",
+        "destination_location__name_normalized",
+        "quantity",
+    ]
+    ordering = ["-transferred_at", "-id"]
+    queryset = InventoryTransfer.objects.select_related(
+        "product",
+        "product__categoria",
+        "origin_location",
+        "destination_location",
+        "responsible",
+    ).all()
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return InventoryTransferCreateSerializer
+        return InventoryTransferSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+        product_ids = parse_id_values(
+            params.get("product") or params.get("producto"),
+            "producto",
+        )
+        if product_ids:
+            queryset = queryset.filter(product_id__in=product_ids)
+        location_ids = parse_id_values(
+            params.get("location") or params.get("ubicacion"),
+            "ubicacion",
+        )
+        if location_ids:
+            queryset = queryset.filter(
+                Q(origin_location_id__in=location_ids)
+                | Q(destination_location_id__in=location_ids)
+            )
+        return apply_created_at_date_range(queryset, params)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        idempotency_key = str(
+            request.headers.get("Idempotency-Key", "")
+        ).strip()
+
+        try:
+            transfer, created = transfer_inventory(
+                **serializer.validated_data,
+                idempotency_key=idempotency_key,
+                user=request.user,
+                request=getattr(request, "_request", request),
+            )
+        except DjangoValidationError as error:
+            raise_drf_validation_error(error)
+
+        self._skip_activity_audit(request)
+        output = InventoryTransferSerializer(transfer)
+        return Response(
+            output.data,
+            status=(
+                status.HTTP_201_CREATED
+                if created
+                else status.HTTP_200_OK
+            ),
+        )
+
+
 class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelViewSet):
     queryset = MovimientoKardex.objects.select_related(
         "producto",
         "producto__categoria",
         "operador",
+        "location",
         "reference_content_type",
     ).all()
     serializer_class = MovimientoKardexSerializer
@@ -998,6 +1254,8 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
         "origin",
         "motivo",
         "reference_repr",
+        "location_name_snapshot",
+        "location__name",
     ]
     ordering_fields = [
         "created_at",
@@ -1052,6 +1310,13 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
 
         if product_ids:
             queryset = queryset.filter(producto_id__in=product_ids)
+
+        location_ids = parse_id_values(
+            params.get("location") or params.get("ubicacion"),
+            "ubicacion",
+        )
+        if location_ids:
+            queryset = queryset.filter(location_id__in=location_ids)
 
         movement_types = validate_choice_values(
             split_csv_param(params.get("movement_type")),

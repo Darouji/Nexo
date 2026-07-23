@@ -13,6 +13,12 @@ from apps.core.models import AuditAction, AuditOrigin, BaseStatus
 from apps.core.utils import normalize_text
 
 from .kardex_context import allow_kardex_write
+from .location_services import (
+    apply_location_balance_delta,
+    assert_product_location_total,
+    get_regularization_location,
+    resolve_stock_location,
+)
 from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
     Categoria,
@@ -703,6 +709,7 @@ def create_product_with_category(
     categoria_nombre="",
     initial_stock=0,
     initial_stock_reason="",
+    initial_location=None,
     user=None,
     request=None,
 ):
@@ -729,6 +736,7 @@ def create_product_with_category(
                 producto=product,
                 cantidad=initial_stock,
                 motivo=initial_stock_reason,
+                location=initial_location,
                 user=user,
                 request=request,
             )
@@ -1136,6 +1144,7 @@ def register_kardex_movement(
     user=None,
     origin=AuditOrigin.MANUAL,
     reference=None,
+    location=None,
     request=None,
 ):
     """
@@ -1224,6 +1233,18 @@ def register_kardex_movement(
                 }
             )
 
+        assert_product_location_total(locked_product)
+        resolved_location = resolve_stock_location(
+            product=locked_product,
+            location=location,
+            quantity_delta=cantidad,
+        )
+        apply_location_balance_delta(
+            product=locked_product,
+            location=resolved_location,
+            delta=cantidad,
+        )
+
         locked_product.stock_actual = stock_despues
         locked_product.updated_by = get_operator(user)
 
@@ -1236,6 +1257,7 @@ def register_kardex_movement(
                 ]
             )
 
+        assert_product_location_total(locked_product)
         reference_data = build_reference_data(reference)
 
         movement = MovimientoKardex(
@@ -1243,6 +1265,7 @@ def register_kardex_movement(
             movement_type=movement_type,
             origin=origin,
             operador=get_operator(user),
+            location=resolved_location,
             cantidad=cantidad,
             stock_antes=stock_antes,
             stock_despues=stock_despues,
@@ -1271,6 +1294,8 @@ def register_kardex_movement(
                 "quantity": movement.cantidad,
                 "stock_before": movement.stock_antes,
                 "stock_after": movement.stock_despues,
+                "location_id": resolved_location.pk,
+                "location_name": resolved_location.name,
                 "reference_content_type_id": (movement.reference_content_type_id),
                 "reference_object_id": movement.reference_object_id,
                 "reference_repr": movement.reference_repr,
@@ -1286,6 +1311,7 @@ def register_manual_entry(
     producto,
     cantidad,
     motivo,
+    location=None,
     user=None,
     request=None,
 ):
@@ -1294,6 +1320,7 @@ def register_manual_entry(
         movement_type=KardexMovementType.ENTRADA_MANUAL,
         cantidad=cantidad,
         motivo=motivo,
+        location=location,
         user=user,
         origin=AuditOrigin.MANUAL,
         request=request,
@@ -1305,6 +1332,7 @@ def register_inventory_adjustment(
     producto,
     cantidad,
     motivo,
+    location=None,
     user=None,
     request=None,
 ):
@@ -1313,6 +1341,7 @@ def register_inventory_adjustment(
         movement_type=KardexMovementType.AJUSTE_INVENTARIO,
         cantidad=cantidad,
         motivo=motivo,
+        location=location,
         user=user,
         origin=AuditOrigin.MANUAL,
         request=request,
@@ -1326,6 +1355,7 @@ def register_sale_exit(
     motivo,
     user=None,
     reference=None,
+    location=None,
     request=None,
 ):
     return register_kardex_movement(
@@ -1336,6 +1366,7 @@ def register_sale_exit(
         user=user,
         origin=AuditOrigin.AUTOMATICO,
         reference=reference,
+        location=location,
         request=request,
     )
 
@@ -1347,6 +1378,7 @@ def register_sale_annulment_reverse(
     motivo,
     user=None,
     reference=None,
+    location=None,
     request=None,
 ):
     return register_kardex_movement(
@@ -1357,6 +1389,7 @@ def register_sale_annulment_reverse(
         user=user,
         origin=AuditOrigin.AUTOMATICO,
         reference=reference,
+        location=location,
         request=request,
     )
 
@@ -1368,6 +1401,7 @@ def register_sale_difference_adjustment(
     motivo,
     user=None,
     reference=None,
+    location=None,
     request=None,
 ):
     return register_kardex_movement(
@@ -1378,6 +1412,7 @@ def register_sale_difference_adjustment(
         user=user,
         origin=AuditOrigin.AUTOMATICO,
         reference=reference,
+        location=location,
         request=request,
     )
 
@@ -1556,6 +1591,7 @@ def create_pending_receipt(
     cantidad,
     motivo="",
     referencia="",
+    destination_location=None,
     user=None,
     request=None,
 ):
@@ -1600,8 +1636,21 @@ def create_pending_receipt(
                 }
             )
 
+        resolved_destination = (
+            destination_location or get_regularization_location()
+        )
+        if resolved_destination.status != BaseStatus.ACTIVO:
+            raise ValidationError(
+                {
+                    "destination_location": (
+                        "La ubicación de destino no se encuentra activa."
+                    )
+                }
+            )
+
         pending_receipt = PendientePorRecibir.objects.create(
             producto=locked_product,
+            destination_location=resolved_destination,
             cantidad_original=cantidad,
             referencia=referencia,
             motivo=motivo,
@@ -1621,6 +1670,8 @@ def create_pending_receipt(
                 "product_model": locked_product.modelo,
                 "original_quantity": pending_receipt.cantidad_original,
                 "reference": pending_receipt.referencia,
+                "destination_location_id": resolved_destination.pk,
+                "destination_location_name": resolved_destination.name,
                 "initial_status": pending_receipt.estado,
             },
             request=request,
@@ -1652,7 +1703,7 @@ def receive_pending_receipt(
 
         locked_pending_receipt = (
             PendientePorRecibir.objects.select_for_update()
-            .select_related("producto")
+            .select_related("producto", "destination_location")
             .get(pk=pending_receipt.pk)
         )
 
@@ -1702,6 +1753,7 @@ def receive_pending_receipt(
             user=user,
             origin=AuditOrigin.MANUAL,
             reference=locked_pending_receipt,
+            location=locked_pending_receipt.destination_location,
             request=request,
         )
 
@@ -1736,6 +1788,12 @@ def receive_pending_receipt(
                 "product_id": locked_product.pk,
                 "product_model": locked_product.modelo,
                 "kardex_movement_id": movement.pk,
+                "destination_location_id": (
+                    locked_pending_receipt.destination_location_id
+                ),
+                "destination_location_name": (
+                    locked_pending_receipt.destination_location.name
+                ),
                 "received_quantity": cantidad,
                 "received_before": int(old_values.get("cantidad_recibida") or 0),
                 "received_after": (locked_pending_receipt.cantidad_recibida),

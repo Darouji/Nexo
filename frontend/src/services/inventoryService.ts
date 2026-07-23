@@ -80,6 +80,8 @@ export type KardexMovement = {
   origin_display: string;
   operador: number | null;
   operador_nombre: string;
+  location: number | null;
+  ubicacion_nombre: string;
   cantidad: number;
   stock_antes: number;
   stock_despues: number;
@@ -130,6 +132,8 @@ export type PendingReceipt = {
   producto_modelo: string;
   producto_categoria: string;
   producto_codigo_sap: string;
+  destination_location: number;
+  ubicacion_destino_nombre: string;
   cantidad_original: number;
   cantidad_recibida: number;
   cantidad_cancelada: number;
@@ -149,6 +153,7 @@ export type PendingReceipt = {
 
 export type CreatePendingReceiptPayload = {
   producto: number;
+  ubicacion_destino?: number | null;
   cantidad: number;
   referencia?: string;
   motivo?: string;
@@ -177,6 +182,93 @@ type KardexListResponse = KardexMovement[] | PaginatedResponse<KardexMovement>;
 type PendingReceiptListResponse =
   | PendingReceipt[]
   | PaginatedResponse<PendingReceipt>;
+
+export type InventoryLocationType =
+  | "BODEGA"
+  | "DOMICILIO_CUSTODIA"
+  | "TRANSITO"
+  | "CLIENTE_FAENA"
+  | "OTRO";
+
+export type InventoryLocation = {
+  [key: string]: unknown;
+  id: number;
+  name: string;
+  location_type: InventoryLocationType;
+  location_type_display: string;
+  custodian: number | null;
+  custodian_name: string;
+  city: string;
+  description: string;
+  is_regularization: boolean;
+  total_units: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductLocationBalance = {
+  [key: string]: unknown;
+  id: number;
+  product: number;
+  product_model: string;
+  product_sap_code: string;
+  product_category: string;
+  location: number;
+  location_name: string;
+  location_type: InventoryLocationType;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InventoryTransfer = {
+  [key: string]: unknown;
+  id: number;
+  product: number;
+  product_model: string;
+  product_sap_code: string;
+  product_category: string;
+  origin_location: number;
+  origin_location_name: string;
+  destination_location: number;
+  destination_location_name: string;
+  quantity: number;
+  responsible: number;
+  responsible_name: string;
+  reason: string;
+  evidence_reference: string;
+  transferred_at: string;
+  status: string;
+  created_at: string;
+};
+
+type InventoryLocationListResponse =
+  | InventoryLocation[]
+  | PaginatedResponse<InventoryLocation>;
+type ProductLocationBalanceListResponse =
+  | ProductLocationBalance[]
+  | PaginatedResponse<ProductLocationBalance>;
+type InventoryTransferListResponse =
+  | InventoryTransfer[]
+  | PaginatedResponse<InventoryTransfer>;
+
+export type SaveInventoryLocationPayload = {
+  name: string;
+  location_type: InventoryLocationType;
+  custodian?: number | null;
+  city?: string;
+  description?: string;
+};
+
+export type CreateInventoryTransferPayload = {
+  product: number;
+  origin_location: number;
+  destination_location: number;
+  quantity: number;
+  reason: string;
+  evidence_reference?: string;
+};
 
 export type CategoryListParams = {
   search?: string;
@@ -297,6 +389,7 @@ export type CreateProductPayload = ProductCategorySelection &
     origen_observacion?: string;
     stock_inicial?: number;
     motivo_stock_inicial?: string;
+    ubicacion_stock_inicial?: number | null;
   };
 
 export type UpdateProductPayload = Partial<ProductEditableFields> & {
@@ -308,6 +401,7 @@ export type UpdateProductPayload = Partial<ProductEditableFields> & {
 export type StockMovementPayload = {
   cantidad: number;
   motivo: string;
+  ubicacion?: number | null;
 };
 
 function extractResults<T>(data: T[] | PaginatedResponse<T>) {
@@ -694,6 +788,7 @@ export async function registerManualStockEntry(
     {
       cantidad: payload.cantidad,
       motivo: payload.motivo.trim(),
+      ubicacion: payload.ubicacion || undefined,
     },
   );
 
@@ -709,6 +804,7 @@ export async function registerInventoryAdjustment(
     {
       cantidad: payload.cantidad,
       motivo: payload.motivo.trim(),
+      ubicacion: payload.ubicacion || undefined,
     },
   );
 
@@ -800,12 +896,153 @@ export async function createPendingReceipt(
     "/inventory/pendientes-por-recibir/",
     {
       producto: payload.producto,
+      ubicacion_destino: payload.ubicacion_destino || undefined,
       cantidad: payload.cantidad,
       referencia: payload.referencia?.trim() || "",
       motivo: payload.motivo?.trim() || "",
     },
   );
 
+  return response.data;
+}
+
+export async function fetchInventoryLocations(params: {
+  status?: string;
+  search?: string;
+} = {}) {
+  const response = await api.get<InventoryLocationListResponse>(
+    "/inventory/ubicaciones/",
+    {
+      params: {
+        status: params.status || undefined,
+        search: params.search?.trim() || undefined,
+        ordering: "name",
+        page_size: 200,
+      },
+    },
+  );
+  return extractResults(response.data);
+}
+
+export async function createInventoryLocation(
+  payload: SaveInventoryLocationPayload,
+) {
+  const response = await api.post<InventoryLocation>(
+    "/inventory/ubicaciones/",
+    {
+      name: payload.name.trim(),
+      location_type: payload.location_type,
+      custodian: payload.custodian || null,
+      city: payload.city?.trim() || "",
+      description: payload.description?.trim() || "",
+    },
+  );
+  return response.data;
+}
+
+export async function updateInventoryLocation(
+  locationId: number,
+  payload: SaveInventoryLocationPayload,
+) {
+  const response = await api.patch<InventoryLocation>(
+    `/inventory/ubicaciones/${locationId}/`,
+    {
+      name: payload.name.trim(),
+      location_type: payload.location_type,
+      custodian: payload.custodian || null,
+      city: payload.city?.trim() || "",
+      description: payload.description?.trim() || "",
+    },
+  );
+  return response.data;
+}
+
+export async function archiveInventoryLocation(
+  locationId: number,
+  reason: string,
+) {
+  const response = await api.post<InventoryLocation>(
+    `/inventory/ubicaciones/${locationId}/archivar/`,
+    { reason: reason.trim() },
+  );
+  return response.data;
+}
+
+export async function fetchProductLocationBalances(params: {
+  product?: number;
+  location?: number;
+  positiveOnly?: boolean;
+} = {}) {
+  const response = await api.get<ProductLocationBalanceListResponse>(
+    "/inventory/saldos-por-ubicacion/",
+    {
+      params: {
+        product: params.product || undefined,
+        location: params.location || undefined,
+        positive_only: params.positiveOnly ? "true" : undefined,
+        ordering: "product__modelo_normalized,location__name_normalized",
+        page_size: 500,
+      },
+    },
+  );
+  return extractResults(response.data);
+}
+
+export async function fetchProductLocationBalancesPage(params: {
+  product?: number;
+  location?: number;
+  positiveOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+  search?: string;
+} = {}) {
+  const response = await api.get<ProductLocationBalanceListResponse>(
+    "/inventory/saldos-por-ubicacion/",
+    {
+      params: {
+        product: params.product || undefined,
+        location: params.location || undefined,
+        positive_only: params.positiveOnly ? "true" : undefined,
+        search: params.search?.trim() || undefined,
+        ordering: "product__modelo_normalized,location__name_normalized",
+        page: params.page,
+        page_size: params.pageSize,
+      },
+    },
+  );
+  return toPaginatedResponse(response.data);
+}
+
+export async function fetchInventoryTransfers() {
+  const response = await api.get<InventoryTransferListResponse>(
+    "/inventory/transferencias/",
+    {
+      params: {
+        ordering: "-transferred_at",
+        page_size: 25,
+      },
+    },
+  );
+  return extractResults(response.data);
+}
+
+export async function createInventoryTransfer(
+  payload: CreateInventoryTransferPayload,
+  idempotencyKey: string,
+) {
+  const response = await api.post<InventoryTransfer>(
+    "/inventory/transferencias/",
+    {
+      ...payload,
+      reason: payload.reason.trim(),
+      evidence_reference: payload.evidence_reference?.trim() || "",
+    },
+    {
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
+    },
+  );
   return response.data;
 }
 

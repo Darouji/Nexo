@@ -5,10 +5,14 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
   Stack,
   TextField,
 } from "@mui/material";
-import type { Product } from "../../../services/inventoryService";
+import type {
+  InventoryLocation,
+  Product,
+} from "../../../services/inventoryService";
 
 type StockMovementMode = "ENTRADA_MANUAL" | "AJUSTE_INVENTARIO";
 
@@ -18,9 +22,12 @@ type StockMovementDialogProps = {
   product: Product | null;
   cantidad: string;
   motivo: string;
+  ubicacion: string;
+  locations: InventoryLocation[];
   saving: boolean;
   onCantidadChange: (value: string) => void;
   onMotivoChange: (value: string) => void;
+  onUbicacionChange: (value: string) => void;
   onClose: () => void;
   onConfirm: () => void;
 };
@@ -31,9 +38,12 @@ export function StockMovementDialog({
   product,
   cantidad,
   motivo,
+  ubicacion,
+  locations,
   saving,
   onCantidadChange,
   onMotivoChange,
+  onUbicacionChange,
   onClose,
   onConfirm,
 }: StockMovementDialogProps) {
@@ -58,6 +68,22 @@ export function StockMovementDialog({
             fullWidth
             disabled
           />
+
+          <TextField
+            label="Ubicación física"
+            select
+            value={ubicacion}
+            onChange={(event) => onUbicacionChange(event.target.value)}
+            fullWidth
+            required
+            helperText="El movimiento actualizará el saldo de esta ubicación."
+          >
+            {locations.map((location) => (
+              <MenuItem key={location.id} value={String(location.id)}>
+                {location.name} — {location.location_type_display}
+              </MenuItem>
+            ))}
+          </TextField>
 
           <TextField
             label={
@@ -92,7 +118,7 @@ export function StockMovementDialog({
         <Button
           variant="contained"
           onClick={onConfirm}
-          disabled={saving || !cantidad || !motivo.trim()}
+          disabled={saving || !cantidad || !motivo.trim() || !ubicacion}
         >
           {saving ? "Guardando..." : "Registrar Kardex"}
         </Button>

@@ -77,6 +77,51 @@ página sin modificar la experiencia de los demás usuarios.
   motivo y evidencia/referencia cuando corresponda.
 - Migración explícita del stock existente a una ubicación inicial.
 
+Estado actual: incremento implementado y verificado en la rama de trabajo.
+
+- Se incorporaron ubicaciones de tipo Bodega, Domicilio bajo custodia,
+  Tránsito, Cliente/faena y Otra ubicación.
+- El domicilio bajo custodia exige un colaborador responsable y evita guardar
+  una dirección residencial completa; sólo conserva ciudad/comuna y una
+  referencia operativa.
+- Cada movimiento Kardex nuevo exige ubicación y actualiza, dentro de la misma
+  transacción, el stock total y el saldo físico por ubicación.
+- La suma de saldos se valida contra `stock_actual` antes y después de cada
+  operación. Los saldos no admiten escritura directa.
+- Los traslados son registros inmutables con responsable, fecha, motivo,
+  referencia/evidencia e idempotencia. Mueven saldo entre ubicaciones sin
+  modificar el stock total ni crear movimientos Kardex ficticios.
+- Una transferencia que involucra Domicilio bajo custodia o Cliente/faena
+  exige referencia o evidencia.
+- El stock anterior a esta función se asigna a
+  **Stock histórico por regularizar**, de tipo Otra ubicación. Esto conserva
+  la verdad histórica y evita inventar una bodega que no fue informada.
+- Las recepciones pendientes antiguas se migran al mismo destino técnico; las
+  nuevas deben seleccionar ubicación de recepción desde la plataforma.
+- La pantalla de Inventario permite administrar ubicaciones, revisar el stock
+  distribuido con paginación, trasladar desde el saldo elegido y consultar
+  los traslados recientes.
+- Los perfiles de consulta pueden leer ubicaciones, saldos y traslados. Crear,
+  editar o archivar ubicaciones y trasladar stock requiere las capacidades
+  administrativas específicas ya definidas en backend.
+- Auditoría presenta el producto mediante modelo, Código SAP y categoría, y
+  explica la ruta, cantidad, responsable, motivo, evidencia y stock total
+  inalterado en lenguaje cotidiano. Los metadatos técnicos se conservan para
+  perfiles autorizados.
+
+Validación automatizada del incremento:
+
+- Migración regresiva desde el esquema anterior con stock y pendientes.
+- Integridad Kardex/saldo/stock total.
+- Traslado atómico, stock insuficiente, evidencia sensible e inmutabilidad.
+- Reintentos idempotentes y permisos de sólo lectura.
+- Contrato OpenAPI, migraciones sin cambios pendientes y `manage.py check`.
+- Suite backend completa, lint, pruebas y build de producción frontend.
+
+La ubicación técnica de regularización no representa una bodega real. Antes
+de la aceptación operativa, un administrador debe crear las ubicaciones reales
+y trasladar cada saldo histórico hacia su ubicación verificada.
+
 ### 3. Por Recibir
 
 - Ubicación destino y referencias futuras sin aumentar stock al crear.

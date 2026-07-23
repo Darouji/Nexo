@@ -1,0 +1,411 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import { getApiErrorMessage } from "../../../services/api";
+import { getStoredAccess } from "../../../services/authService";
+import { fetchCollaborators } from "../../../services/collaboratorService";
+import {
+  archiveInventoryLocation,
+  createInventoryLocation,
+  createInventoryTransfer,
+  fetchInventoryLocations,
+  fetchInventoryTransfers,
+  fetchProductLocationBalances,
+  fetchProductLocationBalancesPage,
+  updateInventoryLocation,
+  type InventoryLocation,
+  type InventoryLocationType,
+  type InventoryTransfer,
+  type ProductLocationBalance,
+} from "../../../services/inventoryService";
+import type { Collaborator } from "../../../services/collaboratorService";
+
+export type LocationFormState = {
+  open: boolean;
+  editing: InventoryLocation | null;
+  name: string;
+  locationType: InventoryLocationType;
+  custodian: string;
+  city: string;
+  description: string;
+};
+
+export type TransferFormState = {
+  open: boolean;
+  product: string;
+  originLocation: string;
+  destinationLocation: string;
+  quantity: string;
+  reason: string;
+  evidenceReference: string;
+  idempotencyKey: string;
+};
+
+export type ArchiveLocationState = {
+  location: InventoryLocation | null;
+  reason: string;
+};
+
+export const emptyLocationForm: LocationFormState = {
+  open: false,
+  editing: null,
+  name: "",
+  locationType: "BODEGA",
+  custodian: "",
+  city: "",
+  description: "",
+};
+
+export const emptyTransferForm: TransferFormState = {
+  open: false,
+  product: "",
+  originLocation: "",
+  destinationLocation: "",
+  quantity: "",
+  reason: "",
+  evidenceReference: "",
+  idempotencyKey: "",
+};
+
+export const emptyArchiveLocation: ArchiveLocationState = {
+  location: null,
+  reason: "",
+};
+
+function createIdempotencyKey() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `transfer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+type ControllerOptions = {
+  onError: (message: string) => void;
+  onSuccess: (message: string) => void;
+  onInventoryChanged?: () => void | Promise<void>;
+  onLocationsChanged?: () => void | Promise<void>;
+};
+
+export function useInventoryLocationsController({
+  onError,
+  onSuccess,
+  onInventoryChanged,
+  onLocationsChanged,
+}: ControllerOptions) {
+  const [locations, setLocations] = useState<InventoryLocation[]>([]);
+  const [balances, setBalances] = useState<ProductLocationBalance[]>([]);
+  const [balanceCount, setBalanceCount] = useState(0);
+  const [balancePage, setBalancePage] = useState(0);
+  const [balancePageSize, setBalancePageSize] = useState(25);
+  const [transferBalances, setTransferBalances] = useState<
+    ProductLocationBalance[]
+  >([]);
+  const [transfers, setTransfers] = useState<InventoryTransfer[]>([]);
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [locationForm, setLocationForm] =
+    useState<LocationFormState>(emptyLocationForm);
+  const [transferForm, setTransferForm] =
+    useState<TransferFormState>(emptyTransferForm);
+  const [archiveState, setArchiveState] =
+    useState<ArchiveLocationState>(emptyArchiveLocation);
+
+  const access = getStoredAccess();
+  const canManageLocations = Boolean(
+    access?.capabilities?.["inventory.manage_locations"],
+  );
+  const canTransferStock = Boolean(
+    access?.capabilities?.["inventory.transfer_stock"],
+  );
+
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [nextLocations, nextBalancesPage, nextTransfers] = await Promise.all([
+        fetchInventoryLocations(),
+        fetchProductLocationBalancesPage({
+          positiveOnly: true,
+          page: balancePage + 1,
+          pageSize: balancePageSize,
+        }),
+        fetchInventoryTransfers(),
+      ]);
+      setLocations(nextLocations);
+      setBalances(nextBalancesPage.results);
+      setBalanceCount(nextBalancesPage.count);
+      setTransfers(nextTransfers);
+      onError("");
+    } catch (error: unknown) {
+      onError(
+        getApiErrorMessage(
+          error,
+          "No se pudieron cargar las ubicaciones de inventario.",
+        ),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [balancePage, balancePageSize, onError]);
+
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([
+      fetchInventoryLocations(),
+      fetchProductLocationBalancesPage({
+        positiveOnly: true,
+        page: 1,
+        pageSize: 25,
+      }),
+      fetchInventoryTransfers(),
+    ])
+      .then(([nextLocations, nextBalancesPage, nextTransfers]) => {
+        if (!active) {
+          return;
+        }
+        setLocations(nextLocations);
+        setBalances(nextBalancesPage.results);
+        setBalanceCount(nextBalancesPage.count);
+        setTransfers(nextTransfers);
+        onError("");
+      })
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+        onError(
+          getApiErrorMessage(
+            error,
+            "No se pudieron cargar las ubicaciones de inventario.",
+          ),
+        );
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [onError]);
+
+  const activeLocations = useMemo(
+    () => locations.filter((location) => location.status === "ACTIVO"),
+    [locations],
+  );
+
+  const changeBalancePagination = async (
+    nextPage: number,
+    nextPageSize: number,
+  ) => {
+    try {
+      setLoading(true);
+      const pageData = await fetchProductLocationBalancesPage({
+        positiveOnly: true,
+        page: nextPage + 1,
+        pageSize: nextPageSize,
+      });
+      setBalancePage(nextPage);
+      setBalancePageSize(nextPageSize);
+      setBalances(pageData.results);
+      setBalanceCount(pageData.count);
+    } catch (error: unknown) {
+      onError(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const originBalances = useMemo(() => {
+    const productId = Number(transferForm.product);
+    return transferBalances.filter(
+      (balance) => balance.product === productId && balance.quantity > 0,
+    );
+  }, [transferBalances, transferForm.product]);
+
+  const loadCollaborators = useCallback(async () => {
+    if (collaborators.length > 0) {
+      return;
+    }
+    try {
+      const data = await fetchCollaborators({ status: "ACTIVO" });
+      setCollaborators(data);
+    } catch (error: unknown) {
+      onError(
+        getApiErrorMessage(
+          error,
+          "No se pudieron cargar los colaboradores disponibles.",
+        ),
+      );
+    }
+  }, [collaborators.length, onError]);
+
+  const openCreateLocation = () => {
+    setLocationForm({ ...emptyLocationForm, open: true });
+    void loadCollaborators();
+  };
+
+  const openEditLocation = (location: InventoryLocation) => {
+    setLocationForm({
+      open: true,
+      editing: location,
+      name: location.name,
+      locationType: location.location_type,
+      custodian: location.custodian ? String(location.custodian) : "",
+      city: location.city,
+      description: location.description,
+    });
+    void loadCollaborators();
+  };
+
+  const closeLocationForm = () => setLocationForm(emptyLocationForm);
+
+  const saveLocation = async () => {
+    try {
+      setSaving(true);
+      onError("");
+      const payload = {
+        name: locationForm.name,
+        location_type: locationForm.locationType,
+        custodian:
+          locationForm.locationType === "DOMICILIO_CUSTODIA" &&
+          locationForm.custodian
+            ? Number(locationForm.custodian)
+            : null,
+        city: locationForm.city,
+        description: locationForm.description,
+      };
+      if (locationForm.editing) {
+        await updateInventoryLocation(locationForm.editing.id, payload);
+        onSuccess("Ubicación actualizada correctamente.");
+      } else {
+        await createInventoryLocation(payload);
+        onSuccess("Ubicación creada correctamente.");
+      }
+      closeLocationForm();
+      await loadData();
+      await onLocationsChanged?.();
+    } catch (error: unknown) {
+      onError(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const requestArchiveLocation = (location: InventoryLocation) => {
+    setArchiveState({ location, reason: "" });
+  };
+
+  const archiveLocation = async () => {
+    if (!archiveState.location) {
+      return;
+    }
+    try {
+      setSaving(true);
+      onError("");
+      await archiveInventoryLocation(
+        archiveState.location.id,
+        archiveState.reason,
+      );
+      setArchiveState(emptyArchiveLocation);
+      onSuccess("Ubicación archivada correctamente.");
+      await loadData();
+      await onLocationsChanged?.();
+    } catch (error: unknown) {
+      onError(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openTransfer = (
+    productId: number,
+    originLocationId: number,
+  ) => {
+    setTransferForm({
+      ...emptyTransferForm,
+      open: true,
+      product: productId ? String(productId) : "",
+      originLocation: "",
+      idempotencyKey: createIdempotencyKey(),
+    });
+    void fetchProductLocationBalances({
+      product: productId,
+      positiveOnly: true,
+    })
+      .then((nextBalances) => {
+        setTransferBalances(nextBalances);
+        setTransferForm((current) => ({
+          ...current,
+          originLocation: String(originLocationId),
+        }));
+      })
+      .catch((error: unknown) => onError(getApiErrorMessage(error)));
+  };
+
+  const closeTransfer = () => {
+    setTransferForm(emptyTransferForm);
+    setTransferBalances([]);
+  };
+
+  const saveTransfer = async () => {
+    try {
+      setSaving(true);
+      onError("");
+      await createInventoryTransfer(
+        {
+          product: Number(transferForm.product),
+          origin_location: Number(transferForm.originLocation),
+          destination_location: Number(transferForm.destinationLocation),
+          quantity: Number(transferForm.quantity),
+          reason: transferForm.reason,
+          evidence_reference: transferForm.evidenceReference,
+        },
+        transferForm.idempotencyKey,
+      );
+      closeTransfer();
+      onSuccess("Transferencia registrada sin alterar el stock total.");
+      await loadData();
+      await onInventoryChanged?.();
+    } catch (error: unknown) {
+      onError(getApiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return {
+    locations,
+    activeLocations,
+    balances,
+    balanceCount,
+    balancePage,
+    balancePageSize,
+    changeBalancePagination,
+    transfers,
+    collaborators,
+    originBalances,
+    loading,
+    saving,
+    canManageLocations,
+    canTransferStock,
+    locationForm,
+    setLocationForm,
+    transferForm,
+    setTransferForm,
+    archiveState,
+    setArchiveState,
+    loadData,
+    openCreateLocation,
+    openEditLocation,
+    closeLocationForm,
+    saveLocation,
+    requestArchiveLocation,
+    archiveLocation,
+    openTransfer,
+    closeTransfer,
+    saveTransfer,
+  };
+}

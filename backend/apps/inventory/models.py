@@ -3,11 +3,13 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models import AuditOrigin, BaseModel, BaseStatus
 from apps.core.utils import normalize_text
 
 from .kardex_context import is_kardex_write_authorized
+from .location_stock_context import is_location_stock_write_authorized
 from .stock_context import is_stock_write_authorized
 
 
@@ -40,6 +42,17 @@ class PendientePorRecibirStatus(models.TextChoices):
     RECIBIDA = "RECIBIDA", "Recibida"
     CANCELADA = "CANCELADA", "Cancelada"
     CERRADA_PARCIAL = "CERRADA_PARCIAL", "Cerrada parcial"
+
+
+class InventoryLocationType(models.TextChoices):
+    BODEGA = "BODEGA", "Bodega"
+    DOMICILIO_CUSTODIA = (
+        "DOMICILIO_CUSTODIA",
+        "Domicilio bajo custodia",
+    )
+    TRANSITO = "TRANSITO", "Tránsito"
+    CLIENTE_FAENA = "CLIENTE_FAENA", "Cliente o faena"
+    OTRO = "OTRO", "Otra ubicación"
 
 
 ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS = (
@@ -746,12 +759,367 @@ class Producto(BaseModel):
             ).update(has_historical_usage=True)
 
 
+class InventoryLocation(BaseModel):
+    name = models.CharField(max_length=160, verbose_name="Nombre de ubicación")
+    name_normalized = models.CharField(
+        max_length=160,
+        blank=True,
+        db_index=True,
+        verbose_name="Nombre normalizado",
+    )
+    location_type = models.CharField(
+        max_length=30,
+        choices=InventoryLocationType.choices,
+        db_index=True,
+        verbose_name="Tipo de ubicación",
+    )
+    custodian = models.ForeignKey(
+        "collaborators.Collaborator",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="inventory_locations_in_custody",
+        verbose_name="Custodio",
+    )
+    city = models.CharField(
+        max_length=120,
+        blank=True,
+        verbose_name="Ciudad o comuna",
+    )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Referencia operativa",
+    )
+    is_regularization = models.BooleanField(
+        default=False,
+        editable=False,
+        verbose_name="Ubicación de regularización",
+    )
+
+    class Meta:
+        verbose_name = "Ubicación de inventario"
+        verbose_name_plural = "Ubicaciones de inventario"
+        ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["name_normalized"],
+                condition=~models.Q(name_normalized=""),
+                name="unique_inventory_location_normalized_name",
+            ),
+            models.UniqueConstraint(
+                fields=["is_regularization"],
+                condition=models.Q(is_regularization=True),
+                name="unique_inventory_regularization_location",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["location_type", "status"]),
+            models.Index(fields=["custodian", "status"]),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_audit_target_snapshot(self):
+        identifiers = [
+            {
+                "key": "ubicacion",
+                "label": "Ubicación",
+                "value": self.name,
+            },
+            {
+                "key": "tipo_ubicacion",
+                "label": "Tipo",
+                "value": self.get_location_type_display(),
+            },
+        ]
+        if self.custodian_id:
+            identifiers.append(
+                {
+                    "key": "custodio",
+                    "label": "Custodio",
+                    "value": self.custodian.full_name,
+                }
+            )
+
+        return {
+            "entity_label": "Ubicación de inventario",
+            "display_name": self.name,
+            "internal_id": self.pk,
+            "identifiers": identifiers,
+        }
+
+    def clean(self):
+        super().clean()
+        self.name = str(self.name or "").strip()
+        self.city = str(self.city or "").strip()
+        self.description = str(self.description or "").strip()
+
+        if not self.name:
+            raise ValidationError({"name": "El nombre de la ubicación es obligatorio."})
+
+        if self.location_type == InventoryLocationType.DOMICILIO_CUSTODIA:
+            if not self.custodian_id:
+                raise ValidationError(
+                    {
+                        "custodian": (
+                            "Un domicilio bajo custodia debe indicar al "
+                            "colaborador responsable."
+                        )
+                    }
+                )
+        elif self.custodian_id:
+            raise ValidationError(
+                {
+                    "custodian": (
+                        "El custodio sólo corresponde a una ubicación de tipo "
+                        "domicilio bajo custodia."
+                    )
+                }
+            )
+
+        if self.is_regularization and self.location_type != InventoryLocationType.OTRO:
+            raise ValidationError(
+                {
+                    "location_type": (
+                        "La ubicación histórica de regularización debe conservar "
+                        "el tipo Otra ubicación."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        self.name = str(self.name or "").strip()
+        self.name_normalized = normalize_text(self.name)
+        self.full_clean()
+
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            normalized_fields = set(update_fields)
+            if "name" in normalized_fields:
+                normalized_fields.add("name_normalized")
+            kwargs["update_fields"] = list(normalized_fields)
+
+        super().save(*args, **kwargs)
+
+
+class ProductLocationBalanceQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        if "quantity" in kwargs and not is_location_stock_write_authorized():
+            raise ValidationError(
+                {
+                    "quantity": (
+                        "Los saldos por ubicación sólo pueden modificarse "
+                        "mediante servicios oficiales de inventario."
+                    )
+                }
+            )
+        return super().update(**kwargs)
+
+
+class ProductLocationBalance(models.Model):
+    objects = ProductLocationBalanceQuerySet.as_manager()
+
+    product = models.ForeignKey(
+        Producto,
+        on_delete=models.PROTECT,
+        related_name="location_balances",
+        verbose_name="Producto",
+    )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="product_balances",
+        verbose_name="Ubicación",
+    )
+    quantity = models.PositiveIntegerField(default=0, verbose_name="Cantidad")
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="Fecha de creación",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="Última actualización",
+    )
+
+    class Meta:
+        verbose_name = "Saldo de producto por ubicación"
+        verbose_name_plural = "Saldos de producto por ubicación"
+        ordering = ["product", "location"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product", "location"],
+                name="unique_product_location_balance",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity__gte=0),
+                name="product_location_balance_non_negative",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["location", "product"]),
+            models.Index(fields=["product", "quantity"]),
+        ]
+
+    def __str__(self):
+        return f"{self.product} · {self.location}: {self.quantity}"
+
+    def save(self, *args, **kwargs):
+        if not is_location_stock_write_authorized():
+            raise ValidationError(
+                (
+                    "Los saldos por ubicación sólo pueden guardarse mediante "
+                    "los servicios oficiales de inventario."
+                )
+            )
+        super().save(*args, **kwargs)
+
+
+class InventoryTransfer(BaseModel):
+    product = models.ForeignKey(
+        Producto,
+        on_delete=models.PROTECT,
+        related_name="location_transfers",
+        verbose_name="Producto",
+    )
+    origin_location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="outgoing_transfers",
+        verbose_name="Ubicación de origen",
+    )
+    destination_location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="incoming_transfers",
+        verbose_name="Ubicación de destino",
+    )
+    quantity = models.PositiveIntegerField(verbose_name="Cantidad transferida")
+    responsible = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="responsible_inventory_transfers",
+        verbose_name="Responsable operativo",
+    )
+    reason = models.CharField(max_length=255, verbose_name="Motivo")
+    evidence_reference = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name="Referencia o evidencia",
+    )
+    idempotency_key = models.CharField(
+        max_length=100,
+        unique=True,
+        editable=False,
+        verbose_name="Clave de idempotencia",
+    )
+    transferred_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name="Fecha de transferencia",
+    )
+
+    class Meta:
+        verbose_name = "Transferencia de inventario"
+        verbose_name_plural = "Transferencias de inventario"
+        ordering = ["-transferred_at", "-id"]
+        indexes = [
+            models.Index(fields=["product", "transferred_at"]),
+            models.Index(fields=["origin_location", "transferred_at"]),
+            models.Index(fields=["destination_location", "transferred_at"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.product.modelo}: {self.origin_location.name} → "
+            f"{self.destination_location.name} ({self.quantity})"
+        )
+
+    def get_audit_target_snapshot(self):
+        return {
+            "entity_label": "Transferencia de inventario",
+            "display_name": f"Transferencia de {self.product.modelo}",
+            "internal_id": self.pk,
+            "identifiers": build_product_audit_identifiers(
+                modelo=self.product.modelo,
+                codigo_sap=self.product.codigo_sap,
+                categoria=self.product.categoria.name,
+            ),
+        }
+
+    def clean(self):
+        super().clean()
+        self.reason = str(self.reason or "").strip()
+        self.evidence_reference = str(self.evidence_reference or "").strip()
+        self.idempotency_key = str(self.idempotency_key or "").strip()
+
+        if not self.product_id:
+            raise ValidationError({"product": "El producto es obligatorio."})
+        if not self.origin_location_id or not self.destination_location_id:
+            raise ValidationError(
+                {"destination_location": "El origen y destino son obligatorios."}
+            )
+        if self.origin_location_id == self.destination_location_id:
+            raise ValidationError(
+                {
+                    "destination_location": (
+                        "La ubicación de destino debe ser diferente del origen."
+                    )
+                }
+            )
+        if self.quantity <= 0:
+            raise ValidationError({"quantity": "La cantidad debe ser positiva."})
+        if not self.reason:
+            raise ValidationError({"reason": "El motivo es obligatorio."})
+        if not self.idempotency_key:
+            raise ValidationError(
+                {"idempotency_key": "La clave de idempotencia es obligatoria."}
+            )
+
+        sensitive_types = {
+            InventoryLocationType.DOMICILIO_CUSTODIA,
+            InventoryLocationType.CLIENTE_FAENA,
+        }
+        if (
+            self.origin_location.location_type in sensitive_types
+            or self.destination_location.location_type in sensitive_types
+        ) and not self.evidence_reference:
+            raise ValidationError(
+                {
+                    "evidence_reference": (
+                        "Debe indicar una referencia o evidencia cuando la "
+                        "transferencia involucra custodia o cliente/faena."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError(
+                "Las transferencias de inventario son inmutables."
+            )
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            "Las transferencias no se eliminan; se corrigen con otra transferencia."
+        )
+
+
 class PendientePorRecibir(BaseModel):
     producto = models.ForeignKey(
         Producto,
         on_delete=models.PROTECT,
         related_name="pendientes_por_recibir",
         verbose_name="Producto",
+    )
+    destination_location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        related_name="pending_receipts",
+        verbose_name="Ubicación de destino",
     )
     cantidad_original = models.PositiveIntegerField(
         verbose_name="Cantidad original",
@@ -922,6 +1290,22 @@ class MovimientoKardex(BaseModel):
         related_name="kardex_movements",
         verbose_name="Operador",
     )
+    location = models.ForeignKey(
+        InventoryLocation,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="kardex_movements",
+        verbose_name="Ubicación",
+        help_text="Vacío únicamente para movimientos históricos no regularizados.",
+    )
+    location_name_snapshot = models.CharField(
+        max_length=160,
+        blank=True,
+        default="",
+        editable=False,
+        verbose_name="Ubicación al registrar",
+    )
 
     cantidad = models.IntegerField(
         verbose_name="Cantidad del movimiento",
@@ -982,6 +1366,7 @@ class MovimientoKardex(BaseModel):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["producto", "created_at"]),
+            models.Index(fields=["location", "created_at"]),
             models.Index(fields=["movement_type", "created_at"]),
             models.Index(fields=["origin", "created_at"]),
             models.Index(fields=["reference_content_type", "reference_object_id"]),
@@ -1026,6 +1411,11 @@ class MovimientoKardex(BaseModel):
                         "que no controla stock."
                     )
                 }
+            )
+
+        if self._state.adding and not self.location_id:
+            raise ValidationError(
+                {"location": "Los movimientos nuevos deben indicar una ubicación."}
             )
 
         if self.status != BaseStatus.ACTIVO:
@@ -1107,6 +1497,9 @@ class MovimientoKardex(BaseModel):
 
             if not self.producto_codigo_sap_snapshot:
                 self.producto_codigo_sap_snapshot = producto.codigo_sap
+
+        if self.location_id and not self.location_name_snapshot:
+            self.location_name_snapshot = self.location.name
 
         self.full_clean()
         super().save(*args, **kwargs)

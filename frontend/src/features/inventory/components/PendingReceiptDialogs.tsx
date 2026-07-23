@@ -6,11 +6,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
   Stack,
   TextField,
 } from "@mui/material";
 
 import type {
+  InventoryLocation,
   PendingReceipt,
   Product,
 } from "../../../services/inventoryService";
@@ -23,6 +25,8 @@ type PendingReceiptDialogsProps = {
   createCantidad: string;
   createReferencia: string;
   createMotivo: string;
+  createUbicacionDestino: string;
+  locations: InventoryLocation[];
 
   operationOpen: boolean;
   operationMode: PendingReceiptOperationMode;
@@ -35,6 +39,7 @@ type PendingReceiptDialogsProps = {
   onCreateCantidadChange: (value: string) => void;
   onCreateReferenciaChange: (value: string) => void;
   onCreateMotivoChange: (value: string) => void;
+  onCreateUbicacionDestinoChange: (value: string) => void;
   onCreateClose: () => void;
   onCreateConfirm: () => void;
 
@@ -50,6 +55,8 @@ export function PendingReceiptDialogs({
   createCantidad,
   createReferencia,
   createMotivo,
+  createUbicacionDestino,
+  locations,
   operationOpen,
   operationMode,
   operationPendingReceipt,
@@ -59,6 +66,7 @@ export function PendingReceiptDialogs({
   onCreateCantidadChange,
   onCreateReferenciaChange,
   onCreateMotivoChange,
+  onCreateUbicacionDestinoChange,
   onCreateClose,
   onCreateConfirm,
   onOperationCantidadChange,
@@ -91,6 +99,24 @@ export function PendingReceiptDialogs({
               fullWidth
               disabled
             />
+
+            <TextField
+              label="Ubicación de recepción"
+              select
+              value={createUbicacionDestino}
+              onChange={(event) =>
+                onCreateUbicacionDestinoChange(event.target.value)
+              }
+              fullWidth
+              required
+              helperText="Al confirmar la recepción, el stock ingresará en esta ubicación."
+            >
+              {locations.map((location) => (
+                <MenuItem key={location.id} value={String(location.id)}>
+                  {location.name} — {location.location_type_display}
+                </MenuItem>
+              ))}
+            </TextField>
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <TextField
@@ -135,6 +161,7 @@ export function PendingReceiptDialogs({
             disabled={
               saving ||
               !createProduct ||
+              !createUbicacionDestino ||
               parseInteger(createCantidad) <= 0 ||
               (!createReferencia.trim() && !createMotivo.trim())
             }

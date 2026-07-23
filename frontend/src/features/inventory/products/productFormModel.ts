@@ -16,6 +16,7 @@ export type ProductFormState = {
   controla_stock: boolean;
   initial_stock: string;
   initial_stock_motivo: string;
+  initial_location: string;
 };
 
 export const emptyProductForm: ProductFormState = {
@@ -30,6 +31,7 @@ export const emptyProductForm: ProductFormState = {
   controla_stock: true,
   initial_stock: "0",
   initial_stock_motivo: "Stock inicial registrado desde frontend.",
+  initial_location: "",
 };
 
 export const productOriginLabels: Record<ProductOrigin, string> = {

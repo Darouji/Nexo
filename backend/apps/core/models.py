@@ -27,6 +27,7 @@ class AuditAction(models.TextChoices):
     REEMPLAZAR_DOCUMENTO = "REEMPLAZAR_DOCUMENTO", "Reemplazar documento"
     CAMBIAR_ESTADO = "CAMBIAR_ESTADO", "Cambiar estado"
     AJUSTE_INVENTARIO = "AJUSTE_INVENTARIO", "Ajuste inventario"
+    TRASLADAR = "TRASLADAR", "Trasladar"
     LOGIN = "LOGIN", "Inicio de sesión"
     LOGOUT = "LOGOUT", "Cierre de sesión"
     ELIMINAR = "ELIMINAR", "Eliminar"

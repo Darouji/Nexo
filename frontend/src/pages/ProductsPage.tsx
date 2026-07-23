@@ -9,6 +9,7 @@ import { colors } from "../theme/colors";
 import { getAvailableProductCategoryOptions } from "../features/inventory/categories/categoryOptions";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
+import { InventoryLocationsSection } from "../features/inventory/locations/InventoryLocationsSection";
 import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
 import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
 import { ProductActionMenus } from "../features/inventory/components/ProductActionMenus";
@@ -41,6 +42,7 @@ import {
   createPendingReceipt,
   createProduct,
   fetchCategories,
+  fetchInventoryLocations,
   fetchInventorySummary,
   fetchKardexMovementsPage,
   fetchPendingReceiptsPage,
@@ -59,6 +61,7 @@ import type {
 import type {
   AuditOrigin,
   Category,
+  InventoryLocation,
   InventorySummary,
   KardexMovement,
   PendingReceipt,
@@ -150,6 +153,9 @@ export function ProductsPage() {
     emptyInventorySummary,
   );
   const [categorias, setCategorias] = useState<Category[]>([]);
+  const [inventoryLocations, setInventoryLocations] = useState<
+    InventoryLocation[]
+  >([]);
   const [savingProduct, setSavingProduct] = useState(false);
   const [savingMovement, setSavingMovement] = useState(false);
   const [productDialogOpen, setProductDialogOpen] = useState(false);
@@ -465,9 +471,15 @@ export function ProductsPage() {
         page_size: defaultPendingReceiptPaginationModel.pageSize,
       }),
       fetchInventorySummary(),
+      fetchInventoryLocations({ status: "ACTIVO" }),
     ])
       .then(
-        ([categoriesData, pendingReceiptsData, summaryData]) => {
+        ([
+          categoriesData,
+          pendingReceiptsData,
+          summaryData,
+          locationsData,
+        ]) => {
           if (!isMounted) {
             return;
           }
@@ -476,6 +488,7 @@ export function ProductsPage() {
           setPendingReceipts(pendingReceiptsData.results);
           setPendingReceiptRowCount(pendingReceiptsData.count);
           setInventorySummary(summaryData);
+          setInventoryLocations(locationsData);
           setErrorMessage("");
         },
       )
@@ -501,7 +514,13 @@ export function ProductsPage() {
 
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
-    setProductForm(emptyProductForm);
+    setProductForm({
+      ...emptyProductForm,
+      initial_location:
+        inventoryLocations.length === 1
+          ? String(inventoryLocations[0].id)
+          : "",
+    });
     setProductDialogOpen(true);
     setErrorMessage("");
     setSuccessMessage("");
@@ -521,6 +540,7 @@ export function ProductsPage() {
       controla_stock: product.controla_stock,
       initial_stock: "0",
       initial_stock_motivo: "Stock inicial registrado desde frontend.",
+      initial_location: "",
     });
     setProductDialogOpen(true);
     setErrorMessage("");
@@ -611,6 +631,10 @@ export function ProductsPage() {
           motivo_stock_inicial:
             initialStock > 0
               ? productForm.initial_stock_motivo.trim()
+              : undefined,
+          ubicacion_stock_inicial:
+            initialStock > 0
+              ? Number(productForm.initial_location)
               : undefined,
         });
 
@@ -900,6 +924,10 @@ export function ProductsPage() {
         mode === "ENTRADA_MANUAL"
           ? "Entrada manual de stock."
           : "Ajuste autorizado de inventario.",
+      ubicacion:
+        inventoryLocations.length === 1
+          ? String(inventoryLocations[0].id)
+          : "",
     });
     setErrorMessage("");
     setSuccessMessage("");
@@ -1072,6 +1100,10 @@ export function ProductsPage() {
       cantidad: "",
       referencia: "",
       motivo: "",
+      ubicacionDestino:
+        inventoryLocations.length === 1
+          ? String(inventoryLocations[0].id)
+          : "",
     });
     setErrorMessage("");
     setSuccessMessage("");
@@ -1118,6 +1150,11 @@ export function ProductsPage() {
       return;
     }
 
+    if (!pendingReceiptCreateDialog.ubicacionDestino) {
+      setErrorMessage("Debe indicar la ubicación donde se recibirá el stock.");
+      return;
+    }
+
     if (
       !pendingReceiptCreateDialog.referencia.trim() &&
       !pendingReceiptCreateDialog.motivo.trim()
@@ -1133,6 +1170,9 @@ export function ProductsPage() {
 
       await createPendingReceipt({
         producto: product.id,
+        ubicacion_destino: Number(
+          pendingReceiptCreateDialog.ubicacionDestino,
+        ),
         cantidad,
         referencia: pendingReceiptCreateDialog.referencia,
         motivo: pendingReceiptCreateDialog.motivo,
@@ -1242,6 +1282,11 @@ export function ProductsPage() {
       return;
     }
 
+    if (!movementDialog.ubicacion) {
+      setErrorMessage("Debe indicar la ubicación física del movimiento.");
+      return;
+    }
+
     try {
       setSavingMovement(true);
       setErrorMessage("");
@@ -1253,11 +1298,13 @@ export function ProductsPage() {
         await registerManualStockEntry(movementDialog.product.id, {
           cantidad,
           motivo: movementDialog.motivo.trim(),
+          ubicacion: Number(movementDialog.ubicacion),
         });
       } else {
         await registerInventoryAdjustment(movementDialog.product.id, {
           cantidad,
           motivo: movementDialog.motivo.trim(),
+          ubicacion: Number(movementDialog.ubicacion),
         });
       }
 
@@ -1385,6 +1432,15 @@ export function ProductsPage() {
     }
   };
 
+  const loadActiveInventoryLocations = async () => {
+    try {
+      const locations = await fetchInventoryLocations({ status: "ACTIVO" });
+      setInventoryLocations(locations);
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error));
+    }
+  };
+
   const canExportOfficial = Boolean(
     getStoredAccess()?.permissions?.grid_labels?.can_update,
   );
@@ -1438,6 +1494,7 @@ export function ProductsPage() {
               onClick={() => {
                 loadFirstProductPage();
                 void loadInventorySummary();
+                void loadActiveInventoryLocations();
                 loadPendingReceipts({
                   page: pendingReceiptPaginationModel.page,
                   pageSize: pendingReceiptPaginationModel.pageSize,
@@ -1509,6 +1566,19 @@ export function ProductsPage() {
         }
       />
 
+      <InventoryLocationsSection
+        onError={setErrorMessage}
+        onSuccess={setSuccessMessage}
+        onLocationsChanged={loadActiveInventoryLocations}
+        onInventoryChanged={async () => {
+          await Promise.all([
+            loadProducts(searchTerm),
+            loadInventorySummary(),
+            refreshGlobalKardexIfLoaded(),
+          ]);
+        }}
+      />
+
       <PendingReceiptsSection
         sectionRef={pendingReceiptsSectionRef}
         pendingReceipts={pendingReceipts}
@@ -1559,6 +1629,7 @@ export function ProductsPage() {
         editingProduct={editingProduct}
         productForm={productForm}
         categories={categorias}
+        locations={inventoryLocations}
         savingProduct={savingProduct}
         onFormChange={setProductForm}
         onClose={handleCloseProductDialog}
@@ -1571,6 +1642,10 @@ export function ProductsPage() {
         createCantidad={pendingReceiptCreateDialog.cantidad}
         createReferencia={pendingReceiptCreateDialog.referencia}
         createMotivo={pendingReceiptCreateDialog.motivo}
+        createUbicacionDestino={
+          pendingReceiptCreateDialog.ubicacionDestino
+        }
+        locations={inventoryLocations}
         operationOpen={pendingReceiptOperationDialog.open}
         operationMode={pendingReceiptOperationDialog.mode}
         operationPendingReceipt={pendingReceiptOperationDialog.pendingReceipt}
@@ -1593,6 +1668,12 @@ export function ProductsPage() {
           setPendingReceiptCreateDialog((current) => ({
             ...current,
             motivo,
+          }))
+        }
+        onCreateUbicacionDestinoChange={(ubicacionDestino) =>
+          setPendingReceiptCreateDialog((current) => ({
+            ...current,
+            ubicacionDestino,
           }))
         }
         onCreateClose={closePendingReceiptCreateDialog}
@@ -1619,6 +1700,8 @@ export function ProductsPage() {
         product={movementDialog.product}
         cantidad={movementDialog.cantidad}
         motivo={movementDialog.motivo}
+        ubicacion={movementDialog.ubicacion}
+        locations={inventoryLocations}
         saving={savingMovement}
         onCantidadChange={(cantidad) =>
           setMovementDialog((current) => ({
@@ -1630,6 +1713,12 @@ export function ProductsPage() {
           setMovementDialog((current) => ({
             ...current,
             motivo,
+          }))
+        }
+        onUbicacionChange={(ubicacion) =>
+          setMovementDialog((current) => ({
+            ...current,
+            ubicacion,
           }))
         }
         onClose={closeMovementDialog}

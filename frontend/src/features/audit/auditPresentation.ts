@@ -18,6 +18,8 @@ const moduleLabels: Record<string, string> = {
 const modelLabels: Record<string, string> = {
   categoria: "Categoría",
   column_display_name: "Nombre de columna",
+  inventorylocation: "Ubicación de inventario",
+  inventorytransfer: "Traslado de inventario",
   movimientokardex: "Movimiento de Kardex",
   pendienteporrecibir: "Pendiente por recibir",
   producto: "Producto",
@@ -50,6 +52,8 @@ const apiResourceLabels: Record<string, string> = {
   categorias: "categoría",
   pendientes_por_recibir: "pendiente por recibir",
   productos: "producto",
+  transferencias: "traslado de inventario",
+  ubicaciones: "ubicación de inventario",
   usuarios: "usuario",
   ventas: "venta",
 };
@@ -389,8 +393,20 @@ export function getAuditNarrative(log: AuditLog) {
     const quantity = metadata.quantity ?? "sin cantidad";
     const stockBefore = metadata.stock_before ?? "sin dato";
     const stockAfter = metadata.stock_after ?? "sin dato";
+    const location = getMetadataString(metadata, "location_name");
 
-    return `${actor} registró ${movementType} por ${quantity} unidad(es) para ${subject}. El stock cambió de ${stockBefore} a ${stockAfter}.`;
+    return `${actor} registró ${movementType} por ${quantity} unidad(es) para ${subject}${location ? ` en “${location}”` : ""}. El stock cambió de ${stockBefore} a ${stockAfter}.`;
+  }
+
+  if (operation === "inventory_transfer") {
+    const quantity = metadata.quantity ?? "sin cantidad";
+    const originLocation =
+      metadata.origin_location_name ?? "ubicación no informada";
+    const destinationLocation =
+      metadata.destination_location_name ?? "ubicación no informada";
+    const evidence = getMetadataString(metadata, "evidence_reference");
+
+    return `${actor} trasladó ${quantity} unidad(es) de ${subject} desde “${originLocation}” hasta “${destinationLocation}”. El stock total permaneció en ${metadata.stock_total_unchanged ?? "el mismo valor"}.${evidence ? ` Evidencia: “${evidence}”.` : ""}`;
   }
 
   if (operation === "pending_receipt_create") {

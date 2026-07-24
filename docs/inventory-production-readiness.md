@@ -176,12 +176,14 @@ producción).
 
 ### 4. Kardex
 
-- Grilla transversal, filtros oficiales y exportación de vista/oficial.
+- Grilla transversal, filtros oficiales y exportación de resultados filtrados/oficial.
 - Snapshots históricos, zona America/Santiago y alcance autorizado.
 - Correcciones mediante reversa o ajuste autorizado; nunca update/delete.
 
-Estado actual: base de navegación y filtros transversales implementada; el
-cierre funcional completo de Kardex continúa pendiente.
+Estado actual: **cierre funcional completado**. Kardex dispone de filtros
+transversales y de columna aplicados antes de paginar, exportación de resultados
+filtrados y exportación oficial con permisos separados, límite de 5.000 filas,
+neutralización de fórmulas y auditoría de cada exportación.
 
 - Inventario se divide en rutas reales para **Catálogo**, **Por recibir** y
   **Ubicaciones de inventario**. La URL, el historial del navegador y la
@@ -204,7 +206,15 @@ cierre funcional completo de Kardex continúa pendiente.
 
 ### 5. Verificación de producción
 
-- Pruebas de permisos, concurrencia PostgreSQL, migraciones y exportaciones.
+Estado actual: **cierre funcional aprobado; endurecimiento de despliegue
+pendiente**. Se aprobaron 121 pruebas backend, 15 pruebas frontend, lint, build,
+`manage.py check`, control de migraciones y validación OpenAPI. También se
+revisaron las rutas de escritura de stock, la inmutabilidad de Kardex y los
+permisos de exportación.
+
+Pendiente antes del despliegue productivo final:
+
+- Pruebas de concurrencia PostgreSQL y exportaciones bajo carga.
 - Datos representativos: 5.000 productos y 50.000 movimientos.
 - Presupuestos p95, consultas y memoria documentados.
 - Revisión WCAG 2.2 AA aplicable y flujos de teclado.

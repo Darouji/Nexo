@@ -249,11 +249,11 @@ def record_product_export(*, request, mode, export_format, columns, row_count):
 def kardex_export_value(movement, field_key):
     if field_key == "created_at":
         return timezone.localtime(movement.created_at).strftime("%d-%m-%Y %H:%M:%S")
-    if field_key == "producto_modelo_snapshot":
+    if field_key == "producto_modelo_orden":
         return movement.producto_modelo_snapshot or movement.producto.modelo
-    if field_key == "producto_codigo_sap_snapshot":
+    if field_key == "producto_codigo_sap_orden":
         return movement.producto_codigo_sap_snapshot or movement.producto.codigo_sap
-    if field_key == "producto_categoria_snapshot":
+    if field_key == "producto_categoria_orden":
         return movement.producto_categoria_snapshot or movement.producto.categoria.name
     if field_key == "movement_type":
         return movement.get_movement_type_display()

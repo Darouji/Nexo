@@ -456,6 +456,11 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
   };
 
   const handleExportGlobalKardex = async (mode: "view" | "official") => {
+    if (globalKardexRowCount === 0) {
+      setErrorMessage("No hay resultados para exportar. Ajuste o elimine los filtros e inténtelo nuevamente.");
+      return;
+    }
+
     try {
       setExportingGlobalKardex(true);
       setErrorMessage("");
@@ -1577,6 +1582,11 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
   };
 
   const handleExportProducts = async (mode: "view" | "official") => {
+    if (productRowCount === 0) {
+      setErrorMessage("No hay resultados para exportar. Ajuste o elimine los filtros e inténtelo nuevamente.");
+      return;
+    }
+
     try {
       setExportingProducts(true);
       setErrorMessage("");
@@ -1607,7 +1617,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
       setSuccessMessage(
         mode === "official"
           ? "Exportación oficial generada correctamente."
-          : "La vista actual se exportó correctamente.",
+          : "Los resultados filtrados se exportaron correctamente.",
       );
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error, "No se pudo exportar el catálogo."));

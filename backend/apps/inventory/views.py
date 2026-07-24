@@ -95,6 +95,20 @@ from .grid_definitions import (
 )
 
 
+def ensure_export_has_results(records):
+    if records:
+        return
+
+    raise DRFValidationError(
+        {
+            "detail": (
+                "No hay resultados para exportar. Ajuste o elimine los filtros "
+                "e inténtelo nuevamente."
+            )
+        }
+    )
+
+
 def raise_drf_validation_error(error):
     if hasattr(error, "message_dict"):
         raise DRFValidationError(error.message_dict)
@@ -674,6 +688,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         )
         queryset = self.filter_queryset(self.get_queryset()).select_related("categoria")
         products = list(queryset[:5000])
+        ensure_export_has_results(products)
 
         record_product_export(
             request=getattr(request, "_request", request),
@@ -971,6 +986,7 @@ class PendientePorRecibirViewSet(
                 "created_by",
             )[:5000]
         )
+        ensure_export_has_results(pending_receipts)
 
         record_grid_export(
             request=getattr(request, "_request", request),
@@ -1486,6 +1502,7 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
             definition=KARDEX_GRID_DEFINITION,
         )
         movements = list(self.filter_queryset(self.get_queryset())[:5000])
+        ensure_export_has_results(movements)
         record_grid_export(
             request=getattr(request, "_request", request),
             definition=KARDEX_GRID_DEFINITION,

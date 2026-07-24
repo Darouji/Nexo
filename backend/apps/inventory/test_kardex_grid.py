@@ -70,7 +70,7 @@ class KardexGridApiTests(TestCase):
             {
                 "mode": "view",
                 "file_format": "xlsx",
-                "columns": "producto_modelo_snapshot,motivo,cantidad",
+                "columns": "producto_modelo_orden,motivo,cantidad",
             },
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -80,6 +80,23 @@ class KardexGridApiTests(TestCase):
         self.assertEqual(rows[1][2], 4)
         audit = AuditLog.objects.get(action=AuditAction.EXPORTAR, model_name="movimientokardex")
         self.assertEqual(audit.metadata["row_count"], 1)
+
+    def test_export_rejects_empty_filtered_results(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+        response = client.get(
+            "/api/inventory/kardex/export/",
+            {"mode": "view", "file_format": "xlsx", "search": "SIN-RESULTADOS"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("No hay resultados para exportar", str(response.data))
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditAction.EXPORTAR,
+                model_name="movimientokardex",
+            ).exists()
+        )
 
     def test_reader_cannot_request_official_export(self):
         client = APIClient()

@@ -260,17 +260,17 @@ KARDEX_GRID_DEFINITION = GridDefinition(
             query_field="created_at", filter_operators=(), required=True,
         ),
         GridColumnDefinition(
-            key="producto_modelo_snapshot", system_label="Producto / Modelo",
+            key="producto_modelo_orden", system_label="Producto / Modelo",
             query_field="producto_modelo_orden",
             filter_operators=("contains", "equals", "startsWith"), required=True,
         ),
         GridColumnDefinition(
-            key="producto_codigo_sap_snapshot", system_label="Código SAP",
+            key="producto_codigo_sap_orden", system_label="Código SAP",
             query_field="producto_codigo_sap_orden",
             filter_operators=("contains", "equals", "startsWith"),
         ),
         GridColumnDefinition(
-            key="producto_categoria_snapshot", system_label="Categoría",
+            key="producto_categoria_orden", system_label="Categoría",
             query_field="producto_categoria_orden",
             filter_operators=("contains", "equals", "startsWith"),
         ),
@@ -312,8 +312,8 @@ KARDEX_GRID_DEFINITION = GridDefinition(
         ),
     ),
     official_export_columns=(
-        "created_at", "producto_modelo_snapshot", "producto_codigo_sap_snapshot",
-        "producto_categoria_snapshot", "movement_type", "cantidad", "stock_antes",
+        "created_at", "producto_modelo_orden", "producto_codigo_sap_orden",
+        "producto_categoria_orden", "movement_type", "cantidad", "stock_antes",
         "stock_despues", "ubicacion_nombre", "motivo", "reference_repr",
         "operador_nombre", "origin",
     ),

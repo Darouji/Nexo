@@ -281,6 +281,11 @@ export function usePendingReceiptsController({
 
   const exportGrid = useCallback(
     async (mode: "view" | "official") => {
+      if (rowCount === 0) {
+        onError("No hay resultados para exportar. Ajuste o elimine los filtros e inténtelo nuevamente.");
+        return;
+      }
+
       try {
         setExporting(true);
         onError("");
@@ -294,7 +299,7 @@ export function usePendingReceiptsController({
         onSuccess(
           mode === "official"
             ? "Exportación oficial de pendientes generada correctamente."
-            : "La vista de pendientes se exportó correctamente.",
+            : "Los resultados filtrados se exportaron correctamente.",
         );
       } catch (error: unknown) {
         onError(
@@ -307,7 +312,7 @@ export function usePendingReceiptsController({
         setExporting(false);
       }
     },
-    [buildParams, onError, onSuccess, visibleColumns],
+    [buildParams, onError, onSuccess, rowCount, visibleColumns],
   );
 
   const openHistory = useCallback(async (pendingReceipt: PendingReceipt) => {

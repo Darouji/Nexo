@@ -109,7 +109,7 @@ export function PendingReceiptsSection({
               onClick={onExportView}
               disabled={exporting}
             >
-              {exporting ? "Exportando..." : "Exportar vista"}
+              {exporting ? "Exportando..." : "Exportar resultados filtrados"}
             </Button>
 
             {canExportOfficial ? (

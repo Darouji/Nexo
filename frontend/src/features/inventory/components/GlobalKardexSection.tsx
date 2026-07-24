@@ -93,7 +93,7 @@ export function GlobalKardexSection({
       actions={
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportView} disabled={exporting || loading}>
-            {exporting ? "Exportando..." : "Exportar vista"}
+            {exporting ? "Exportando..." : "Exportar resultados filtrados"}
           </Button>
           {canExportOfficial ? (
             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportOfficial} disabled={exporting || loading}>

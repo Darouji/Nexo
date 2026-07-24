@@ -106,6 +106,23 @@ class PendingReceiptGridApiTests(TestCase):
         )
         self.assertEqual(audit.metadata["row_count"], 1)
 
+    def test_export_rejects_empty_filtered_results(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+        response = client.get(
+            "/api/inventory/pendientes-por-recibir/export/",
+            {"mode": "view", "file_format": "xlsx", "search": "SIN-RESULTADOS"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("No hay resultados para exportar", str(response.data))
+        self.assertFalse(
+            AuditLog.objects.filter(
+                action=AuditAction.EXPORTAR,
+                model_name="pendienteporrecibir",
+            ).exists()
+        )
+
     def test_official_export_requires_official_export_capability(self):
         reader_client = APIClient()
         reader_client.force_authenticate(user=self.reader)

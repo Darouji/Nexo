@@ -203,7 +203,7 @@ export function InventoryCatalogSection({
               onClick={onExportView}
               disabled={exporting}
             >
-              Exportar vista
+              Exportar resultados filtrados
             </Button>
 
             {canExportOfficial ? (

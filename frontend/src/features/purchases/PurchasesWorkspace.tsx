@@ -17,7 +17,12 @@ import { SerkanMultiSelectFilter } from "../../components/filters/SerkanMultiSel
 import { getApiErrorMessage, getApiFieldErrors } from "../../services/api";
 import { downloadBlob } from "../../services/download";
 import { createIdempotencyKey } from "../../services/idempotency";
-import { fetchInventoryLocations, fetchProducts, type InventoryLocation, type Product } from "../../services/inventoryService";
+import {
+  fetchInventoryLocations,
+  fetchProducts,
+  type InventoryLocation,
+  type Product,
+} from "../../services/inventoryService";
 import {
   createPurchaseOrder,
   createSupplier,
@@ -34,7 +39,11 @@ import {
 } from "../../services/purchasesService";
 import type { SavedGridViewConfig } from "../../services/gridService";
 import { colors } from "../../theme/colors";
-import { buildOrderColumns, buildReceiptColumns, buildSupplierColumns } from "./purchaseColumns";
+import {
+  buildOrderColumns,
+  buildReceiptColumns,
+  buildSupplierColumns,
+} from "./purchaseColumns";
 import {
   createEmptyPurchaseOrderForm,
   PURCHASE_STATUSES,
@@ -42,7 +51,10 @@ import {
   validatePurchaseOrderForm,
   type PurchaseOrderForm,
 } from "./purchaseModels";
-import { buildPurchaseQueryParams, type PurchaseQueryState } from "./purchaseQueryParams";
+import {
+  buildPurchaseQueryParams,
+  type PurchaseQueryState,
+} from "./purchaseQueryParams";
 import { PurchaseOrderDialog } from "./PurchaseOrderDialog";
 import {
   OrderDetailDialog,
@@ -54,11 +66,13 @@ import {
 
 type Section = "orders" | "suppliers" | "receipts";
 type Row = PurchaseOrder | Supplier | PurchaseReceipt;
+
 const sections: Record<Section, { label: string; gridKey: string }> = {
   orders: { label: "Órdenes", gridKey: "purchases.orders" },
   suppliers: { label: "Proveedores", gridKey: "purchases.suppliers" },
   receipts: { label: "Recepciones", gridKey: "purchases.receipts" },
 };
+
 const emptyQuery = (): PurchaseQueryState => ({
   search: "",
   statuses: [],
@@ -67,6 +81,17 @@ const emptyQuery = (): PurchaseQueryState => ({
   sort: null,
   columnFilters: [],
 });
+
+const emptySupplier: SupplierPayload = {
+  tax_id: "",
+  name: "",
+  trade_name: "",
+  country: "",
+  contact_name: "",
+  email: "",
+  phone: "",
+  active: true,
+};
 
 export function PurchasesWorkspace() {
   const [section, setSection] = useState<Section>("orders");
@@ -81,6 +106,7 @@ export function PurchasesWorkspace() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const request = useRef<AbortController | null>(null);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState<PurchaseOrderForm>(createEmptyPurchaseOrderForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -90,7 +116,7 @@ export function PurchasesWorkspace() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
-  const emptySupplier: SupplierPayload = { tax_id: "", name: "", trade_name: "", country: "", contact_name: "", email: "", phone: "", active: true };
+
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [supplierForm, setSupplierForm] = useState<SupplierPayload>(emptySupplier);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
@@ -100,36 +126,43 @@ export function PurchasesWorkspace() {
   const [selectedCommitment, setSelectedCommitment] = useState<PurchaseReceipt | null>(null);
   const [receiptQuantity, setReceiptQuantity] = useState("");
   const [receiptReason, setReceiptReason] = useState("");
-  const [receiptKey, setReceiptKey] = useState(() => createIdempotencyKey("purchase-receipt"));
+  const [receiptKey, setReceiptKey] = useState(() =>
+    createIdempotencyKey("purchase-receipt"),
+  );
 
-  const load = useCallback(async (target: Section, state: PurchaseQueryState) => {
-    request.current?.abort();
-    const controller = new AbortController();
-    request.current = controller;
-    setLoading(true);
-    try {
-      const params = buildPurchaseQueryParams(state);
-      const response =
-        target === "orders"
-          ? await fetchPurchaseOrders(params, controller.signal)
-          : target === "suppliers"
-            ? await fetchSuppliers(params, controller.signal)
-            : await fetchPurchaseReceipts(params, controller.signal);
-      if (!controller.signal.aborted) {
-        setRows(response.results);
-        setCount(response.count);
-        setError("");
+  const load = useCallback(
+    async (target: Section, state: PurchaseQueryState) => {
+      request.current?.abort();
+      const controller = new AbortController();
+      request.current = controller;
+      setLoading(true);
+
+      try {
+        const params = buildPurchaseQueryParams(state);
+        const response =
+          target === "orders"
+            ? await fetchPurchaseOrders(params, controller.signal)
+            : target === "suppliers"
+              ? await fetchSuppliers(params, controller.signal)
+              : await fetchPurchaseReceipts(params, controller.signal);
+
+        if (!controller.signal.aborted) {
+          setRows(response.results);
+          setCount(response.count);
+          setError("");
+        }
+      } catch (reason: unknown) {
+        if (!controller.signal.aborted) {
+          setRows([]);
+          setCount(0);
+          setError(getApiErrorMessage(reason, "No se pudo cargar Compras."));
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
       }
-    } catch (reason: unknown) {
-      if (!controller.signal.aborted) {
-        setRows([]);
-        setCount(0);
-        setError(getApiErrorMessage(reason, "No se pudo cargar Compras."));
-      }
-    } finally {
-      if (!controller.signal.aborted) setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(section, query), 0);
@@ -162,24 +195,35 @@ export function PurchasesWorkspace() {
     setFieldErrors({});
     setDialogError("");
     setDialogOpen(true);
+
     try {
       const [supplierPage, productRows, locationRows] = await Promise.all([
         fetchSuppliers({ page_size: 200 }),
         fetchProducts({ status: "ACTIVO" }),
-        fetchInventoryLocations({ status: "ACTIVA" }),
+        fetchInventoryLocations({ status: "ACTIVO" }),
       ]);
       setSuppliers(supplierPage.results.filter((supplier) => supplier.active));
       setProducts(productRows);
       setLocations(locationRows);
     } catch (reason: unknown) {
-      setDialogError(getApiErrorMessage(reason, "No se pudieron cargar las opciones."));
+      setDialogError(
+        getApiErrorMessage(reason, "No se pudieron cargar las opciones."),
+      );
     }
+  };
+
+  const openSupplierDialog = () => {
+    setSupplierForm(emptySupplier);
+    setFieldErrors({});
+    setDialogError("");
+    setSupplierOpen(true);
   };
 
   const saveOrder = async () => {
     const errors = validatePurchaseOrderForm(form);
     setFieldErrors(errors);
     if (Object.keys(errors).length) return;
+
     setSaving(true);
     try {
       await createPurchaseOrder(
@@ -191,7 +235,9 @@ export function PurchasesWorkspace() {
       await load("orders", query);
     } catch (reason: unknown) {
       setFieldErrors(getApiFieldErrors(reason));
-      setDialogError(getApiErrorMessage(reason, "No se pudo guardar la orden."));
+      setDialogError(
+        getApiErrorMessage(reason, "No se pudo guardar la orden."),
+      );
     } finally {
       setSaving(false);
     }
@@ -199,14 +245,25 @@ export function PurchasesWorkspace() {
 
   const saveSupplier = async () => {
     const errors: Record<string, string> = {};
-    if (!supplierForm.name.trim()) errors.name = "La razón social es obligatoria.";
-    if (!supplierForm.tax_id.trim()) errors.tax_id = "La identificación tributaria es obligatoria.";
-    if (!supplierForm.country.trim()) errors.country = "El país es obligatorio.";
-    if (supplierForm.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplierForm.email)) {
+    if (!supplierForm.name.trim()) {
+      errors.name = "La razón social es obligatoria.";
+    }
+    if (!supplierForm.tax_id.trim()) {
+      errors.tax_id = "La identificación tributaria es obligatoria.";
+    }
+    if (!supplierForm.country.trim()) {
+      errors.country = "El país es obligatorio.";
+    }
+    if (
+      supplierForm.email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(supplierForm.email)
+    ) {
       errors.email = "Ingresa un correo válido.";
     }
+
     setFieldErrors(errors);
     if (Object.keys(errors).length) return;
+
     setSaving(true);
     setDialogError("");
     try {
@@ -216,7 +273,9 @@ export function PurchasesWorkspace() {
       await load("suppliers", query);
     } catch (reason: unknown) {
       setFieldErrors(getApiFieldErrors(reason));
-      setDialogError(getApiErrorMessage(reason, "No se pudo crear el proveedor."));
+      setDialogError(
+        getApiErrorMessage(reason, "No se pudo crear el proveedor."),
+      );
     } finally {
       setSaving(false);
     }
@@ -235,18 +294,24 @@ export function PurchasesWorkspace() {
       setDialogError("El motivo es obligatorio para mantener la trazabilidad.");
       return;
     }
+
     setSaving(true);
     setDialogError("");
     try {
       const updated = await transitionPurchaseOrder(
-        selectedOrder.id, transition, transitionReason.trim(), transitionKey.current,
+        selectedOrder.id,
+        transition,
+        transitionReason.trim(),
+        transitionKey.current,
       );
       setSelectedOrder(updated);
       setTransition(null);
       setSuccess("Estado de la orden actualizado correctamente.");
       await load("orders", query);
     } catch (reason: unknown) {
-      setDialogError(getApiErrorMessage(reason, "No se pudo actualizar la orden."));
+      setDialogError(
+        getApiErrorMessage(reason, "No se pudo actualizar la orden."),
+      );
     } finally {
       setSaving(false);
     }
@@ -263,21 +328,33 @@ export function PurchasesWorkspace() {
   const saveReceipt = async () => {
     if (!selectedCommitment) return;
     const quantity = Number(receiptQuantity);
-    if (!receiptReason.trim() || quantity < 1 || quantity > selectedCommitment.pending_units) {
+    if (
+      !receiptReason.trim() ||
+      quantity < 1 ||
+      quantity > selectedCommitment.pending_units
+    ) {
       setDialogError("Indica una cantidad válida y un motivo de recepción.");
       return;
     }
+
     setSaving(true);
     setDialogError("");
     try {
       await receivePurchaseCommitment(
-        selectedCommitment.id, quantity, receiptReason.trim(), receiptKey,
+        selectedCommitment.id,
+        quantity,
+        receiptReason.trim(),
+        receiptKey,
       );
       setSelectedCommitment(null);
-      setSuccess("Recepción registrada; Inventario y Kardex fueron actualizados.");
+      setSuccess(
+        "Recepción registrada; Inventario y Kardex fueron actualizados.",
+      );
       await load("receipts", query);
     } catch (reason: unknown) {
-      setDialogError(getApiErrorMessage(reason, "No se pudo registrar la recepción."));
+      setDialogError(
+        getApiErrorMessage(reason, "No se pudo registrar la recepción."),
+      );
     } finally {
       setSaving(false);
     }
@@ -288,6 +365,7 @@ export function PurchasesWorkspace() {
       setError("No hay resultados para exportar. Ajusta o elimina los filtros.");
       return;
     }
+
     try {
       const blob = await exportPurchases(section, {
         ...buildPurchaseQueryParams(query),
@@ -297,17 +375,25 @@ export function PurchasesWorkspace() {
       downloadBlob(blob, `compras-${section}-${scope}.xlsx`);
       setSuccess("Archivo Excel generado correctamente.");
     } catch (reason: unknown) {
-      setError(getApiErrorMessage(reason, "No se pudo exportar el archivo."));
+      setError(
+        getApiErrorMessage(reason, "No se pudo exportar el archivo."),
+      );
     }
   };
 
   const applyNamedView = (config: SavedGridViewConfig) => {
     const list = (key: string) => {
       const value = config.filters[key];
-      return typeof value === "string" ? value.split(",").filter(Boolean) : [];
+      return typeof value === "string"
+        ? value.split(",").filter(Boolean)
+        : [];
     };
+
     const next: PurchaseQueryState = {
-      search: typeof config.filters.search === "string" ? config.filters.search : "",
+      search:
+        typeof config.filters.search === "string"
+          ? config.filters.search
+          : "",
       statuses: list("status"),
       currencies: list("currency"),
       pagination: { page: 0, pageSize: config.page_size },
@@ -316,8 +402,15 @@ export function PurchasesWorkspace() {
         ? (config.filters.column_filters as SerkanGridFilter[])
         : [],
     };
+
     setSearch(next.search);
-    setExpanded(Boolean(next.statuses.length || next.currencies.length || next.columnFilters.length));
+    setExpanded(
+      Boolean(
+        next.statuses.length ||
+          next.currencies.length ||
+          next.columnFilters.length,
+      ),
+    );
     setQuery(next);
   };
 
@@ -327,6 +420,7 @@ export function PurchasesWorkspace() {
       : section === "suppliers"
         ? (buildSupplierColumns() as ColDef<Row>[])
         : (buildReceiptColumns(openReceipt) as ColDef<Row>[]);
+
   const statusOptions =
     section === "orders"
       ? PURCHASE_STATUSES
@@ -351,52 +445,103 @@ export function PurchasesWorkspace() {
         eyebrow="Abastecimiento"
         icon={<ReceiptLongIcon />}
         tone={colors.modules.purchases}
-        actions={
-          section === "orders" ? (
-            <CapabilityGate capability="purchases.create_order">
-              <Button variant="contained" startIcon={<AddShoppingCartIcon />} onClick={() => void openOrderDialog()}>
-                Nueva orden
-              </Button>
-            </CapabilityGate>
-          ) : section === "suppliers" ? (
-            <CapabilityGate capability="purchases.manage_suppliers">
-              <Button variant="contained" startIcon={<BusinessIcon />} onClick={() => {
-                setSupplierForm(emptySupplier);
-                setFieldErrors({});
-                setDialogError("");
-                setSupplierOpen(true);
-              }}>
-                Nuevo proveedor
-              </Button>
-            </CapabilityGate>
-          ) : null
-        }
       />
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 2 }}>
-        <MetricCard title="Resultados" value={String(count)} helper="Según los filtros actuales" icon={<ReceiptLongIcon />} tone={colors.modules.purchases} />
-        <MetricCard title="Recepción física" value="Controlada" helper="Solo entonces cambia stock y Kardex" icon={<Inventory2Icon />} tone={colors.modules.inventory} />
-        <MetricCard title="Monedas" value="CLP / USD" helper="Tipo de cambio congelado" icon={<BusinessIcon />} tone={colors.modules.analytics} />
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+          gap: 2,
+        }}
+      >
+        <MetricCard
+          title="Resultados"
+          value={String(count)}
+          helper="Según los filtros actuales"
+          icon={<ReceiptLongIcon />}
+          tone={colors.modules.purchases}
+        />
+        <MetricCard
+          title="Recepción física"
+          value="Controlada"
+          helper="Solo entonces cambia stock y Kardex"
+          icon={<Inventory2Icon />}
+          tone={colors.modules.inventory}
+        />
+        <MetricCard
+          title="Monedas"
+          value="CLP / USD"
+          helper="Tipo de cambio congelado"
+          icon={<BusinessIcon />}
+          tone={colors.modules.analytics}
+        />
       </Box>
+
       <ButtonGroup sx={{ alignSelf: "flex-start" }}>
         {(Object.keys(sections) as Section[]).map((key) => (
-          <Button key={key} variant={section === key ? "contained" : "outlined"} onClick={() => changeSection(key)}>
+          <Button
+            key={key}
+            variant={section === key ? "contained" : "outlined"}
+            onClick={() => changeSection(key)}
+          >
             {sections[key].label}
           </Button>
         ))}
       </ButtonGroup>
-      {success ? <Alert severity="success" onClose={() => setSuccess("")}>{success}</Alert> : null}
-      {error ? <Alert severity="error" onClose={() => setError("")}>{error}</Alert> : null}
+
+      {success ? (
+        <Alert severity="success" onClose={() => setSuccess("")}>
+          {success}
+        </Alert>
+      ) : null}
+      {error ? (
+        <Alert severity="error" onClose={() => setError("")}>
+          {error}
+        </Alert>
+      ) : null}
+
       <SectionCard
         title={sections[section].label}
         subtitle="Filtros remotos, vistas personales, columnas configurables y exportación."
         actions={
           <>
             <CapabilityGate capability="purchases.export_view">
-              <Button startIcon={<DownloadIcon />} onClick={() => void handleExport("view")}>Exportar resultados filtrados</Button>
+              <Button
+                startIcon={<DownloadIcon />}
+                onClick={() => void handleExport("view")}
+              >
+                Exportar resultados filtrados
+              </Button>
             </CapabilityGate>
             <CapabilityGate capability="purchases.export_official">
-              <Button variant="outlined" onClick={() => void handleExport("official")}>Exportación oficial</Button>
+              <Button
+                variant="outlined"
+                onClick={() => void handleExport("official")}
+              >
+                Exportación oficial
+              </Button>
             </CapabilityGate>
+            {section === "orders" ? (
+              <CapabilityGate capability="purchases.create_order">
+                <Button
+                  variant="contained"
+                  startIcon={<AddShoppingCartIcon />}
+                  onClick={() => void openOrderDialog()}
+                >
+                  Nueva orden
+                </Button>
+              </CapabilityGate>
+            ) : section === "suppliers" ? (
+              <CapabilityGate capability="purchases.manage_suppliers">
+                <Button
+                  variant="contained"
+                  startIcon={<BusinessIcon />}
+                  onClick={openSupplierDialog}
+                >
+                  Nuevo proveedor
+                </Button>
+              </CapabilityGate>
+            ) : null}
           </>
         }
       >
@@ -415,23 +560,42 @@ export function PurchasesWorkspace() {
           loading={loading}
           expanded={expanded}
           onExpandedChange={setExpanded}
-          activeFiltersCount={query.statuses.length + query.currencies.length + query.columnFilters.length}
+          activeFiltersCount={
+            query.statuses.length +
+            query.currencies.length +
+            query.columnFilters.length
+          }
           panelId={`purchases-${section}-filters`}
         >
-          <SerkanMultiSelectFilter label="Estado" options={statusOptions} value={query.statuses} onChange={(statuses) => updateQuery({ statuses })} />
+          <SerkanMultiSelectFilter
+            label="Estado"
+            options={statusOptions}
+            value={query.statuses}
+            onChange={(statuses) => updateQuery({ statuses })}
+          />
           {section === "orders" ? (
             <SerkanMultiSelectFilter
               label="Moneda"
-              options={[{ value: "CLP", label: "CLP" }, { value: "USD", label: "USD" }]}
+              options={[
+                { value: "CLP", label: "CLP" },
+                { value: "USD", label: "USD" },
+              ]}
               value={query.currencies}
               onChange={(currencies) => updateQuery({ currencies })}
             />
           ) : null}
         </SerkanFilterToolbar>
+
         {loading && rows.length === 0 ? (
           <LoadingState message="Cargando Compras..." />
         ) : error && rows.length === 0 ? (
-          <StateFeedback title="No se pudo mostrar esta sección" description={error} severity="error" actionLabel="Reintentar" onAction={() => void load(section, query)} />
+          <StateFeedback
+            title="No se pudo mostrar esta sección"
+            description={error}
+            severity="error"
+            actionLabel="Reintentar"
+            onAction={() => void load(section, query)}
+          />
         ) : (
           <SerkanDataGrid
             key={section}
@@ -442,18 +606,27 @@ export function PurchasesWorkspace() {
             columns={columns}
             loading={loading}
             paginationModel={query.pagination}
-            onPaginationModelChange={(pagination) => updateQuery({ pagination })}
+            onPaginationModelChange={(pagination) =>
+              updateQuery({ pagination })
+            }
             rowCount={count}
             sortModel={query.sort}
             onSortModelChange={(sort) => updateQuery({ sort })}
-            onFilterModelChange={(columnFilters) => updateQuery({ columnFilters })}
+            onFilterModelChange={(columnFilters) =>
+              updateQuery({ columnFilters })
+            }
             filterResetKey={filterResetKey}
             onVisibleColumnsChange={setVisibleColumns}
-            namedViewFilters={{ search: query.search, status: query.statuses.join(","), currency: query.currencies.join(",") }}
+            namedViewFilters={{
+              search: query.search,
+              status: query.statuses.join(","),
+              currency: query.currencies.join(","),
+            }}
             onNamedViewApply={applyNamedView}
           />
         )}
       </SectionCard>
+
       <PurchaseOrderDialog
         open={dialogOpen}
         form={form}

@@ -126,6 +126,57 @@ function getFirstErrorText(value: unknown): string | null {
   return null;
 }
 
+const API_TO_FORM_FIELD: Record<string, string> = {
+  order_date: "issue_date",
+  unit_price_original: "unit_price",
+};
+
+function normalizeValidationPath(path: string) {
+  return path
+    .split(".")
+    .map((part) => API_TO_FORM_FIELD[part] ?? part)
+    .join(".");
+}
+
+function flattenValidationErrors(
+  value: unknown,
+  path = "",
+  result: Record<string, string> = {},
+): Record<string, string> {
+  if (typeof value === "string") {
+    if (path && value.trim() && !result[normalizeValidationPath(path)]) {
+      result[normalizeValidationPath(path)] = value;
+    }
+    return result;
+  }
+
+  if (Array.isArray(value)) {
+    const onlyMessages = value.every((item) => typeof item === "string");
+    if (onlyMessages) {
+      const message = getFirstErrorText(value);
+      if (path && message && !result[normalizeValidationPath(path)]) {
+        result[normalizeValidationPath(path)] = message;
+      }
+      return result;
+    }
+
+    value.forEach((item, index) => {
+      const nestedPath = path ? `${path}.${index}` : String(index);
+      flattenValidationErrors(item, nestedPath, result);
+    });
+    return result;
+  }
+
+  if (value && typeof value === "object") {
+    Object.entries(value as Record<string, unknown>).forEach(([field, item]) => {
+      const nestedPath = path ? `${path}.${field}` : field;
+      flattenValidationErrors(item, nestedPath, result);
+    });
+  }
+
+  return result;
+}
+
 export function getApiFieldErrors(error: unknown): Record<string, string> {
   if (!axios.isAxiosError(error)) {
     return {};
@@ -136,21 +187,13 @@ export function getApiFieldErrors(error: unknown): Record<string, string> {
     data?.error && typeof data.error === "object"
       ? (data.error as Record<string, unknown>)
       : null;
-  const details =
-    errorPayload?.details && typeof errorPayload.details === "object"
-      ? (errorPayload.details as Record<string, unknown>)
-      : null;
+  const details = errorPayload?.details ?? data;
 
-  if (!details) {
+  if (!details || typeof details !== "object") {
     return {};
   }
 
-  return Object.fromEntries(
-    Object.entries(details).flatMap(([field, value]) => {
-      const message = getFirstErrorText(value);
-      return message ? [[field, message]] : [];
-    }),
-  );
+  return flattenValidationErrors(details);
 }
 
 export function getApiRequestId(error: unknown) {

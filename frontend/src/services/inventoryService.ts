@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { createIdempotencyKey } from "./idempotency";
 
 export type ProductStockStatus =
   | "STOCK_CORRECTO"
@@ -165,6 +166,33 @@ export type PendingReceiptOperationPayload = {
   motivo: string;
 };
 
+export type PendingReceiptOperation = {
+  id: number;
+  pending_receipt: number;
+  operation_type: "RECEIVE" | "CANCEL";
+  operation_type_display: string;
+  quantity: number;
+  reason: string;
+  product_model_snapshot: string;
+  product_sap_code_snapshot: string;
+  product_category_snapshot: string;
+  destination_location_snapshot: string;
+  responsible: number;
+  responsible_name: string;
+  kardex_movement: number | null;
+  received_before: number;
+  received_after: number;
+  cancelled_before: number;
+  cancelled_after: number;
+  pending_before: number;
+  pending_after: number;
+  previous_state: PendingReceiptStatus;
+  previous_state_display: string;
+  new_state: PendingReceiptStatus;
+  new_state_display: string;
+  occurred_at: string;
+};
+
 export type ReceivePendingReceiptResponse = {
   pendiente: PendingReceipt;
   movimiento_kardex: KardexMovement;
@@ -319,6 +347,7 @@ export type PendingReceiptListParams = {
   ordering?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
+  grid_filters?: string;
 };
 
 export type PendingReceiptPageParams = PendingReceiptListParams & {
@@ -861,6 +890,7 @@ export async function fetchPendingReceipts(
         fecha_hasta: params.fecha_hasta || undefined,
         search: params.search?.trim() || undefined,
         ordering: params.ordering || "-created_at",
+        grid_filters: params.grid_filters,
       },
     },
   );
@@ -870,10 +900,12 @@ export async function fetchPendingReceipts(
 
 export async function fetchPendingReceiptsPage(
   params: PendingReceiptPageParams = {},
+  signal?: AbortSignal,
 ) {
   const response = await api.get<PendingReceiptListResponse>(
     "/inventory/pendientes-por-recibir/",
     {
+      signal,
       params: {
         producto: toCsv(params.producto),
         estado: toCsv(params.estado),
@@ -881,6 +913,7 @@ export async function fetchPendingReceiptsPage(
         fecha_hasta: params.fecha_hasta || undefined,
         search: params.search?.trim() || undefined,
         ordering: params.ordering || "-created_at",
+        grid_filters: params.grid_filters,
         page: params.page,
         page_size: params.page_size,
       },
@@ -890,8 +923,53 @@ export async function fetchPendingReceiptsPage(
   return toPaginatedResponse(response.data);
 }
 
+export async function exportPendingReceipts(
+  params: PendingReceiptListParams & {
+    mode: "view" | "official";
+    file_format: "xlsx" | "csv";
+    columns?: string[];
+  },
+) {
+  const response = await api.get<Blob>(
+    "/inventory/pendientes-por-recibir/export/",
+    {
+      params: {
+        producto: toCsv(params.producto),
+        estado: toCsv(params.estado),
+        fecha_desde: params.fecha_desde || undefined,
+        fecha_hasta: params.fecha_hasta || undefined,
+        search: params.search?.trim() || undefined,
+        ordering: params.ordering || "-created_at",
+        grid_filters: params.grid_filters,
+        mode: params.mode,
+        file_format: params.file_format,
+        columns: params.columns?.join(",") || undefined,
+      },
+      responseType: "blob",
+    },
+  );
+
+  const contentDisposition = response.headers["content-disposition"] || "";
+  const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+
+  return {
+    blob: response.data,
+    filename:
+      filenameMatch?.[1] ||
+      `serkan_pendientes_por_recibir_${params.mode}.${params.file_format}`,
+  };
+}
+
+export async function fetchPendingReceiptHistory(pendingReceiptId: number) {
+  const response = await api.get<PendingReceiptOperation[]>(
+    `/inventory/pendientes-por-recibir/${pendingReceiptId}/historial/`,
+  );
+  return response.data;
+}
+
 export async function createPendingReceipt(
   payload: CreatePendingReceiptPayload,
+  idempotencyKey = createIdempotencyKey("pending-receipt-create"),
 ) {
   const response = await api.post<PendingReceipt>(
     "/inventory/pendientes-por-recibir/",
@@ -901,6 +979,11 @@ export async function createPendingReceipt(
       cantidad: payload.cantidad,
       referencia: payload.referencia?.trim() || "",
       motivo: payload.motivo?.trim() || "",
+    },
+    {
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
     },
   );
 
@@ -1050,12 +1133,18 @@ export async function createInventoryTransfer(
 export async function receivePendingReceipt(
   pendingReceiptId: number,
   payload: PendingReceiptOperationPayload,
+  idempotencyKey = createIdempotencyKey("pending-receipt-receive"),
 ) {
   const response = await api.post<ReceivePendingReceiptResponse>(
     `/inventory/pendientes-por-recibir/${pendingReceiptId}/recibir/`,
     {
       cantidad: payload.cantidad,
       motivo: payload.motivo.trim(),
+    },
+    {
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
     },
   );
 
@@ -1065,12 +1154,18 @@ export async function receivePendingReceipt(
 export async function cancelPendingReceipt(
   pendingReceiptId: number,
   payload: PendingReceiptOperationPayload,
+  idempotencyKey = createIdempotencyKey("pending-receipt-cancel"),
 ) {
   const response = await api.post<PendingReceipt>(
     `/inventory/pendientes-por-recibir/${pendingReceiptId}/cancelar/`,
     {
       cantidad: payload.cantidad,
       motivo: payload.motivo.trim(),
+    },
+    {
+      headers: {
+        "Idempotency-Key": idempotencyKey,
+      },
     },
   );
 

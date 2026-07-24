@@ -4,6 +4,7 @@ from .models import (
     Categoria,
     MovimientoKardex,
     PendientePorRecibir,
+    PendingReceiptOperation,
     Producto,
 )
 
@@ -81,6 +82,50 @@ class PendientePorRecibirAdmin(admin.ModelAdmin):
         "cantidad_cancelada",
         "cantidad_pendiente",
         "estado",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by",
+    )
+
+
+@admin.register(PendingReceiptOperation)
+class PendingReceiptOperationAdmin(admin.ModelAdmin):
+    list_display = (
+        "pending_receipt",
+        "operation_type",
+        "quantity",
+        "responsible",
+        "previous_state",
+        "new_state",
+        "occurred_at",
+    )
+    list_filter = ("operation_type", "previous_state", "new_state", "occurred_at")
+    search_fields = (
+        "pending_receipt__producto__modelo",
+        "pending_receipt__producto__codigo_sap",
+        "reason",
+        "idempotency_key",
+    )
+    ordering = ("-occurred_at",)
+    readonly_fields = (
+        "pending_receipt",
+        "operation_type",
+        "quantity",
+        "reason",
+        "responsible",
+        "kardex_movement",
+        "idempotency_key",
+        "received_before",
+        "received_after",
+        "cancelled_before",
+        "cancelled_after",
+        "pending_before",
+        "pending_after",
+        "previous_state",
+        "new_state",
+        "occurred_at",
+        "status",
         "created_at",
         "updated_at",
         "created_by",

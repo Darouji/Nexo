@@ -6,6 +6,7 @@ import {
 } from "../../../services/api";
 import { getStoredAccess } from "../../../services/authService";
 import { fetchCollaborators } from "../../../services/collaboratorService";
+import { createIdempotencyKey } from "../../../services/idempotency";
 import {
   archiveInventoryLocation,
   createInventoryLocation,
@@ -73,13 +74,6 @@ export const emptyArchiveLocation: ArchiveLocationState = {
   location: null,
   reason: "",
 };
-
-function createIdempotencyKey() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  return `transfer-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
 
 type ControllerOptions = {
   onError: (message: string) => void;
@@ -338,7 +332,7 @@ export function useInventoryLocationsController({
       open: true,
       product: productId ? String(productId) : "",
       originLocation: "",
-      idempotencyKey: createIdempotencyKey(),
+      idempotencyKey: createIdempotencyKey("inventory-transfer"),
     });
     void fetchProductLocationBalances({
       product: productId,

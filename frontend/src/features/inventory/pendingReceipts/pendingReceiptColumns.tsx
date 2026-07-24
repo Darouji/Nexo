@@ -1,5 +1,6 @@
 import AddBoxIcon from "@mui/icons-material/AddBox";
 import DeleteIcon from "@mui/icons-material/Delete";
+import HistoryIcon from "@mui/icons-material/History";
 import { Button, Chip, Stack, Typography } from "@mui/material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 
@@ -17,6 +18,7 @@ type PendingReceiptColumnsOptions = {
     pendingReceipt: PendingReceipt,
     mode: PendingReceiptOperationMode,
   ) => void;
+  onOpenPendingReceiptHistory: (pendingReceipt: PendingReceipt) => void;
 };
 
 function getPendingReceiptStatusColor(status: PendingReceiptStatus) {
@@ -46,6 +48,7 @@ const numericCellStyle = {
 
 export function buildPendingReceiptColumns({
   onOpenPendingReceiptOperationDialog,
+  onOpenPendingReceiptHistory,
 }: PendingReceiptColumnsOptions): ColDef<PendingReceipt>[] {
   return [
     {
@@ -90,6 +93,15 @@ export function buildPendingReceiptColumns({
       valueFormatter: (params) => String(params.value || "Sin OC / factura"),
     },
     {
+      field: "ubicacion_destino_nombre",
+      colId: "destination_location__name_normalized",
+      headerName: "Ubicación de recepción",
+      minWidth: 210,
+      flex: 0.8,
+      valueFormatter: (params) =>
+        String(params.value || "Sin ubicación registrada"),
+    },
+    {
       field: "cantidad_original",
       colId: "cantidad_original",
       headerName: "Original",
@@ -115,10 +127,9 @@ export function buildPendingReceiptColumns({
     },
     {
       field: "cantidad_pendiente",
-      colId: "cantidad_pendiente",
+      colId: "cantidad_pendiente_orden",
       headerName: "Pendiente",
       width: 125,
-      sortable: false,
       cellStyle: numericCellStyle,
       cellRenderer: (params: ICellRendererParams<PendingReceipt, number>) => (
         <Stack
@@ -189,10 +200,18 @@ export function buildPendingReceiptColumns({
       valueFormatter: (params) => String(params.value || "Sin motivo"),
     },
     {
+      field: "created_by_nombre",
+      colId: "created_by__username",
+      headerName: "Registrado por",
+      minWidth: 170,
+      flex: 0.7,
+      valueFormatter: (params) => String(params.value || "Sistema"),
+    },
+    {
       colId: "actions",
       headerName: "Acciones",
-      width: 260,
-      minWidth: 260,
+      width: 370,
+      minWidth: 370,
       sortable: false,
       filter: false,
       resizable: false,
@@ -218,6 +237,15 @@ export function buildPendingReceiptColumns({
               alignItems: "center",
             }}
           >
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<HistoryIcon />}
+              onClick={() => onOpenPendingReceiptHistory(pendingReceipt)}
+            >
+              Historial
+            </Button>
+
             <Button
               size="small"
               variant="outlined"

@@ -21,6 +21,8 @@ import { StockMovementDialog } from "../features/inventory/components/StockMovem
 import { buildKardexColumns } from "../features/inventory/kardex/kardexColumns";
 import { buildGlobalKardexColumns } from "../features/inventory/kardex/globalKardexColumns";
 import { buildPendingReceiptColumns } from "../features/inventory/pendingReceipts/pendingReceiptColumns";
+import { PendingReceiptHistoryDialog } from "../features/inventory/pendingReceipts/PendingReceiptHistoryDialog";
+import { usePendingReceiptsController } from "../features/inventory/pendingReceipts/usePendingReceiptsController";
 import { getProductActionMenuPermissions } from "../features/inventory/products/productActionPermissions";
 import { buildProductCatalogColumns } from "../features/inventory/products/productCatalogColumns";
 import { ProductDialog } from "../features/inventory/products/ProductDialog";
@@ -30,7 +32,6 @@ import {
 } from "../features/inventory/utils/inventoryFormatters";
 import {
   buildKardexMovementPageParams,
-  buildPendingReceiptPageParams,
   buildProductPageParams,
 } from "../features/inventory/utils/inventoryQueryParams";
 import {
@@ -38,7 +39,7 @@ import {
   getApiFieldErrors,
 } from "../services/api";
 import {
-  cancelPendingReceipt,
+  cancelPendingReceipt as cancelPendingReceiptRequest,
   changeProductCategory,
   changeProductLifecycle,
   changeProductOrigin,
@@ -48,15 +49,16 @@ import {
   fetchInventoryLocations,
   fetchInventorySummary,
   fetchKardexMovementsPage,
-  fetchPendingReceiptsPage,
   fetchProductLocationBalances,
   exportProducts,
-  receivePendingReceipt,
+  receivePendingReceipt as receivePendingReceiptRequest,
   registerInventoryAdjustment,
   registerManualStockEntry,
   updateProduct,
 } from "../services/inventoryService";
 import { getStoredAccess } from "../services/authService";
+import { downloadBlob } from "../services/download";
+import { createIdempotencyKey } from "../services/idempotency";
 
 import type {
   SerkanGridPaginationModel,
@@ -69,7 +71,6 @@ import type {
   InventorySummary,
   KardexMovement,
   PendingReceipt,
-  PendingReceiptStatus,
   Product,
   ProductLifecycleAction,
 } from "../services/inventoryService";
@@ -92,7 +93,6 @@ import {
 import {
   defaultKardexPaginationModel,
   defaultKardexSortModel,
-  defaultPendingReceiptPaginationModel,
   emptyInventorySummary,
   emptyKardexDialog,
   emptyMovementDialog,
@@ -106,7 +106,6 @@ import {
   type KardexFilterOverrides,
   type MovementDialogState,
   type PendingReceiptCreateDialogState,
-  type PendingReceiptFilterOverrides,
   type PendingReceiptOperationDialogState,
   type PendingReceiptOperationMode,
   type ProductActionMenuState,
@@ -159,6 +158,43 @@ export function ProductsPage() {
     clearFilters: clearProductCatalogFilters,
     applyNamedView: handleApplyProductNamedView,
   } = useProductCatalogController({ onError: setErrorMessage });
+
+  const {
+    pendingReceipts,
+    rowCount: pendingReceiptRowCount,
+    paginationModel: pendingReceiptPaginationModel,
+    sortModel: pendingReceiptSortModel,
+    searchTerm: pendingReceiptSearchTerm,
+    setSearchTerm: setPendingReceiptSearchTerm,
+    statusFilter: pendingReceiptStatusFilter,
+    setStatusFilter: setPendingReceiptStatusFilter,
+    dateFrom: pendingReceiptDateFrom,
+    setDateFrom: setPendingReceiptDateFrom,
+    dateTo: pendingReceiptDateTo,
+    setDateTo: setPendingReceiptDateTo,
+    filterResetKey: pendingReceiptFilterResetKey,
+    setVisibleColumns: setVisiblePendingReceiptColumns,
+    loading: pendingReceiptsLoading,
+    exporting: exportingPendingReceipts,
+    historyOpen: pendingReceiptHistoryOpen,
+    historyPendingReceipt,
+    historyOperations: pendingReceiptHistoryOperations,
+    historyLoading: pendingReceiptHistoryLoading,
+    historyError: pendingReceiptHistoryError,
+    loadPendingReceipts,
+    loadFirstPage: loadFirstPendingReceiptPage,
+    changePagination: handlePendingReceiptPaginationModelChange,
+    changeSort: handlePendingReceiptSortModelChange,
+    changeColumnFilters: handlePendingReceiptColumnFiltersChange,
+    clearFilters: handleClearPendingReceiptFilters,
+    applyNamedView: handleApplyPendingReceiptNamedView,
+    exportGrid: handleExportPendingReceipts,
+    openHistory: openPendingReceiptHistory,
+    closeHistory: closePendingReceiptHistory,
+  } = usePendingReceiptsController({
+    onError: setErrorMessage,
+    onSuccess: setSuccessMessage,
+  });
 
   const [exportingProducts, setExportingProducts] = useState(false);
 
@@ -225,24 +261,6 @@ export function ProductsPage() {
   const [globalKardexOrigin, setGlobalKardexOrigin] = useState<
     AuditOrigin | ""
   >("");
-  const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
-  const [pendingReceiptsLoading, setPendingReceiptsLoading] = useState(true);
-  const [pendingReceiptRowCount, setPendingReceiptRowCount] = useState(0);
-  const [pendingReceiptPaginationModel, setPendingReceiptPaginationModel] =
-    useState<SerkanGridPaginationModel>(defaultPendingReceiptPaginationModel);
-  const [pendingReceiptSortModel, setPendingReceiptSortModel] =
-    useState<SerkanGridSortModel>({
-      field: "created_at",
-      direction: "desc",
-    });
-
-  const [pendingReceiptOrdering, setPendingReceiptOrdering] =
-    useState("-created_at");
-  const [pendingReceiptSearchTerm, setPendingReceiptSearchTerm] = useState("");
-  const [pendingReceiptStatusFilter, setPendingReceiptStatusFilter] = useState<
-    PendingReceiptStatus | ""
-  >("");
-
   const [pendingReceiptCreateDialog, setPendingReceiptCreateDialog] =
     useState<PendingReceiptCreateDialogState>(emptyPendingReceiptCreateDialog);
 
@@ -252,6 +270,16 @@ export function ProductsPage() {
     );
 
   const [savingPendingReceipt, setSavingPendingReceipt] = useState(false);
+  const [pendingReceiptCreateError, setPendingReceiptCreateError] =
+    useState("");
+  const [pendingReceiptCreateFieldErrors, setPendingReceiptCreateFieldErrors] =
+    useState<Record<string, string>>({});
+  const [pendingReceiptOperationError, setPendingReceiptOperationError] =
+    useState("");
+  const [
+    pendingReceiptOperationFieldErrors,
+    setPendingReceiptOperationFieldErrors,
+  ] = useState<Record<string, string>>({});
   const pendingReceiptsSectionRef = useRef<HTMLDivElement | null>(null);
 
   const [inventoryActionMenu, setInventoryActionMenu] =
@@ -390,131 +418,24 @@ export function ProductsPage() {
     });
   };
 
-  const loadPendingReceipts = async (
-    filters: PendingReceiptFilterOverrides = {},
-  ) => {
-    try {
-      setPendingReceiptsLoading(true);
-      setErrorMessage("");
-
-      const pendingReceiptsPage = await fetchPendingReceiptsPage(
-        buildPendingReceiptPageParams(filters, {
-          searchTerm: pendingReceiptSearchTerm,
-          statusFilter: pendingReceiptStatusFilter,
-          ordering: pendingReceiptOrdering,
-          paginationModel: pendingReceiptPaginationModel,
-        }),
-      );
-
-      setPendingReceipts(pendingReceiptsPage.results);
-      setPendingReceiptRowCount(pendingReceiptsPage.count);
-    } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setPendingReceiptsLoading(false);
-    }
-  };
-
-  const handlePendingReceiptPaginationModelChange = (
-    nextPaginationModel: SerkanGridPaginationModel,
-  ) => {
-    setPendingReceiptPaginationModel(nextPaginationModel);
-
-    void loadPendingReceipts({
-      page: nextPaginationModel.page,
-      pageSize: nextPaginationModel.pageSize,
-    });
-  };
-
-  const handlePendingReceiptSortModelChange = (
-    nextSortModel: SerkanGridSortModel,
-  ) => {
-    const nextOrdering = nextSortModel
-      ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
-      : "-created_at";
-
-    const nextPaginationModel = {
-      ...pendingReceiptPaginationModel,
-      page: 0,
-    };
-
-    setPendingReceiptSortModel(nextSortModel);
-    setPendingReceiptOrdering(nextOrdering);
-    setPendingReceiptPaginationModel(nextPaginationModel);
-
-    void loadPendingReceipts({
-      ordering: nextOrdering,
-      page: 0,
-      pageSize: nextPaginationModel.pageSize,
-    });
-  };
-
-  const handleSearchPendingReceipts = () => {
-    const nextPaginationModel = {
-      ...pendingReceiptPaginationModel,
-      page: 0,
-    };
-
-    setPendingReceiptPaginationModel(nextPaginationModel);
-
-    void loadPendingReceipts({
-      search: pendingReceiptSearchTerm,
-      status: pendingReceiptStatusFilter,
-      page: 0,
-      pageSize: nextPaginationModel.pageSize,
-    });
-  };
-
-  const handleClearPendingReceiptFilters = () => {
-    const nextPaginationModel = {
-      ...pendingReceiptPaginationModel,
-      page: 0,
-    };
-
-    setPendingReceiptSearchTerm("");
-    setPendingReceiptStatusFilter("");
-    setPendingReceiptPaginationModel(nextPaginationModel);
-
-    void loadPendingReceipts({
-      search: "",
-      status: "",
-      page: 0,
-      pageSize: nextPaginationModel.pageSize,
-    });
-  };
-
   useEffect(() => {
     let isMounted = true;
 
     Promise.all([
       fetchCategories(),
-      fetchPendingReceiptsPage({
-        ordering: "-created_at",
-        page: 1,
-        page_size: defaultPendingReceiptPaginationModel.pageSize,
-      }),
       fetchInventorySummary(),
       fetchInventoryLocations({ status: "ACTIVO" }),
     ])
-      .then(
-        ([
-          categoriesData,
-          pendingReceiptsData,
-          summaryData,
-          locationsData,
-        ]) => {
+      .then(([categoriesData, summaryData, locationsData]) => {
           if (!isMounted) {
             return;
           }
 
           setCategorias(categoriesData);
-          setPendingReceipts(pendingReceiptsData.results);
-          setPendingReceiptRowCount(pendingReceiptsData.count);
           setInventorySummary(summaryData);
           setInventoryLocations(locationsData);
           setErrorMessage("");
-        },
-      )
+        })
       .catch((error: unknown) => {
         if (!isMounted) {
           return;
@@ -526,8 +447,6 @@ export function ProductsPage() {
         if (!isMounted) {
           return;
         }
-
-        setPendingReceiptsLoading(false);
       });
 
     return () => {
@@ -1184,11 +1103,14 @@ export function ProductsPage() {
       cantidad: "",
       referencia: "",
       motivo: "",
+      idempotencyKey: createIdempotencyKey("pending-receipt-create"),
       ubicacionDestino:
         inventoryLocations.length === 1
           ? String(inventoryLocations[0].id)
           : "",
     });
+    setPendingReceiptCreateError("");
+    setPendingReceiptCreateFieldErrors({});
     setErrorMessage("");
     setSuccessMessage("");
   };
@@ -1199,6 +1121,8 @@ export function ProductsPage() {
     }
 
     setPendingReceiptCreateDialog(emptyPendingReceiptCreateDialog);
+    setPendingReceiptCreateError("");
+    setPendingReceiptCreateFieldErrors({});
   };
 
   const openPendingReceiptOperationDialog = useCallback(
@@ -1207,10 +1131,17 @@ export function ProductsPage() {
         open: true,
         mode,
         pendingReceipt,
+        idempotencyKey: createIdempotencyKey(
+          mode === "RECIBIR"
+            ? "pending-receipt-receive"
+            : "pending-receipt-cancel",
+        ),
         cantidad:
           mode === "RECIBIR" ? String(pendingReceipt.cantidad_pendiente) : "",
         motivo: "",
       });
+      setPendingReceiptOperationError("");
+      setPendingReceiptOperationFieldErrors({});
       setErrorMessage("");
       setSuccessMessage("");
     },
@@ -1223,6 +1154,8 @@ export function ProductsPage() {
     }
 
     setPendingReceiptOperationDialog(emptyPendingReceiptOperationDialog);
+    setPendingReceiptOperationError("");
+    setPendingReceiptOperationFieldErrors({});
   };
 
   const handleCreatePendingReceipt = async () => {
@@ -1230,12 +1163,17 @@ export function ProductsPage() {
     const cantidad = parseInteger(pendingReceiptCreateDialog.cantidad);
 
     if (!product || cantidad <= 0) {
-      setErrorMessage("Debe indicar una cantidad válida por recibir.");
+      setPendingReceiptCreateFieldErrors({
+        cantidad: "Debe indicar una cantidad válida por recibir.",
+      });
       return;
     }
 
     if (!pendingReceiptCreateDialog.ubicacionDestino) {
-      setErrorMessage("Debe indicar la ubicación donde se recibirá el stock.");
+      setPendingReceiptCreateFieldErrors({
+        ubicacion_destino:
+          "Debe indicar la ubicación donde se recibirá el stock.",
+      });
       return;
     }
 
@@ -1243,24 +1181,30 @@ export function ProductsPage() {
       !pendingReceiptCreateDialog.referencia.trim() &&
       !pendingReceiptCreateDialog.motivo.trim()
     ) {
-      setErrorMessage("Debe indicar una referencia o un motivo.");
+      setPendingReceiptCreateFieldErrors({
+        motivo: "Debe indicar una referencia o un motivo.",
+      });
       return;
     }
 
     try {
       setSavingPendingReceipt(true);
-      setErrorMessage("");
+      setPendingReceiptCreateError("");
+      setPendingReceiptCreateFieldErrors({});
       setSuccessMessage("");
 
-      await createPendingReceipt({
-        producto: product.id,
-        ubicacion_destino: Number(
-          pendingReceiptCreateDialog.ubicacionDestino,
-        ),
-        cantidad,
-        referencia: pendingReceiptCreateDialog.referencia,
-        motivo: pendingReceiptCreateDialog.motivo,
-      });
+      await createPendingReceipt(
+        {
+          producto: product.id,
+          ubicacion_destino: Number(
+            pendingReceiptCreateDialog.ubicacionDestino,
+          ),
+          cantidad,
+          referencia: pendingReceiptCreateDialog.referencia,
+          motivo: pendingReceiptCreateDialog.motivo,
+        },
+        pendingReceiptCreateDialog.idempotencyKey,
+      );
 
       setSuccessMessage(
         `Se registraron ${formatNumber(cantidad)} unidades por recibir para "${product.modelo}". El stock físico no cambió.`,
@@ -1276,11 +1220,44 @@ export function ProductsPage() {
         }),
       ]);
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
+      const fieldErrors = getApiFieldErrors(error);
+      const formMessage =
+        fieldErrors.idempotency_key || fieldErrors.non_field_errors || "";
+      const visibleFieldErrors = removeFieldErrors(fieldErrors, [
+        "idempotency_key",
+        "non_field_errors",
+      ]);
+      setPendingReceiptCreateFieldErrors(visibleFieldErrors);
+      setPendingReceiptCreateError(
+        formMessage ||
+          (Object.keys(visibleFieldErrors).length > 0
+            ? ""
+            : getErrorMessage(error)),
+      );
     } finally {
       setSavingPendingReceipt(false);
     }
   };
+
+  const receivePendingReceipt = (
+    pendingReceiptId: number,
+    payload: Parameters<typeof receivePendingReceiptRequest>[1],
+  ) =>
+    receivePendingReceiptRequest(
+      pendingReceiptId,
+      payload,
+      pendingReceiptOperationDialog.idempotencyKey,
+    );
+
+  const cancelPendingReceipt = (
+    pendingReceiptId: number,
+    payload: Parameters<typeof cancelPendingReceiptRequest>[1],
+  ) =>
+    cancelPendingReceiptRequest(
+      pendingReceiptId,
+      payload,
+      pendingReceiptOperationDialog.idempotencyKey,
+    );
 
   const handlePendingReceiptOperation = async () => {
     const pendingReceipt = pendingReceiptOperationDialog.pendingReceipt;
@@ -1292,27 +1269,32 @@ export function ProductsPage() {
     }
 
     if (cantidad <= 0) {
-      setErrorMessage("Debe indicar una cantidad válida.");
+      setPendingReceiptOperationFieldErrors({
+        cantidad: "Debe indicar una cantidad válida.",
+      });
       return;
     }
 
     if (cantidad > pendingReceipt.cantidad_pendiente) {
-      setErrorMessage(
-        `La cantidad no puede superar las ${formatNumber(
+      setPendingReceiptOperationFieldErrors({
+        cantidad: `La cantidad no puede superar las ${formatNumber(
           pendingReceipt.cantidad_pendiente,
         )} unidades pendientes.`,
-      );
+      });
       return;
     }
 
     if (!motivo) {
-      setErrorMessage("El motivo es obligatorio.");
+      setPendingReceiptOperationFieldErrors({
+        motivo: "El motivo es obligatorio.",
+      });
       return;
     }
 
     try {
       setSavingPendingReceipt(true);
-      setErrorMessage("");
+      setPendingReceiptOperationError("");
+      setPendingReceiptOperationFieldErrors({});
       setSuccessMessage("");
 
       if (pendingReceiptOperationDialog.mode === "RECIBIR") {
@@ -1355,7 +1337,20 @@ export function ProductsPage() {
 
       closePendingReceiptOperationDialog();
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
+      const fieldErrors = getApiFieldErrors(error);
+      const formMessage =
+        fieldErrors.idempotency_key || fieldErrors.non_field_errors || "";
+      const visibleFieldErrors = removeFieldErrors(fieldErrors, [
+        "idempotency_key",
+        "non_field_errors",
+      ]);
+      setPendingReceiptOperationFieldErrors(visibleFieldErrors);
+      setPendingReceiptOperationError(
+        formMessage ||
+          (Object.keys(visibleFieldErrors).length > 0
+            ? ""
+            : getErrorMessage(error)),
+      );
     } finally {
       setSavingPendingReceipt(false);
     }
@@ -1429,8 +1424,9 @@ export function ProductsPage() {
     () =>
       buildPendingReceiptColumns({
         onOpenPendingReceiptOperationDialog: openPendingReceiptOperationDialog,
+        onOpenPendingReceiptHistory: openPendingReceiptHistory,
       }),
-    [openPendingReceiptOperationDialog],
+    [openPendingReceiptHistory, openPendingReceiptOperationDialog],
   );
 
   const {
@@ -1505,14 +1501,7 @@ export function ProductsPage() {
         columns: mode === "view" ? visibleProductColumns : undefined,
       });
 
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const downloadLink = document.createElement("a");
-      downloadLink.href = downloadUrl;
-      downloadLink.download = filename;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      downloadLink.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      downloadBlob(blob, filename);
 
       setSuccessMessage(
         mode === "official"
@@ -1682,13 +1671,34 @@ export function ProductsPage() {
         onSearchTermChange={setPendingReceiptSearchTerm}
         statusFilter={pendingReceiptStatusFilter}
         onStatusFilterChange={setPendingReceiptStatusFilter}
-        onSearch={handleSearchPendingReceipts}
+        dateFrom={pendingReceiptDateFrom}
+        onDateFromChange={setPendingReceiptDateFrom}
+        dateTo={pendingReceiptDateTo}
+        onDateToChange={setPendingReceiptDateTo}
+        onSearch={() => loadFirstPendingReceiptPage()}
         onClearFilters={handleClearPendingReceiptFilters}
         paginationModel={pendingReceiptPaginationModel}
         onPaginationModelChange={handlePendingReceiptPaginationModelChange}
         rowCount={pendingReceiptRowCount}
         sortModel={pendingReceiptSortModel}
         onSortModelChange={handlePendingReceiptSortModelChange}
+        onColumnFiltersChange={handlePendingReceiptColumnFiltersChange}
+        filterResetKey={pendingReceiptFilterResetKey}
+        onVisibleColumnsChange={setVisiblePendingReceiptColumns}
+        onNamedViewApply={handleApplyPendingReceiptNamedView}
+        exporting={exportingPendingReceipts}
+        canExportOfficial={canExportOfficial}
+        onExportView={() => void handleExportPendingReceipts("view")}
+        onExportOfficial={() => void handleExportPendingReceipts("official")}
+      />
+
+      <PendingReceiptHistoryDialog
+        open={pendingReceiptHistoryOpen}
+        pendingReceipt={historyPendingReceipt}
+        operations={pendingReceiptHistoryOperations}
+        loading={pendingReceiptHistoryLoading}
+        errorMessage={pendingReceiptHistoryError}
+        onClose={closePendingReceiptHistory}
       />
 
       <GlobalKardexSection
@@ -1746,43 +1756,99 @@ export function ProductsPage() {
         operationCantidad={pendingReceiptOperationDialog.cantidad}
         operationMotivo={pendingReceiptOperationDialog.motivo}
         saving={savingPendingReceipt}
+        createErrorMessage={pendingReceiptCreateError}
+        createFieldErrors={pendingReceiptCreateFieldErrors}
+        operationErrorMessage={pendingReceiptOperationError}
+        operationFieldErrors={pendingReceiptOperationFieldErrors}
         onCreateCantidadChange={(cantidad) =>
-          setPendingReceiptCreateDialog((current) => ({
-            ...current,
-            cantidad,
-          }))
+          {
+            setPendingReceiptCreateFieldErrors((current) =>
+              removeFieldErrors(current, ["cantidad"]),
+            );
+            setPendingReceiptCreateDialog((current) => ({
+              ...current,
+              cantidad,
+              idempotencyKey: createIdempotencyKey(
+                "pending-receipt-create",
+              ),
+            }));
+          }
         }
         onCreateReferenciaChange={(referencia) =>
-          setPendingReceiptCreateDialog((current) => ({
-            ...current,
-            referencia,
-          }))
+          {
+            setPendingReceiptCreateFieldErrors((current) =>
+              removeFieldErrors(current, ["referencia", "motivo"]),
+            );
+            setPendingReceiptCreateDialog((current) => ({
+              ...current,
+              referencia,
+              idempotencyKey: createIdempotencyKey(
+                "pending-receipt-create",
+              ),
+            }));
+          }
         }
         onCreateMotivoChange={(motivo) =>
-          setPendingReceiptCreateDialog((current) => ({
-            ...current,
-            motivo,
-          }))
+          {
+            setPendingReceiptCreateFieldErrors((current) =>
+              removeFieldErrors(current, ["motivo"]),
+            );
+            setPendingReceiptCreateDialog((current) => ({
+              ...current,
+              motivo,
+              idempotencyKey: createIdempotencyKey(
+                "pending-receipt-create",
+              ),
+            }));
+          }
         }
         onCreateUbicacionDestinoChange={(ubicacionDestino) =>
-          setPendingReceiptCreateDialog((current) => ({
-            ...current,
-            ubicacionDestino,
-          }))
+          {
+            setPendingReceiptCreateFieldErrors((current) =>
+              removeFieldErrors(current, ["ubicacion_destino"]),
+            );
+            setPendingReceiptCreateDialog((current) => ({
+              ...current,
+              ubicacionDestino,
+              idempotencyKey: createIdempotencyKey(
+                "pending-receipt-create",
+              ),
+            }));
+          }
         }
         onCreateClose={closePendingReceiptCreateDialog}
         onCreateConfirm={() => void handleCreatePendingReceipt()}
         onOperationCantidadChange={(cantidad) =>
-          setPendingReceiptOperationDialog((current) => ({
-            ...current,
-            cantidad,
-          }))
+          {
+            setPendingReceiptOperationFieldErrors((current) =>
+              removeFieldErrors(current, ["cantidad"]),
+            );
+            setPendingReceiptOperationDialog((current) => ({
+              ...current,
+              cantidad,
+              idempotencyKey: createIdempotencyKey(
+                current.mode === "RECIBIR"
+                  ? "pending-receipt-receive"
+                  : "pending-receipt-cancel",
+              ),
+            }));
+          }
         }
         onOperationMotivoChange={(motivo) =>
-          setPendingReceiptOperationDialog((current) => ({
-            ...current,
-            motivo,
-          }))
+          {
+            setPendingReceiptOperationFieldErrors((current) =>
+              removeFieldErrors(current, ["motivo"]),
+            );
+            setPendingReceiptOperationDialog((current) => ({
+              ...current,
+              motivo,
+              idempotencyKey: createIdempotencyKey(
+                current.mode === "RECIBIR"
+                  ? "pending-receipt-receive"
+                  : "pending-receipt-cancel",
+              ),
+            }));
+          }
         }
         onOperationClose={closePendingReceiptOperationDialog}
         onOperationConfirm={() => void handlePendingReceiptOperation()}

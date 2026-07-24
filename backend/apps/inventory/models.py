@@ -44,6 +44,11 @@ class PendientePorRecibirStatus(models.TextChoices):
     CERRADA_PARCIAL = "CERRADA_PARCIAL", "Cerrada parcial"
 
 
+class PendingReceiptOperationType(models.TextChoices):
+    RECEIVE = "RECEIVE", "Recepción"
+    CANCEL = "CANCEL", "Cancelación"
+
+
 class InventoryLocationType(models.TextChoices):
     BODEGA = "BODEGA", "Bodega"
     DOMICILIO_CUSTODIA = (
@@ -1151,6 +1156,14 @@ class PendientePorRecibir(BaseModel):
         blank=True,
         verbose_name="Motivo de registro",
     )
+    creation_idempotency_key = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="Clave de idempotencia de creación",
+    )
 
     class Meta:
         verbose_name = "Pendiente por recibir"
@@ -1259,6 +1272,181 @@ class PendientePorRecibir(BaseModel):
             kwargs["update_fields"] = list(set(update_fields) | {"estado"})
 
         super().save(*args, **kwargs)
+
+
+class PendingReceiptOperation(BaseModel):
+    pending_receipt = models.ForeignKey(
+        PendientePorRecibir,
+        on_delete=models.PROTECT,
+        related_name="operations",
+        verbose_name="Pendiente por recibir",
+    )
+    operation_type = models.CharField(
+        max_length=20,
+        choices=PendingReceiptOperationType.choices,
+        db_index=True,
+        verbose_name="Tipo de operación",
+    )
+    quantity = models.PositiveIntegerField(verbose_name="Cantidad")
+    reason = models.CharField(max_length=255, verbose_name="Motivo")
+    product_model_snapshot = models.CharField(
+        max_length=150,
+        editable=False,
+        verbose_name="Producto / modelo al operar",
+    )
+    product_sap_code_snapshot = models.CharField(
+        max_length=100,
+        editable=False,
+        verbose_name="Código SAP al operar",
+    )
+    product_category_snapshot = models.CharField(
+        max_length=150,
+        editable=False,
+        verbose_name="Categoría al operar",
+    )
+    destination_location_snapshot = models.CharField(
+        max_length=160,
+        editable=False,
+        verbose_name="Ubicación de recepción al operar",
+    )
+    responsible = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="responsible_pending_receipt_operations",
+        verbose_name="Responsable",
+    )
+    kardex_movement = models.ForeignKey(
+        "MovimientoKardex",
+        on_delete=models.PROTECT,
+        related_name="pending_receipt_operations",
+        null=True,
+        blank=True,
+        verbose_name="Movimiento Kardex",
+    )
+    idempotency_key = models.CharField(
+        max_length=100,
+        unique=True,
+        editable=False,
+        verbose_name="Clave de idempotencia",
+    )
+    received_before = models.PositiveIntegerField(
+        verbose_name="Cantidad recibida anterior",
+    )
+    received_after = models.PositiveIntegerField(
+        verbose_name="Cantidad recibida posterior",
+    )
+    cancelled_before = models.PositiveIntegerField(
+        verbose_name="Cantidad cancelada anterior",
+    )
+    cancelled_after = models.PositiveIntegerField(
+        verbose_name="Cantidad cancelada posterior",
+    )
+    pending_before = models.PositiveIntegerField(
+        verbose_name="Cantidad pendiente anterior",
+    )
+    pending_after = models.PositiveIntegerField(
+        verbose_name="Cantidad pendiente posterior",
+    )
+    previous_state = models.CharField(
+        max_length=30,
+        choices=PendientePorRecibirStatus.choices,
+        verbose_name="Estado anterior",
+    )
+    new_state = models.CharField(
+        max_length=30,
+        choices=PendientePorRecibirStatus.choices,
+        verbose_name="Estado posterior",
+    )
+    occurred_at = models.DateTimeField(
+        default=timezone.now,
+        db_index=True,
+        verbose_name="Fecha de operación",
+    )
+
+    class Meta:
+        verbose_name = "Operación de pendiente por recibir"
+        verbose_name_plural = "Operaciones de pendientes por recibir"
+        ordering = ["-occurred_at", "-id"]
+        indexes = [
+            models.Index(fields=["pending_receipt", "occurred_at"]),
+            models.Index(fields=["operation_type", "occurred_at"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name="pending_receipt_operation_quantity_positive",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.get_operation_type_display()} de "
+            f"{self.pending_receipt.producto.modelo}: {self.quantity}"
+        )
+
+    def get_audit_target_snapshot(self):
+        return {
+            "entity_label": "Operación de pendiente por recibir",
+            "display_name": (
+                f"{self.get_operation_type_display()} de "
+                f"{self.product_model_snapshot}"
+            ),
+            "internal_id": self.pk,
+            "identifiers": build_product_audit_identifiers(
+                modelo=self.product_model_snapshot,
+                codigo_sap=self.product_sap_code_snapshot,
+                categoria=self.product_category_snapshot,
+            ),
+        }
+
+    def clean(self):
+        super().clean()
+        self.reason = str(self.reason or "").strip()
+        self.idempotency_key = str(self.idempotency_key or "").strip()
+
+        if self.quantity <= 0:
+            raise ValidationError({"quantity": "La cantidad debe ser positiva."})
+        if not self.reason:
+            raise ValidationError({"reason": "El motivo es obligatorio."})
+        if not self.idempotency_key:
+            raise ValidationError(
+                {"idempotency_key": "La clave de idempotencia es obligatoria."}
+            )
+        if (
+            self.operation_type == PendingReceiptOperationType.RECEIVE
+            and not self.kardex_movement_id
+        ):
+            raise ValidationError(
+                {
+                    "kardex_movement": (
+                        "Una recepción debe conservar su movimiento Kardex."
+                    )
+                }
+            )
+        if (
+            self.operation_type == PendingReceiptOperationType.CANCEL
+            and self.kardex_movement_id
+        ):
+            raise ValidationError(
+                {
+                    "kardex_movement": (
+                        "Una cancelación no debe crear movimiento Kardex."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError(
+                "Las operaciones de pendientes por recibir son inmutables."
+            )
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            "Las operaciones de pendientes por recibir no se eliminan."
+        )
 
 
 class MovimientoKardex(BaseModel):

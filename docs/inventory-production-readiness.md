@@ -129,6 +129,51 @@ y trasladar cada saldo histórico hacia su ubicación verificada.
   núcleo común.
 - Recepción/cancelación parcial idempotente y protegida contra concurrencia.
 
+Estado actual: incremento implementado y verificado en la rama de trabajo.
+
+- Registrar un pendiente exige producto operativo, cantidad positiva,
+  ubicación de recepción activa y una referencia o motivo. Esta acción no
+  modifica stock ni crea Kardex.
+- Crear, recibir y cancelar usan claves de idempotencia. Un reintento idéntico
+  devuelve el mismo resultado sin duplicar pendientes, stock, movimientos ni
+  auditoría; reutilizar una clave con otros datos se rechaza.
+- Las recepciones y cancelaciones parciales bloquean el registro y el producto
+  durante la transacción. La recepción física actualiza stock, saldo por
+  ubicación, Kardex y pendiente como una sola unidad atómica.
+- Cada recepción o cancelación conserva un registro operativo inmutable con
+  actor, fecha, motivo, cantidad, saldos anterior/posterior, estados
+  anterior/posterior y vínculo al Kardex cuando corresponde.
+- El historial conserva una instantánea del modelo, Código SAP, categoría y
+  ubicación. La plataforma lo presenta en lenguaje cotidiano desde el botón
+  **Historial**, aunque el producto se renombre posteriormente.
+- La grilla incorpora búsqueda, estado, rango de fechas, filtros remotos por
+  columna, ordenamiento, paginación y preferencias del núcleo transversal.
+- Cada usuario puede guardar vistas personales con nombre que conservan
+  búsqueda, estado, fechas, filtros de columna, orden, columnas y tamaño de
+  página.
+- La exportación de la vista respeta las columnas visibles y etiquetas
+  administrativas. La exportación oficial requiere su capacidad backend,
+  ambas tienen límite de 5.000 registros, neutralizan fórmulas y quedan
+  auditadas.
+- Los errores de creación, recepción y cancelación aparecen dentro del diálogo
+  correspondiente y marcan el campo afectado.
+- El controlador de Por Recibir está separado de la página principal y cancela
+  solicitudes obsoletas para evitar resultados fuera de orden.
+
+Validación automatizada del incremento:
+
+- Migración generada y ausencia de cambios de esquema pendientes.
+- Creación, recepción y cancelación idempotentes.
+- Recepciones/cancelaciones parciales, integridad stock/Kardex y permisos.
+- Historial inmutable con identificadores históricos legibles.
+- Filtros remotos, exportación segura, alcance oficial y auditoría.
+- `manage.py check`, pruebas backend específicas, lint, pruebas frontend y
+  build de producción.
+
+Este incremento cierra **Por Recibir**, pero no declara todavía Inventario
+completo: faltan los incrementos 4 (Kardex transversal) y 5 (verificación de
+producción).
+
 ### 4. Kardex
 
 - Grilla transversal, filtros oficiales y exportación de vista/oficial.

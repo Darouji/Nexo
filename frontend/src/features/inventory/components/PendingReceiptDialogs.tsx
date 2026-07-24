@@ -35,6 +35,10 @@ type PendingReceiptDialogsProps = {
   operationMotivo: string;
 
   saving: boolean;
+  createErrorMessage: string;
+  createFieldErrors: Record<string, string>;
+  operationErrorMessage: string;
+  operationFieldErrors: Record<string, string>;
 
   onCreateCantidadChange: (value: string) => void;
   onCreateReferenciaChange: (value: string) => void;
@@ -63,6 +67,10 @@ export function PendingReceiptDialogs({
   operationCantidad,
   operationMotivo,
   saving,
+  createErrorMessage,
+  createFieldErrors,
+  operationErrorMessage,
+  operationFieldErrors,
   onCreateCantidadChange,
   onCreateReferenciaChange,
   onCreateMotivoChange,
@@ -89,6 +97,12 @@ export function PendingReceiptDialogs({
               física.
             </Alert>
 
+            {createErrorMessage ? (
+              <Alert severity="error" variant="outlined">
+                {createErrorMessage}
+              </Alert>
+            ) : null}
+
             <TextField
               label="Producto"
               value={
@@ -109,7 +123,11 @@ export function PendingReceiptDialogs({
               }
               fullWidth
               required
-              helperText="Al confirmar la recepción, el stock ingresará en esta ubicación."
+              error={Boolean(createFieldErrors.ubicacion_destino)}
+              helperText={
+                createFieldErrors.ubicacion_destino ||
+                "Al confirmar la recepción, el stock ingresará en esta ubicación."
+              }
             >
               {locations.map((location) => (
                 <MenuItem key={location.id} value={String(location.id)}>
@@ -126,6 +144,8 @@ export function PendingReceiptDialogs({
                 onChange={(event) => onCreateCantidadChange(event.target.value)}
                 fullWidth
                 required
+                error={Boolean(createFieldErrors.cantidad)}
+                helperText={createFieldErrors.cantidad}
               />
 
               <TextField
@@ -136,7 +156,11 @@ export function PendingReceiptDialogs({
                 }
                 fullWidth
                 placeholder="Ej.: OC-2026-001 o FAC-2026-001"
-                helperText="Ingresa la orden de compra o la factura asociada al pendiente."
+                error={Boolean(createFieldErrors.referencia)}
+                helperText={
+                  createFieldErrors.referencia ||
+                  "Ingresa la orden de compra o la factura asociada al pendiente."
+                }
               />
             </Stack>
 
@@ -147,7 +171,11 @@ export function PendingReceiptDialogs({
               fullWidth
               multiline
               minRows={2}
-              helperText="Debe indicar una referencia o un motivo."
+              error={Boolean(createFieldErrors.motivo)}
+              helperText={
+                createFieldErrors.motivo ||
+                "Debe indicar una referencia o un motivo."
+              }
             />
           </Stack>
         </DialogContent>
@@ -194,6 +222,12 @@ export function PendingReceiptDialogs({
                 : "Esta operación no modifica el stock físico ni crea un movimiento Kardex."}
             </Alert>
 
+            {operationErrorMessage ? (
+              <Alert severity="error" variant="outlined">
+                {operationErrorMessage}
+              </Alert>
+            ) : null}
+
             <TextField
               label="Producto"
               value={
@@ -226,6 +260,8 @@ export function PendingReceiptDialogs({
                 }
                 fullWidth
                 required
+                error={Boolean(operationFieldErrors.cantidad)}
+                helperText={operationFieldErrors.cantidad}
               />
             </Stack>
 
@@ -237,6 +273,8 @@ export function PendingReceiptDialogs({
               required
               multiline
               minRows={2}
+              error={Boolean(operationFieldErrors.motivo)}
+              helperText={operationFieldErrors.motivo}
             />
           </Stack>
         </DialogContent>

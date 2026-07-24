@@ -37,8 +37,11 @@ type KardexQueryState = {
 type PendingReceiptQueryState = {
   searchTerm: string;
   statusFilter: PendingReceiptStatus | "";
+  dateFrom: string;
+  dateTo: string;
   ordering: string;
   paginationModel: SerkanGridPaginationModel;
+  columnFilters: SerkanGridFilter[];
 };
 
 export function buildProductPageParams(
@@ -104,7 +107,10 @@ export function buildPendingReceiptPageParams(
 ) {
   const resolvedSearch = filters.search ?? state.searchTerm;
   const resolvedStatus = filters.status ?? state.statusFilter;
+  const resolvedDateFrom = filters.dateFrom ?? state.dateFrom;
+  const resolvedDateTo = filters.dateTo ?? state.dateTo;
   const resolvedOrdering = filters.ordering ?? state.ordering;
+  const resolvedColumnFilters = filters.columnFilters ?? state.columnFilters;
   const resolvedPage = filters.page ?? state.paginationModel.page;
   const resolvedPageSize = filters.pageSize ?? state.paginationModel.pageSize;
 
@@ -112,6 +118,12 @@ export function buildPendingReceiptPageParams(
     ordering: resolvedOrdering,
     search: resolvedSearch,
     estado: resolvedStatus || undefined,
+    fecha_desde: resolvedDateFrom || undefined,
+    fecha_hasta: resolvedDateTo || undefined,
+    grid_filters:
+      resolvedColumnFilters.length > 0
+        ? JSON.stringify(resolvedColumnFilters)
+        : undefined,
     page: resolvedPage + 1,
     page_size: resolvedPageSize,
   };

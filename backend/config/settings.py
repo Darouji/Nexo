@@ -83,6 +83,7 @@ INSTALLED_APPS = [
     "apps.collaborators",
     "apps.commercial",
     "apps.inventory",
+    "apps.purchases.apps.PurchasesConfig",
     "apps.sales",
     "apps.documents.apps.DocumentsConfig",
     "apps.imports.apps.ImportsConfig",
@@ -309,6 +310,9 @@ SPECTACULAR_SETTINGS = {
     "REDOC_DIST": "SIDECAR",
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": True,
+    "ENUM_NAME_OVERRIDES": {
+        "PurchaseCostQualityEnum": "apps.purchases.models.CostQuality.choices",
+    },
     "TAGS": [
         {
             "name": "Auth",
@@ -325,6 +329,12 @@ SPECTACULAR_SETTINGS = {
             "description": "Holdings, mineras, áreas, subáreas y contactos.",
         },
         {"name": "Inventory", "description": "Productos, stock y movimientos Kardex."},
+        {
+            "name": "Purchases",
+            "description": (
+                "Proveedores, órdenes de compra, recepciones y costos asociados."
+            ),
+        },
         {
             "name": "Sales",
             "description": "Ventas, detalles, estados comerciales y alertas.",

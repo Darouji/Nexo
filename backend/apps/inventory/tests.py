@@ -4,11 +4,19 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User, UserRole
-from apps.core.models import AuditAction, AuditLog, BaseStatus, RecordChangeLog
+from apps.core.models import (
+    AuditAction,
+    AuditLog,
+    AuditOrigin,
+    BaseStatus,
+    RecordChangeLog,
+)
 
 from .models import (
     Categoria,
     KardexMovementType,
+    InventoryLocation,
+    InventoryLocationType,
     MovimientoKardex,
     PendientePorRecibir,
     PendingReceiptOperation,
@@ -307,6 +315,86 @@ class PendientePorRecibirServiceTests(TestCase):
                 creation_idempotency_key="pending-create-idempotent-001"
             ).count(),
             1,
+        )
+
+    def test_create_reloads_and_rejects_archived_destination(self):
+        destination = InventoryLocation.objects.create(
+            name="Bodega que fue archivada",
+            location_type=InventoryLocationType.BODEGA,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        InventoryLocation.objects.filter(pk=destination.pk).update(
+            status=BaseStatus.ARCHIVADO
+        )
+
+        with self.assertRaises(ValidationError) as error:
+            create_pending_receipt(
+                producto=self.producto,
+                cantidad=2,
+                motivo="Compra destinada a ubicación archivada.",
+                destination_location=destination,
+                idempotency_key="pending-archived-location-001",
+                user=self.user,
+            )
+
+        self.assertIn("destination_location", error.exception.message_dict)
+        self.assertFalse(
+            PendientePorRecibir.objects.filter(
+                creation_idempotency_key="pending-archived-location-001"
+            ).exists()
+        )
+
+    def test_create_accepts_explicit_audit_origin_and_defaults_to_manual(self):
+        automatic_pending = create_pending_receipt(
+            producto=self.producto,
+            cantidad=2,
+            motivo="Creación originada por integración.",
+            referencia="OC-AUDIT-001",
+            idempotency_key="pending-audit-origin-001",
+            audit_origin=AuditOrigin.AUTOMATICO,
+            user=self.user,
+        )
+        manual_pending = create_pending_receipt(
+            producto=self.producto,
+            cantidad=1,
+            motivo="Creación manual.",
+            referencia="OC-AUDIT-002",
+            idempotency_key="pending-audit-origin-002",
+            user=self.user,
+        )
+
+        self.assertEqual(
+            AuditLog.objects.get(
+                model_name="pendienteporrecibir",
+                object_id=str(automatic_pending.pk),
+            ).origin,
+            AuditOrigin.AUTOMATICO,
+        )
+        self.assertEqual(
+            AuditLog.objects.get(
+                model_name="pendienteporrecibir",
+                object_id=str(manual_pending.pk),
+            ).origin,
+            AuditOrigin.MANUAL,
+        )
+
+    def test_create_rejects_invalid_audit_origin(self):
+        with self.assertRaises(ValidationError) as error:
+            create_pending_receipt(
+                producto=self.producto,
+                cantidad=2,
+                motivo="Origen inválido.",
+                idempotency_key="pending-invalid-origin-001",
+                audit_origin="COMPRAS_DESCONOCIDO",
+                user=self.user,
+            )
+
+        self.assertIn("audit_origin", error.exception.message_dict)
+        self.assertFalse(
+            PendientePorRecibir.objects.filter(
+                creation_idempotency_key="pending-invalid-origin-001"
+            ).exists()
         )
 
     def test_receive_partial_pending_updates_stock_and_creates_kardex(self):
@@ -627,6 +715,58 @@ class PendientePorRecibirServiceTests(TestCase):
 
         with self.assertRaises(ValidationError):
             self.producto.mark_inactive(user=self.user)
+
+    def test_product_with_open_pending_cannot_be_discontinued(self):
+        create_pending_receipt(
+            producto=self.producto,
+            cantidad=3,
+            motivo="Compra en tránsito que debe resolverse.",
+            idempotency_key="pending-before-discontinue-001",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError) as service_error:
+            change_product_lifecycle(
+                producto=self.producto,
+                accion="DESCONTINUAR",
+                motivo="Intento con compra aún pendiente.",
+                user=self.user,
+            )
+
+        self.assertIn("descontinuado", service_error.exception.message_dict)
+        self.producto.refresh_from_db()
+        self.assertFalse(self.producto.descontinuado)
+
+        self.producto.descontinuado = True
+        with self.assertRaises(ValidationError) as model_error:
+            self.producto.save()
+
+        self.assertIn("descontinuado", model_error.exception.message_dict)
+
+    def test_legacy_discontinued_product_pending_can_be_cancelled(self):
+        pending_receipt = create_pending_receipt(
+            producto=self.producto,
+            cantidad=3,
+            motivo="Pendiente heredado para saneamiento.",
+            idempotency_key="pending-legacy-cancel-001",
+            user=self.user,
+        )
+        Producto.objects.filter(pk=self.producto.pk).update(descontinuado=True)
+
+        cancelled = cancel_pending_receipt(
+            pending_receipt=pending_receipt,
+            cantidad=3,
+            motivo="Cierre administrativo del remanente heredado.",
+            idempotency_key="cancel-legacy-pending-001",
+            user=self.user,
+        )
+
+        cancelled.refresh_from_db()
+        self.producto.refresh_from_db()
+        self.assertEqual(cancelled.cantidad_pendiente, 0)
+        self.assertEqual(cancelled.estado, PendientePorRecibirStatus.CANCELADA)
+        self.assertTrue(self.producto.descontinuado)
+        self.assertEqual(self.producto.stock_actual, 10)
 
     def test_product_lifecycle_controls_operational_state(self):
         producto = Producto.objects.create(

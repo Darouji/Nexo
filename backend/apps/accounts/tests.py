@@ -87,6 +87,21 @@ class AuthSessionAndSecurityTests(APITestCase):
         self.assertTrue(
             response.data["access"]["capabilities"]["inventory.export_official"]
         )
+        self.assertTrue(
+            response.data["access"]["capabilities"]["purchases.approve_order"]
+        )
+        self.assertTrue(
+            response.data["access"]["capabilities"]["purchases.export_official"]
+        )
+        self.assertTrue(
+            response.data["access"]["permissions"]["compras"]["can_view"]
+        )
+        self.assertTrue(
+            any(
+                item["module"] == "compras"
+                for item in response.data["access"]["menu"]
+            )
+        )
         self.assertIn("permissions", response.data["access"])
         self.assertIn("menu", response.data["access"])
 
@@ -165,6 +180,23 @@ class AuthSessionAndSecurityTests(APITestCase):
         self.assertGreaterEqual(response.data["session"]["token_expires_in_seconds"], 0)
 
         self.assertTrue(Token.objects.filter(key=token.key).exists())
+
+    def test_operational_user_can_receive_purchases_but_not_approve_or_export_official(self):
+        self.authenticate_as(self.operativo)
+
+        response = self.client.get("/api/auth/session/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        capabilities = response.data["access"]["capabilities"]
+        purchase_permission = response.data["access"]["permissions"]["compras"]
+
+        self.assertTrue(capabilities["purchases.view"])
+        self.assertTrue(capabilities["purchases.receive_order"])
+        self.assertFalse(capabilities["purchases.approve_order"])
+        self.assertFalse(capabilities["purchases.export_official"])
+        self.assertTrue(purchase_permission["can_view"])
+        self.assertFalse(purchase_permission["can_create"])
+        self.assertTrue(purchase_permission["can_update"])
 
     def test_expired_token_is_rejected_and_deleted(self):
         token = self.authenticate_as(self.admin)

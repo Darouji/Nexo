@@ -52,6 +52,51 @@ INVENTORY_CAPABILITY_ROLES = {
     InventoryCapability.TRANSFER_STOCK: MANAGEMENT_ROLES,
 }
 
+PURCHASE_VIEW_ROLES = {
+    UserRole.ADMINISTRADOR,
+    UserRole.FINANZAS_COMERCIAL,
+    UserRole.OPERATIVO,
+    UserRole.CONSULTA,
+}
+
+PURCHASE_MANAGEMENT_ROLES = {
+    UserRole.ADMINISTRADOR,
+    UserRole.FINANZAS_COMERCIAL,
+}
+
+
+class PurchaseCapability:
+    VIEW = "purchases.view"
+    MANAGE_SUPPLIERS = "purchases.manage_suppliers"
+    CREATE_ORDER = "purchases.create_order"
+    EDIT_DRAFT = "purchases.edit_draft"
+    SUBMIT_REVIEW = "purchases.submit_review"
+    APPROVE_ORDER = "purchases.approve_order"
+    ISSUE_ORDER = "purchases.issue_order"
+    RECEIVE_ORDER = "purchases.receive_order"
+    MANAGE_COSTS = "purchases.manage_costs"
+    CANCEL_ORDER = "purchases.cancel_order"
+    CLOSE_ORDER = "purchases.close_order"
+    EXPORT_VIEW = "purchases.export_view"
+    EXPORT_OFFICIAL = "purchases.export_official"
+
+
+PURCHASE_CAPABILITY_ROLES = {
+    PurchaseCapability.VIEW: PURCHASE_VIEW_ROLES,
+    PurchaseCapability.MANAGE_SUPPLIERS: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.CREATE_ORDER: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.EDIT_DRAFT: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.SUBMIT_REVIEW: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.APPROVE_ORDER: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.ISSUE_ORDER: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.RECEIVE_ORDER: PURCHASE_MANAGEMENT_ROLES | {UserRole.OPERATIVO},
+    PurchaseCapability.MANAGE_COSTS: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.CANCEL_ORDER: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.CLOSE_ORDER: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.EXPORT_VIEW: PURCHASE_VIEW_ROLES,
+    PurchaseCapability.EXPORT_OFFICIAL: PURCHASE_MANAGEMENT_ROLES,
+}
+
 
 def is_active_internal_user(user):
     if user is None:
@@ -97,6 +142,18 @@ def build_inventory_capabilities(user):
     }
 
 
+def has_purchase_capability(user, capability):
+    allowed_roles = PURCHASE_CAPABILITY_ROLES.get(capability, set())
+    return user_role(user) in allowed_roles
+
+
+def build_purchase_capabilities(user):
+    return {
+        capability: has_purchase_capability(user, capability)
+        for capability in PURCHASE_CAPABILITY_ROLES
+    }
+
+
 def module_permission(
     *, can_view=False, can_create=False, can_update=False, can_delete=False
 ):
@@ -121,6 +178,23 @@ def build_module_permissions(user):
     can_read = has_read_access(user)
     can_manage = has_management_access(user)
     can_audit = has_audit_access(user)
+    can_view_purchases = has_purchase_capability(user, PurchaseCapability.VIEW)
+    can_create_purchases = has_purchase_capability(
+        user, PurchaseCapability.CREATE_ORDER
+    )
+    can_update_purchases = any(
+        has_purchase_capability(user, capability)
+        for capability in (
+            PurchaseCapability.EDIT_DRAFT,
+            PurchaseCapability.SUBMIT_REVIEW,
+            PurchaseCapability.APPROVE_ORDER,
+            PurchaseCapability.ISSUE_ORDER,
+            PurchaseCapability.RECEIVE_ORDER,
+            PurchaseCapability.MANAGE_COSTS,
+            PurchaseCapability.CANCEL_ORDER,
+            PurchaseCapability.CLOSE_ORDER,
+        )
+    )
 
     return {
         "inicio": module_permission(can_view=can_read),
@@ -154,6 +228,12 @@ def build_module_permissions(user):
             can_view=can_read,
             can_create=can_manage,
             can_update=can_manage,
+            can_delete=False,
+        ),
+        "compras": module_permission(
+            can_view=can_view_purchases,
+            can_create=can_create_purchases,
+            can_update=can_update_purchases,
             can_delete=False,
         ),
         "documentos": module_permission(
@@ -224,6 +304,12 @@ def build_menu(user):
             "module": "ventas",
         },
         {
+            "key": "compras",
+            "label": "Compras / Egresos",
+            "path": "/compras",
+            "module": "compras",
+        },
+        {
             "key": "documentos",
             "label": "Documentos",
             "path": "/documentos",
@@ -288,12 +374,18 @@ def build_token_status(token):
 
 
 def build_access_payload(user):
+    inventory_capabilities = build_inventory_capabilities(user)
+    purchase_capabilities = build_purchase_capabilities(user)
+
     return {
         "role": user_role(user),
         "is_management_role": has_management_access(user),
         "is_read_role": has_read_access(user),
         "is_audit_role": has_audit_access(user),
-        "capabilities": build_inventory_capabilities(user),
+        "capabilities": {
+            **inventory_capabilities,
+            **purchase_capabilities,
+        },
         "permissions": build_module_permissions(user),
         "menu": build_menu(user),
     }

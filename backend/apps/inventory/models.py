@@ -626,6 +626,17 @@ class Producto(BaseModel):
                 }
             )
 
+        if self.descontinuado and has_open_pending_receipts:
+            raise ValidationError(
+                {
+                    "descontinuado": (
+                        "No se puede descontinuar el producto mientras tenga "
+                        "unidades pendientes por recibir. Reciba o cancele "
+                        "primero el remanente pendiente."
+                    )
+                }
+            )
+
         original = (
             Producto.objects.filter(pk=self.pk)
             .values(

@@ -75,7 +75,7 @@ const sectionAccessRules: Record<string, SectionAccessRule> = {
     fallbackRoles: READ_ROLES,
   },
   "Compras / Egresos": {
-    moduleKey: "compras_demo",
+    moduleKey: "compras",
     fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
   },
   "Importaciones Excel": {

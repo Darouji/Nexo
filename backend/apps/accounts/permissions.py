@@ -2,7 +2,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from apps.core.models import BaseStatus
 
-from .access import has_inventory_capability
+from .access import has_inventory_capability, has_purchase_capability
 from .models import UserRole
 
 
@@ -59,6 +59,29 @@ class HasInventoryCapability(BasePermission):
             return False
 
         return has_inventory_capability(request.user, capability)
+
+
+class HasPurchaseCapability(BasePermission):
+    """Autoriza una capacidad de Compras declarada por la vista y la acción."""
+
+    message = "No tiene la capacidad necesaria para realizar esta acción de compras."
+
+    def has_permission(self, request, view):
+        capability_resolver = getattr(
+            view,
+            "get_required_purchase_capability",
+            None,
+        )
+
+        if not callable(capability_resolver):
+            return False
+
+        capability = capability_resolver()
+
+        if not capability:
+            return False
+
+        return has_purchase_capability(request.user, capability)
 
 
 class IsAdministrador(BasePermission):

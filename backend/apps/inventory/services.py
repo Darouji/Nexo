@@ -25,6 +25,7 @@ from .models import (
     ESTADOS_PENDIENTE_POR_RECIBIR_ABIERTOS,
     Categoria,
     KardexMovementType,
+    InventoryLocation,
     MovimientoKardex,
     PendientePorRecibir,
     ProductLocationBalance,
@@ -1559,6 +1560,17 @@ def change_product_lifecycle(
                     {"accion": "El producto ya se encuentra descontinuado."}
                 )
 
+            if has_open_pending_receipts:
+                raise ValidationError(
+                    {
+                        "descontinuado": (
+                            "No se puede descontinuar el producto mientras tenga "
+                            "unidades pendientes por recibir. Reciba o cancele "
+                            "primero el remanente pendiente."
+                        )
+                    }
+                )
+
             locked_product.descontinuado = True
 
         elif accion == "REANUDAR":
@@ -1626,12 +1638,19 @@ def create_pending_receipt(
     referencia="",
     destination_location=None,
     idempotency_key="",
+    audit_origin=AuditOrigin.MANUAL,
     user=None,
     request=None,
 ):
     motivo = str(motivo or "").strip()
     referencia = str(referencia or "").strip()
     idempotency_key = str(idempotency_key or "").strip()
+    audit_origin = str(audit_origin or "").strip().upper()
+
+    if audit_origin not in AuditOrigin.values:
+        raise ValidationError(
+            {"audit_origin": "El origen de auditoría indicado no es válido."}
+        )
 
     if not idempotency_key:
         if request is not None:
@@ -1703,6 +1722,12 @@ def create_pending_receipt(
             locked_product = Producto.objects.select_for_update().get(
                 pk=producto.pk
             )
+            # Orden de bloqueo para operaciones que crean recepciones:
+            # producto -> ubicación. Debe conservarse para evitar interbloqueos
+            # con integraciones que registren varias líneas de compra.
+            locked_destination = InventoryLocation.objects.select_for_update().get(
+                pk=resolved_destination.pk
+            )
 
             if (
                 locked_product.status != BaseStatus.ACTIVO
@@ -1727,7 +1752,7 @@ def create_pending_receipt(
                     }
                 )
 
-            if resolved_destination.status != BaseStatus.ACTIVO:
+            if locked_destination.status != BaseStatus.ACTIVO:
                 raise ValidationError(
                     {
                         "destination_location": (
@@ -1738,7 +1763,7 @@ def create_pending_receipt(
 
             pending_receipt = PendientePorRecibir.objects.create(
                 producto=locked_product,
-                destination_location=resolved_destination,
+                destination_location=locked_destination,
                 cantidad_original=cantidad,
                 referencia=referencia,
                 motivo=motivo,
@@ -1751,7 +1776,7 @@ def create_pending_receipt(
                 instance=pending_receipt,
                 action=AuditAction.CREAR,
                 user=user,
-                origin=AuditOrigin.MANUAL,
+                origin=audit_origin,
                 reason=motivo or referencia,
                 metadata={
                     "operation": "pending_receipt_create",
@@ -1759,8 +1784,8 @@ def create_pending_receipt(
                     "product_model": locked_product.modelo,
                     "original_quantity": pending_receipt.cantidad_original,
                     "reference": pending_receipt.referencia,
-                    "destination_location_id": resolved_destination.pk,
-                    "destination_location_name": resolved_destination.name,
+                    "destination_location_id": locked_destination.pk,
+                    "destination_location_name": locked_destination.name,
                     "initial_status": pending_receipt.estado,
                     "idempotency_key": idempotency_key,
                 },
@@ -2109,27 +2134,9 @@ def cancel_pending_receipt(
                         )
                     }
                 )
-            if (
-                locked_product.status != BaseStatus.ACTIVO
-                or locked_product.descontinuado
-            ):
-                raise ValidationError(
-                    {
-                        "producto": (
-                            "El producto debe estar activo y no descontinuado "
-                            "para cancelar unidades pendientes."
-                        )
-                    }
-                )
-            if not locked_product.controla_stock:
-                raise ValidationError(
-                    {
-                        "producto": (
-                            "Este producto no maneja inventario y no puede "
-                            "cancelar unidades pendientes."
-                        )
-                    }
-                )
+            # Cancelar no modifica stock ni Kardex. Debe seguir disponible como
+            # operación de saneamiento para pendientes históricos, incluso si el
+            # producto quedó inactivo o descontinuado por datos heredados.
             if cantidad > locked_pending_receipt.cantidad_pendiente:
                 raise ValidationError(
                     {

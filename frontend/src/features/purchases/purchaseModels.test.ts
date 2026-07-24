@@ -1,0 +1,31 @@
+import { describe, expect, it } from "vitest";
+import {
+  createEmptyPurchaseOrderForm,
+  toPurchaseOrderPayload,
+  validatePurchaseOrderForm,
+} from "./purchaseModels";
+
+describe("purchaseModels", () => {
+  it("exige proveedor, producto y destino en líneas inventariables", () => {
+    const errors = validatePurchaseOrderForm(createEmptyPurchaseOrderForm());
+    expect(errors.supplier).toBeTruthy();
+    expect(errors["lines.0.product"]).toBeTruthy();
+    expect(errors["lines.0.destination_location"]).toBeTruthy();
+  });
+
+  it("congela el tipo de cambio en el payload USD", () => {
+    const form = createEmptyPurchaseOrderForm();
+    form.supplier = "4";
+    form.currency = "USD";
+    form.exchangeRate = "945.5";
+    form.lines[0] = {
+      description: "Alternador",
+      product: "8",
+      destinationLocation: "2",
+      inventoryManaged: true,
+      quantity: "3",
+      unitPrice: "120",
+    };
+    expect(toPurchaseOrderPayload(form).exchange_rate).toBe(945.5);
+  });
+});

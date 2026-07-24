@@ -169,11 +169,10 @@ const menuItems: MenuItem[] = [
   },
   {
     label: "Compras / Egresos",
-    moduleKey: "compras_demo",
+    moduleKey: "compras",
     fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
     icon: <ShoppingCartIcon />,
-    helper: "Vista demo de compras",
-    demo: true,
+    helper: "Órdenes, proveedores y recepciones",
     accent: colors.modules.purchases,
   },
   {

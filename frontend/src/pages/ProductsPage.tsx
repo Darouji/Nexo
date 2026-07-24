@@ -55,6 +55,7 @@ import {
   fetchInventorySummary,
   fetchKardexMovementsPage,
   fetchProductLocationBalances,
+  exportKardexMovements,
   exportProducts,
   receivePendingReceipt as receivePendingReceiptRequest,
   registerInventoryAdjustment,
@@ -66,6 +67,7 @@ import { downloadBlob } from "../services/download";
 import { createIdempotencyKey } from "../services/idempotency";
 
 import type {
+  SerkanGridFilter,
   SerkanGridPaginationModel,
   SerkanGridSortModel,
 } from "../components/SerkanDataGrid";
@@ -278,6 +280,10 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
     string[]
   >([]);
   const [globalKardexOrigin, setGlobalKardexOrigin] = useState<AuditOrigin[]>([]);
+  const [globalKardexColumnFilters, setGlobalKardexColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [globalKardexFilterResetKey, setGlobalKardexFilterResetKey] = useState(0);
+  const [visibleGlobalKardexColumns, setVisibleGlobalKardexColumns] = useState<string[]>([]);
+  const [exportingGlobalKardex, setExportingGlobalKardex] = useState(false);
   const [pendingReceiptCreateDialog, setPendingReceiptCreateDialog] =
     useState<PendingReceiptCreateDialogState>(emptyPendingReceiptCreateDialog);
 
@@ -347,6 +353,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
             origin: globalKardexOrigin,
             ordering: globalKardexOrdering,
             paginationModel: globalKardexPaginationModel,
+            columnFilters: globalKardexColumnFilters,
           }),
         );
 
@@ -365,6 +372,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
       globalKardexOrigin,
       globalKardexPaginationModel,
       globalKardexSearchTerm,
+      globalKardexColumnFilters,
     ],
   );
 
@@ -436,6 +444,48 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
     });
   };
 
+  const handleGlobalKardexColumnFiltersChange = (nextFilters: SerkanGridFilter[]) => {
+    const nextPaginationModel = { ...globalKardexPaginationModel, page: 0 };
+    setGlobalKardexColumnFilters(nextFilters);
+    setGlobalKardexPaginationModel(nextPaginationModel);
+    void loadGlobalKardex({
+      columnFilters: nextFilters,
+      page: 0,
+      pageSize: nextPaginationModel.pageSize,
+    });
+  };
+
+  const handleExportGlobalKardex = async (mode: "view" | "official") => {
+    try {
+      setExportingGlobalKardex(true);
+      setErrorMessage("");
+      const params = buildKardexMovementPageParams({}, {
+        searchTerm: globalKardexSearchTerm,
+        movementType: globalKardexMovementType,
+        origin: globalKardexOrigin,
+        ordering: globalKardexOrdering,
+        paginationModel: globalKardexPaginationModel,
+        columnFilters: globalKardexColumnFilters,
+      });
+      const { blob, filename } = await exportKardexMovements({
+        ...params,
+        mode,
+        file_format: "xlsx",
+        columns: mode === "view" ? visibleGlobalKardexColumns : undefined,
+      });
+      downloadBlob(blob, filename);
+      setSuccessMessage(
+        mode === "official"
+          ? "Exportación oficial de Kardex generada correctamente."
+          : "La vista actual de Kardex se exportó correctamente.",
+      );
+    } catch (error: unknown) {
+      setErrorMessage(getErrorMessage(error, "No se pudo exportar el Kardex."));
+    } finally {
+      setExportingGlobalKardex(false);
+    }
+  };
+
   const handleClearGlobalKardexFilters = () => {
     const nextPaginationModel = {
       ...globalKardexPaginationModel,
@@ -445,6 +495,8 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
     setGlobalKardexSearchTerm("");
     setGlobalKardexMovementType([]);
     setGlobalKardexOrigin([]);
+    setGlobalKardexColumnFilters([]);
+    setGlobalKardexFilterResetKey((current) => current + 1);
     setGlobalKardexPaginationModel(nextPaginationModel);
     navigate("/kardex", { replace: true });
 
@@ -452,6 +504,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
       search: "",
       movementType: [],
       origin: [],
+      columnFilters: [],
       page: 0,
       pageSize: nextPaginationModel.pageSize,
     });
@@ -1806,6 +1859,13 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
         rowCount={globalKardexRowCount}
         sortModel={globalKardexSortModel}
         onSortModelChange={handleGlobalKardexSortModelChange}
+        onColumnFiltersChange={handleGlobalKardexColumnFiltersChange}
+        filterResetKey={globalKardexFilterResetKey}
+        onVisibleColumnsChange={setVisibleGlobalKardexColumns}
+        exporting={exportingGlobalKardex}
+        canExportOfficial={canExportOfficial}
+        onExportView={() => void handleExportGlobalKardex("view")}
+        onExportOfficial={() => void handleExportGlobalKardex("official")}
       />
       ) : null}
 

@@ -7,6 +7,7 @@ from apps.core.grid_registry import (
 
 PRODUCT_GRID_KEY = "inventory.products"
 PENDING_RECEIPT_GRID_KEY = "inventory.pending-receipts"
+KARDEX_GRID_KEY = "inventory.global-kardex"
 
 PRODUCT_GRID_DEFINITION = GridDefinition(
     key=PRODUCT_GRID_KEY,
@@ -242,3 +243,80 @@ PENDING_RECEIPT_GRID_DEFINITION = GridDefinition(
 )
 
 register_grid_definition(PENDING_RECEIPT_GRID_DEFINITION)
+
+
+KARDEX_GRID_DEFINITION = GridDefinition(
+    key=KARDEX_GRID_KEY,
+    module="inventory",
+    model_name="movimientokardex",
+    version=1,
+    default_page_size=25,
+    saved_filter_keys=(
+        "search", "movement_type", "origin", "location", "date_from", "date_to",
+    ),
+    columns=(
+        GridColumnDefinition(
+            key="created_at", system_label="Fecha y hora", data_type="date",
+            query_field="created_at", filter_operators=(), required=True,
+        ),
+        GridColumnDefinition(
+            key="producto_modelo_snapshot", system_label="Producto / Modelo",
+            query_field="producto_modelo_orden",
+            filter_operators=("contains", "equals", "startsWith"), required=True,
+        ),
+        GridColumnDefinition(
+            key="producto_codigo_sap_snapshot", system_label="Código SAP",
+            query_field="producto_codigo_sap_orden",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="producto_categoria_snapshot", system_label="Categoría",
+            query_field="producto_categoria_orden",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="movement_type", system_label="Tipo de movimiento",
+            data_type="choice", query_field="movement_type", filter_operators=("equals",),
+        ),
+        GridColumnDefinition(
+            key="cantidad", system_label="Cantidad", data_type="number",
+            query_field="cantidad", filter_operators=("equals", "greaterThan", "lessThan", "inRange"),
+        ),
+        GridColumnDefinition(
+            key="stock_antes", system_label="Stock anterior", data_type="number",
+            query_field="stock_antes", filter_operators=("equals", "greaterThan", "lessThan", "inRange"),
+        ),
+        GridColumnDefinition(
+            key="stock_despues", system_label="Stock posterior", data_type="number",
+            query_field="stock_despues", filter_operators=("equals", "greaterThan", "lessThan", "inRange"),
+        ),
+        GridColumnDefinition(
+            key="ubicacion_nombre", system_label="Ubicación", query_field="location_name_snapshot",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="motivo", system_label="Motivo", query_field="motivo",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="reference_repr", system_label="Referencia", query_field="reference_repr",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="operador_nombre", system_label="Responsable", query_field="operador__username",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="origin", system_label="Origen", data_type="choice",
+            query_field="origin", filter_operators=("equals",),
+        ),
+    ),
+    official_export_columns=(
+        "created_at", "producto_modelo_snapshot", "producto_codigo_sap_snapshot",
+        "producto_categoria_snapshot", "movement_type", "cantidad", "stock_antes",
+        "stock_despues", "ubicacion_nombre", "motivo", "reference_repr",
+        "operador_nombre", "origin",
+    ),
+)
+
+register_grid_definition(KARDEX_GRID_DEFINITION)

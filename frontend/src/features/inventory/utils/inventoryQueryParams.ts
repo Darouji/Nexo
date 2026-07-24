@@ -32,6 +32,7 @@ type KardexQueryState = {
   origin: AuditOrigin[];
   ordering: string;
   paginationModel: SerkanGridPaginationModel;
+  columnFilters: SerkanGridFilter[];
 };
 
 type PendingReceiptQueryState = {
@@ -59,9 +60,9 @@ export function buildProductPageParams(
   const resolvedStockControl = filters.stockControl ?? state.stockControlFilter;
   const resolvedStockStatus = filters.stockStatus ?? state.stockStatusFilter;
   const resolvedOrdering = filters.ordering ?? state.ordering;
+  const resolvedColumnFilters = filters.columnFilters ?? state.columnFilters;
   const resolvedPage = filters.page ?? state.paginationModel.page;
   const resolvedPageSize = filters.pageSize ?? state.paginationModel.pageSize;
-  const resolvedColumnFilters = filters.columnFilters ?? state.columnFilters;
 
   return {
     search: resolvedSearch,
@@ -94,6 +95,7 @@ export function buildKardexMovementPageParams(
   const resolvedMovementType = filters.movementType ?? state.movementType;
   const resolvedOrigin = filters.origin ?? state.origin;
   const resolvedOrdering = filters.ordering ?? state.ordering;
+  const resolvedColumnFilters = filters.columnFilters ?? state.columnFilters;
   const resolvedPage = filters.page ?? state.paginationModel.page;
   const resolvedPageSize = filters.pageSize ?? state.paginationModel.pageSize;
 
@@ -105,6 +107,10 @@ export function buildKardexMovementPageParams(
         : undefined,
     origin: resolvedOrigin.length > 0 ? resolvedOrigin.join(",") : undefined,
     producto: filters.product,
+    grid_filters:
+      resolvedColumnFilters.length > 0
+        ? JSON.stringify(resolvedColumnFilters)
+        : undefined,
     ordering: resolvedOrdering,
     page: resolvedPage + 1,
     page_size: resolvedPageSize,

@@ -333,6 +333,7 @@ export type KardexListParams = {
   ordering?: string;
   fecha_desde?: string;
   fecha_hasta?: string;
+  grid_filters?: string;
 };
 
 export type KardexPageParams = KardexListParams & {
@@ -852,6 +853,7 @@ export async function fetchKardexMovements(params: KardexListParams = {}) {
       ordering: params.ordering || "-created_at",
       fecha_desde: params.fecha_desde || undefined,
       fecha_hasta: params.fecha_hasta || undefined,
+      grid_filters: params.grid_filters,
     },
   });
 
@@ -869,12 +871,49 @@ export async function fetchKardexMovementsPage(params: KardexPageParams = {}) {
       ordering: params.ordering || "-created_at",
       fecha_desde: params.fecha_desde || undefined,
       fecha_hasta: params.fecha_hasta || undefined,
+      grid_filters: params.grid_filters,
       page: params.page,
       page_size: params.page_size,
     },
   });
 
   return toPaginatedResponse(response.data);
+}
+
+export async function exportKardexMovements(
+  params: KardexListParams & {
+    mode: "view" | "official";
+    file_format: "xlsx" | "csv";
+    columns?: string[];
+  },
+) {
+  const response = await api.get<Blob>("/inventory/kardex/export/", {
+    params: {
+      producto: toCsv(params.producto),
+      movement_type: toCsv(params.movement_type),
+      origin: toCsv(params.origin),
+      status: toCsv(params.status),
+      search: params.search?.trim() || undefined,
+      ordering: params.ordering || "-created_at",
+      fecha_desde: params.fecha_desde || undefined,
+      fecha_hasta: params.fecha_hasta || undefined,
+      grid_filters: params.grid_filters,
+      mode: params.mode,
+      file_format: params.file_format,
+      columns: params.columns?.join(",") || undefined,
+    },
+    responseType: "blob",
+  });
+
+  const contentDisposition = response.headers["content-disposition"] || "";
+  const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+
+  return {
+    blob: response.data,
+    filename:
+      filenameMatch?.[1] ||
+      `serkan_kardex_global_${params.mode}.${params.file_format}`,
+  };
 }
 
 export async function fetchPendingReceipts(

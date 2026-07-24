@@ -81,6 +81,7 @@ describe("buildKardexMovementPageParams", () => {
         origin: ["MANUAL", "AUTOMATICO"],
         ordering: "-created_at",
         paginationModel: { page: 0, pageSize: 25 },
+        columnFilters: [],
       },
     );
 

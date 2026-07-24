@@ -81,6 +81,7 @@ from .location_services import (
     transfer_inventory,
 )
 from .exports import (
+    build_kardex_export_response,
     build_pending_receipt_export_response,
     build_product_export_response,
     record_grid_export,
@@ -88,6 +89,7 @@ from .exports import (
     resolve_export_columns,
 )
 from .grid_definitions import (
+    KARDEX_GRID_DEFINITION,
     PENDING_RECEIPT_GRID_DEFINITION,
     PRODUCT_GRID_DEFINITION,
 )
@@ -1379,6 +1381,15 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
     ]
     ordering = ["-created_at"]
 
+    def get_required_inventory_capability(self):
+        if self.action == "export":
+            return (
+                InventoryCapability.EXPORT_OFFICIAL
+                if self.request.query_params.get("mode", "view") == "official"
+                else InventoryCapability.EXPORT_VIEW
+            )
+        return super().get_required_inventory_capability()
+
     def get_queryset(self):
         queryset = (
             super()
@@ -1454,4 +1465,41 @@ class MovimientoKardexViewSet(InventoryPermissionMixin, viewsets.ReadOnlyModelVi
         if statuses:
             queryset = queryset.filter(status__in=statuses)
 
-        return apply_created_at_date_range(queryset, params)
+        queryset = apply_created_at_date_range(queryset, params)
+        grid_filters = parse_grid_filters_param(params.get("grid_filters"))
+        return apply_grid_filters(queryset, KARDEX_GRID_DEFINITION, grid_filters)
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        mode = request.query_params.get("mode", "view")
+        export_format = request.query_params.get("file_format", "xlsx")
+        if mode not in {"view", "official"}:
+            raise DRFValidationError(
+                {"mode": "Use view para la vista u official para el esquema oficial."}
+            )
+        if export_format not in {"xlsx", "csv"}:
+            raise DRFValidationError({"file_format": "Use xlsx o csv."})
+
+        columns = resolve_export_columns(
+            mode=mode,
+            requested_columns=split_csv_param(request.query_params.get("columns")),
+            definition=KARDEX_GRID_DEFINITION,
+        )
+        movements = list(self.filter_queryset(self.get_queryset())[:5000])
+        record_grid_export(
+            request=getattr(request, "_request", request),
+            definition=KARDEX_GRID_DEFINITION,
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+            row_count=len(movements),
+            model_name="movimientokardex",
+            object_repr="Kardex global",
+        )
+        self._skip_activity_audit(request)
+        return build_kardex_export_response(
+            queryset=movements,
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+        )

@@ -113,6 +113,7 @@ export type KardexFilterOverrides = {
   origin?: AuditOrigin[];
   ordering?: string;
   product?: number;
+  columnFilters?: SerkanGridFilter[];
   page?: number;
   pageSize?: number;
 };

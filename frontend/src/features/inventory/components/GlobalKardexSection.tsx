@@ -1,3 +1,4 @@
+import DownloadIcon from "@mui/icons-material/Download";
 import HistoryIcon from "@mui/icons-material/History";
 import {
   Alert,
@@ -11,6 +12,7 @@ import { SerkanFilterToolbar } from "../../../components/filters/SerkanFilterToo
 import { SerkanMultiSelectFilter } from "../../../components/filters/SerkanMultiSelectFilter";
 import {
   SerkanDataGrid,
+  type SerkanGridFilter,
   type SerkanGridPaginationModel,
   type SerkanGridSortModel,
 } from "../../../components/SerkanDataGrid";
@@ -47,6 +49,13 @@ type GlobalKardexSectionProps = {
 
   sortModel: SerkanGridSortModel;
   onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
+  onColumnFiltersChange: (filters: SerkanGridFilter[]) => void;
+  filterResetKey: number;
+  onVisibleColumnsChange: (fieldKeys: string[]) => void;
+  exporting: boolean;
+  canExportOfficial: boolean;
+  onExportView: () => void;
+  onExportOfficial: () => void;
 };
 
 export function GlobalKardexSection({
@@ -67,6 +76,13 @@ export function GlobalKardexSection({
   rowCount,
   sortModel,
   onSortModelChange,
+  onColumnFiltersChange,
+  filterResetKey,
+  onVisibleColumnsChange,
+  exporting,
+  canExportOfficial,
+  onExportView,
+  onExportOfficial,
 }: GlobalKardexSectionProps) {
   const [filtersOpen, setFiltersOpen] = useState(true);
 
@@ -75,26 +91,19 @@ export function GlobalKardexSection({
       title="Movimientos de Kardex"
       subtitle="Un único historial para recepciones, ventas, ajustes, importaciones y reversas."
       actions={
-        <Button
-          variant={hasLoaded ? "outlined" : "contained"}
-          startIcon={<HistoryIcon />}
-          onClick={onSearch}
-          disabled={loading}
-          sx={
-            hasLoaded
-              ? {
-                  color: colors.text.primary,
-                  borderColor: colors.border.medium,
-                }
-              : undefined
-          }
-        >
-          {loading
-            ? "Cargando..."
-            : hasLoaded
-              ? "Actualizar Kardex"
-              : "Cargar Kardex"}
-        </Button>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportView} disabled={exporting || loading}>
+            {exporting ? "Exportando..." : "Exportar vista"}
+          </Button>
+          {canExportOfficial ? (
+            <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportOfficial} disabled={exporting || loading}>
+              Exportación oficial
+            </Button>
+          ) : null}
+          <Button variant={hasLoaded ? "outlined" : "contained"} startIcon={<HistoryIcon />} onClick={onSearch} disabled={loading || exporting} sx={hasLoaded ? { color: colors.text.primary, borderColor: colors.border.medium } : undefined}>
+            {loading ? "Cargando..." : hasLoaded ? "Actualizar Kardex" : "Cargar Kardex"}
+          </Button>
+        </Stack>
       }
     >
       {!hasLoaded ? (
@@ -180,6 +189,9 @@ export function GlobalKardexSection({
             rowCount={rowCount}
             sortModel={sortModel}
             onSortModelChange={onSortModelChange}
+            onFilterModelChange={onColumnFiltersChange}
+            filterResetKey={filterResetKey}
+            onVisibleColumnsChange={onVisibleColumnsChange}
           />
         </>
       )}

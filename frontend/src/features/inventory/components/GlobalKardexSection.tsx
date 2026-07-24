@@ -1,15 +1,14 @@
 import HistoryIcon from "@mui/icons-material/History";
-import SearchIcon from "@mui/icons-material/Search";
 import {
   Alert,
   Button,
-  InputAdornment,
-  MenuItem,
   Stack,
-  TextField,
 } from "@mui/material";
 import type { ColDef } from "ag-grid-community";
+import { useState } from "react";
 
+import { SerkanFilterToolbar } from "../../../components/filters/SerkanFilterToolbar";
+import { SerkanMultiSelectFilter } from "../../../components/filters/SerkanMultiSelectFilter";
 import {
   SerkanDataGrid,
   type SerkanGridPaginationModel,
@@ -31,11 +30,11 @@ type GlobalKardexSectionProps = {
   searchTerm: string;
   onSearchTermChange: (value: string) => void;
 
-  movementType: string;
-  onMovementTypeChange: (value: string) => void;
+  movementType: string[];
+  onMovementTypeChange: (value: string[]) => void;
 
-  origin: AuditOrigin | "";
-  onOriginChange: (value: AuditOrigin | "") => void;
+  origin: AuditOrigin[];
+  onOriginChange: (value: AuditOrigin[]) => void;
 
   onSearch: () => void;
   onClearFilters: () => void;
@@ -49,17 +48,6 @@ type GlobalKardexSectionProps = {
   sortModel: SerkanGridSortModel;
   onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
 };
-
-function isAuditOriginFilter(value: string): value is AuditOrigin | "" {
-  return (
-    value === "" ||
-    value === "MANUAL" ||
-    value === "API" ||
-    value === "IMPORTACION_EXCEL" ||
-    value === "AUTOMATICO" ||
-    value === "SISTEMA"
-  );
-}
 
 export function GlobalKardexSection({
   hasLoaded,
@@ -80,10 +68,12 @@ export function GlobalKardexSection({
   sortModel,
   onSortModelChange,
 }: GlobalKardexSectionProps) {
+  const [filtersOpen, setFiltersOpen] = useState(true);
+
   return (
     <SectionCard
-      title="Kardex de Inventario"
-      subtitle="Historial cronológico y auditado de los movimientos de stock."
+      title="Movimientos de Kardex"
+      subtitle="Un único historial para recepciones, ventas, ajustes, importaciones y reversas."
       actions={
         <Button
           variant={hasLoaded ? "outlined" : "contained"}
@@ -132,100 +122,52 @@ export function GlobalKardexSection({
         </Stack>
       ) : (
         <>
-          <Stack
-            direction={{ xs: "column", lg: "row" }}
-            spacing={1.5}
-            sx={{ mb: 2 }}
+          <SerkanFilterToolbar
+            searchLabel="Buscar movimiento"
+            searchPlaceholder="Producto, código SAP, motivo, referencia u operador"
+            searchValue={searchTerm}
+            onSearchValueChange={onSearchTermChange}
+            onApply={onSearch}
+            onClear={onClearFilters}
+            loading={loading}
+            expanded={filtersOpen}
+            onExpandedChange={setFiltersOpen}
+            activeFiltersCount={movementType.length + origin.length}
+            panelId="global-kardex-filter-panel"
           >
-            <TextField
-              label="Buscar movimiento"
-              value={searchTerm}
-              onChange={(event) => onSearchTermChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  onSearch();
-                }
-              }}
-              fullWidth
-              placeholder="Producto, código SAP, motivo, referencia u operador"
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: colors.text.muted }} />
-                    </InputAdornment>
-                  ),
+            <SerkanMultiSelectFilter
+              label="Tipos de movimiento"
+              options={[
+                { value: "ENTRADA_MANUAL", label: "Entrada manual" },
+                { value: "ENTRADA_RECEPCION", label: "Entrada por recepción" },
+                { value: "AJUSTE_INVENTARIO", label: "Ajuste de inventario" },
+                { value: "SALIDA_VENTA", label: "Salida por venta" },
+                { value: "REVERSA_ANULACION", label: "Reversa por anulación" },
+                {
+                  value: "ENTRADA_IMPORTACION",
+                  label: "Entrada por importación",
                 },
-              }}
+              ]}
+              value={movementType}
+              onChange={onMovementTypeChange}
             />
 
-            <TextField
-              select
-              label="Movimiento"
-              value={movementType}
-              onChange={(event) => onMovementTypeChange(event.target.value)}
-              sx={{ minWidth: { xs: "100%", lg: 230 } }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="ENTRADA_MANUAL">Entrada manual</MenuItem>
-              <MenuItem value="ENTRADA_RECEPCION">
-                Entrada por recepción
-              </MenuItem>
-              <MenuItem value="AJUSTE_INVENTARIO">
-                Ajuste de inventario
-              </MenuItem>
-              <MenuItem value="SALIDA_VENTA">Salida por venta</MenuItem>
-              <MenuItem value="REVERSA_ANULACION">
-                Reversa por anulación
-              </MenuItem>
-              <MenuItem value="ENTRADA_IMPORTACION">
-                Entrada por importación
-              </MenuItem>
-            </TextField>
-
-            <TextField
-              select
-              label="Origen"
+            <SerkanMultiSelectFilter
+              label="Orígenes"
+              options={[
+                { value: "MANUAL", label: "Manual" },
+                { value: "AUTOMATICO", label: "Automático" },
+                { value: "API", label: "API" },
+                {
+                  value: "IMPORTACION_EXCEL",
+                  label: "Importación Excel",
+                },
+                { value: "SISTEMA", label: "Sistema" },
+              ]}
               value={origin}
-              onChange={(event) => {
-                const nextOrigin = event.target.value;
-
-                if (isAuditOriginFilter(nextOrigin)) {
-                  onOriginChange(nextOrigin);
-                }
-              }}
-              sx={{ minWidth: { xs: "100%", lg: 190 } }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              <MenuItem value="MANUAL">Manual</MenuItem>
-              <MenuItem value="AUTOMATICO">Automático</MenuItem>
-              <MenuItem value="API">API</MenuItem>
-              <MenuItem value="IMPORTACION_EXCEL">Importación Excel</MenuItem>
-              <MenuItem value="SISTEMA">Sistema</MenuItem>
-            </TextField>
-
-            <Button
-              variant="contained"
-              onClick={onSearch}
-              disabled={loading}
-              sx={{ minWidth: { xs: "100%", lg: 140 } }}
-            >
-              Buscar
-            </Button>
-
-            <Button
-              variant="outlined"
-              onClick={onClearFilters}
-              disabled={loading}
-              sx={{
-                minWidth: { xs: "100%", lg: 120 },
-                color: colors.text.primary,
-                borderColor: colors.border.medium,
-              }}
-            >
-              Limpiar
-            </Button>
-          </Stack>
+              onChange={(values) => onOriginChange(values as AuditOrigin[])}
+            />
+          </SerkanFilterToolbar>
 
           <SerkanDataGrid
             gridKey="inventory.global-kardex"

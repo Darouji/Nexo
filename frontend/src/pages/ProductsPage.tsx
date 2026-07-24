@@ -3,12 +3,17 @@ import Inventory2Icon from "@mui/icons-material/Inventory2";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
 import { Alert, Button } from "@mui/material";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
 import { colors } from "../theme/colors";
 import { getAvailableProductCategoryOptions } from "../features/inventory/categories/categoryOptions";
 import { GlobalKardexSection } from "../features/inventory/components/GlobalKardexSection";
 import { InventoryCatalogSection } from "../features/inventory/components/InventoryCatalogSection";
+import {
+  InventorySectionNavigation,
+  type InventorySection,
+} from "../features/inventory/components/InventorySectionNavigation";
 import { InventoryLocationsSection } from "../features/inventory/locations/InventoryLocationsSection";
 import { PendingReceiptDialogs } from "../features/inventory/components/PendingReceiptDialogs";
 import { PendingReceiptsSection } from "../features/inventory/components/PendingReceiptsSection";
@@ -123,7 +128,13 @@ function removeFieldErrors(
   return remaining;
 }
 
-export function ProductsPage() {
+type ProductsPageProps = {
+  section?: InventorySection;
+};
+
+export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const {
@@ -157,7 +168,10 @@ export function ProductsPage() {
     changeColumnFilters: handleProductColumnFiltersChange,
     clearFilters: clearProductCatalogFilters,
     applyNamedView: handleApplyProductNamedView,
-  } = useProductCatalogController({ onError: setErrorMessage });
+  } = useProductCatalogController({
+    onError: setErrorMessage,
+    enabled: section === "catalog",
+  });
 
   const {
     pendingReceipts,
@@ -194,6 +208,7 @@ export function ProductsPage() {
   } = usePendingReceiptsController({
     onError: setErrorMessage,
     onSuccess: setSuccessMessage,
+    enabled: section === "pending-receipts",
   });
 
   const [exportingProducts, setExportingProducts] = useState(false);
@@ -256,11 +271,13 @@ export function ProductsPage() {
   const [globalKardexOrdering, setGlobalKardexOrdering] =
     useState("-created_at");
 
-  const [globalKardexSearchTerm, setGlobalKardexSearchTerm] = useState("");
-  const [globalKardexMovementType, setGlobalKardexMovementType] = useState("");
-  const [globalKardexOrigin, setGlobalKardexOrigin] = useState<
-    AuditOrigin | ""
-  >("");
+  const [globalKardexSearchTerm, setGlobalKardexSearchTerm] = useState(
+    () => searchParams.get("buscar") ?? "",
+  );
+  const [globalKardexMovementType, setGlobalKardexMovementType] = useState<
+    string[]
+  >([]);
+  const [globalKardexOrigin, setGlobalKardexOrigin] = useState<AuditOrigin[]>([]);
   const [pendingReceiptCreateDialog, setPendingReceiptCreateDialog] =
     useState<PendingReceiptCreateDialogState>(emptyPendingReceiptCreateDialog);
 
@@ -317,30 +334,51 @@ export function ProductsPage() {
     }
   };
 
-  const loadGlobalKardex = async (filters: KardexFilterOverrides = {}) => {
-    try {
-      setGlobalKardexLoading(true);
-      setErrorMessage("");
+  const loadGlobalKardex = useCallback(
+    async (filters: KardexFilterOverrides = {}) => {
+      try {
+        setGlobalKardexLoading(true);
+        setErrorMessage("");
 
-      const movementsPage = await fetchKardexMovementsPage(
-        buildKardexMovementPageParams(filters, {
-          searchTerm: globalKardexSearchTerm,
-          movementType: globalKardexMovementType,
-          origin: globalKardexOrigin,
-          ordering: globalKardexOrdering,
-          paginationModel: globalKardexPaginationModel,
-        }),
-      );
+        const movementsPage = await fetchKardexMovementsPage(
+          buildKardexMovementPageParams(filters, {
+            searchTerm: globalKardexSearchTerm,
+            movementType: globalKardexMovementType,
+            origin: globalKardexOrigin,
+            ordering: globalKardexOrdering,
+            paginationModel: globalKardexPaginationModel,
+          }),
+        );
 
-      setGlobalKardexMovements(movementsPage.results);
-      setGlobalKardexRowCount(movementsPage.count);
-      setHasLoadedGlobalKardex(true);
-    } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setGlobalKardexLoading(false);
+        setGlobalKardexMovements(movementsPage.results);
+        setGlobalKardexRowCount(movementsPage.count);
+        setHasLoadedGlobalKardex(true);
+      } catch (error: unknown) {
+        setErrorMessage(getErrorMessage(error));
+      } finally {
+        setGlobalKardexLoading(false);
+      }
+    },
+    [
+      globalKardexMovementType,
+      globalKardexOrdering,
+      globalKardexOrigin,
+      globalKardexPaginationModel,
+      globalKardexSearchTerm,
+    ],
+  );
+
+  useEffect(() => {
+    if (section !== "kardex" || hasLoadedGlobalKardex) {
+      return;
     }
-  };
+
+    const timeoutId = window.setTimeout(() => {
+      void loadGlobalKardex();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [hasLoadedGlobalKardex, loadGlobalKardex, section]);
 
   const refreshGlobalKardexIfLoaded = async () => {
     if (!hasLoadedGlobalKardex) {
@@ -405,54 +443,66 @@ export function ProductsPage() {
     };
 
     setGlobalKardexSearchTerm("");
-    setGlobalKardexMovementType("");
-    setGlobalKardexOrigin("");
+    setGlobalKardexMovementType([]);
+    setGlobalKardexOrigin([]);
     setGlobalKardexPaginationModel(nextPaginationModel);
+    navigate("/kardex", { replace: true });
 
     void loadGlobalKardex({
       search: "",
-      movementType: "",
-      origin: "",
+      movementType: [],
+      origin: [],
       page: 0,
       pageSize: nextPaginationModel.pageSize,
     });
   };
 
   useEffect(() => {
+    if (section !== "catalog" && section !== "pending-receipts") {
+      return;
+    }
+
     let isMounted = true;
 
-    Promise.all([
-      fetchCategories(),
-      fetchInventorySummary(),
-      fetchInventoryLocations({ status: "ACTIVO" }),
-    ])
-      .then(([categoriesData, summaryData, locationsData]) => {
-          if (!isMounted) {
-            return;
-          }
+    const loadReferenceData =
+      section === "catalog"
+        ? Promise.all([
+            fetchCategories(),
+            fetchInventorySummary(),
+            fetchInventoryLocations({ status: "ACTIVO" }),
+          ]).then(([categoriesData, summaryData, locationsData]) => {
+            if (!isMounted) {
+              return;
+            }
 
-          setCategorias(categoriesData);
-          setInventorySummary(summaryData);
-          setInventoryLocations(locationsData);
+            setCategorias(categoriesData);
+            setInventorySummary(summaryData);
+            setInventoryLocations(locationsData);
+          })
+        : fetchInventoryLocations({ status: "ACTIVO" }).then(
+            (locationsData) => {
+              if (isMounted) {
+                setInventoryLocations(locationsData);
+              }
+            },
+          );
+
+    void loadReferenceData
+      .then(() => {
+        if (isMounted) {
           setErrorMessage("");
-        })
-      .catch((error: unknown) => {
-        if (!isMounted) {
-          return;
         }
-
-        setErrorMessage(getErrorMessage(error));
       })
-      .finally(() => {
-        if (!isMounted) {
-          return;
+      .catch((error: unknown) => {
+        if (isMounted) {
+          setErrorMessage(getErrorMessage(error));
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [section]);
 
   const handleOpenCreateProduct = () => {
     setEditingProduct(null);
@@ -673,7 +723,7 @@ export function ProductsPage() {
 
       const destinationStatus = getLifecycleDestinationFilter(action);
 
-      setStatusFilter(destinationStatus);
+      setStatusFilter([destinationStatus]);
 
       setSuccessMessage(
         `Producto "${product.modelo}" ${getProductLifecycleSuccessLabel(action)} correctamente.`,
@@ -683,7 +733,7 @@ export function ProductsPage() {
 
       await loadProducts({
         search: searchTerm,
-        status: destinationStatus,
+        status: [destinationStatus],
       });
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
@@ -826,10 +876,10 @@ export function ProductsPage() {
       setProductCategoryDialog(emptyProductCategoryDialog);
 
       setSearchTerm(updatedProduct.modelo);
-      setCategoryFilter(String(destinationCategory.id));
-      setStatusFilter("");
+      setCategoryFilter([String(destinationCategory.id)]);
+      setStatusFilter([]);
       setStockControlFilter("");
-      setStockStatusFilter("");
+      setStockStatusFilter([]);
       setFiltersOpen(true);
 
       setSuccessMessage(
@@ -839,10 +889,10 @@ export function ProductsPage() {
       await Promise.all([
         loadProducts({
           search: updatedProduct.modelo,
-          category: String(destinationCategory.id),
-          status: "",
+          category: [String(destinationCategory.id)],
+          status: [],
           stockControl: "",
-          stockStatus: "",
+          stockStatus: [],
         }),
         loadInventorySummary(),
       ]);
@@ -996,7 +1046,9 @@ export function ProductsPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    void loadProductKardexPage(product, defaultKardexPaginationModel);
+    setGlobalKardexSearchTerm(product.modelo);
+    setHasLoadedGlobalKardex(false);
+    navigate(`/kardex?buscar=${encodeURIComponent(product.modelo)}`);
   };
 
   const handleProductKardexPaginationModelChange = (
@@ -1455,12 +1507,8 @@ export function ProductsPage() {
     [categorias, productCategoryDialog.product?.categoria],
   );
 
-  const handleSubmitProductSearch = () => {
-    loadFirstProductPage();
-  };
-
   const handleExecuteProductSearch = () => {
-    void loadProducts();
+    loadFirstProductPage();
   };
 
   const handleToggleProductFilters = () => {
@@ -1534,10 +1582,10 @@ export function ProductsPage() {
   ) => {
     setCategoryManagerOpen(false);
     setSearchTerm(product.modelo);
-    setCategoryFilter(String(category.id));
-    setStatusFilter("");
+    setCategoryFilter([String(category.id)]);
+    setStatusFilter([]);
     setStockControlFilter("");
-    setStockStatusFilter("");
+    setStockStatusFilter([]);
     setFiltersOpen(true);
     setErrorMessage("");
 
@@ -1547,22 +1595,50 @@ export function ProductsPage() {
 
     loadFirstProductPage({
       search: product.modelo,
-      category: String(category.id),
-      status: "",
+      category: [String(category.id)],
+      status: [],
       stockControl: "",
-      stockStatus: "",
+      stockStatus: [],
     });
   };
 
+  const pagePresentation = {
+    catalog: {
+      title: "Catálogo de productos",
+      subtitle:
+        "Productos, categorías, stock actual y acciones operativas de inventario.",
+      eyebrow: "Inventario",
+    },
+    "pending-receipts": {
+      title: "Productos por recibir",
+      subtitle:
+        "Recepciones pendientes, confirmaciones físicas e historial de cada operación.",
+      eyebrow: "Inventario",
+    },
+    locations: {
+      title: "Ubicaciones de inventario",
+      subtitle:
+        "Bodegas, domicilios bajo responsabilidad, existencias por ubicación y traslados.",
+      eyebrow: "Inventario",
+    },
+    kardex: {
+      title: "Kardex",
+      subtitle:
+        "Historial global, cronológico e inmutable de todos los movimientos de stock.",
+      eyebrow: "Trazabilidad de inventario",
+    },
+  }[section];
+
   return (
     <PageShell
-        title="Inventario de Productos"
-        subtitle="Módulo central del sistema: productos, categorías, stock actual, stock mínimo, unidades por recibir y movimientos Kardex."
-        eyebrow="Inventario y Kardex"
+        title={pagePresentation.title}
+        subtitle={pagePresentation.subtitle}
+        eyebrow={pagePresentation.eyebrow}
         icon={<Inventory2Icon />}
         tone={colors.modules.inventory}
         actions={
-          <>
+          section === "catalog" ? (
+            <>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -1592,11 +1668,28 @@ export function ProductsPage() {
             >
               Actualizar
             </Button>
-          </>
+            </>
+          ) : undefined
         }
     >
+      {section !== "kardex" && section !== "catalog" ? (
+        <InventorySectionNavigation />
+      ) : null}
 
-      <InventoryCatalogSection
+      {successMessage ? (
+        <Alert severity="success" variant="outlined">
+          {successMessage}
+        </Alert>
+      ) : null}
+
+      {errorMessage ? (
+        <Alert severity="error" variant="outlined">
+          {errorMessage}
+        </Alert>
+      ) : null}
+
+      {section === "catalog" ? (
+        <InventoryCatalogSection
         inventorySummary={inventorySummary}
         products={productos}
         categories={categorias}
@@ -1604,7 +1697,6 @@ export function ProductsPage() {
         loading={loading}
         searchTerm={searchTerm}
         onSearchTermChange={setSearchTerm}
-        onSubmitProductSearch={handleSubmitProductSearch}
         onExecuteProductSearch={handleExecuteProductSearch}
         filtersOpen={filtersOpen}
         onToggleFilters={handleToggleProductFilters}
@@ -1632,24 +1724,13 @@ export function ProductsPage() {
         onExportView={() => void handleExportProducts("view")}
         onExportOfficial={() => void handleExportProducts("official")}
         onOpenCategoryManager={handleOpenCategoryManager}
-        feedbackSlot={
-          <>
-            {successMessage ? (
-              <Alert severity="success" variant="outlined">
-                {successMessage}
-              </Alert>
-            ) : null}
-
-            {errorMessage ? (
-              <Alert severity="error" variant="outlined">
-                {errorMessage}
-              </Alert>
-            ) : null}
-          </>
-        }
+        feedbackSlot={undefined}
+        navigationSlot={<InventorySectionNavigation />}
       />
+      ) : null}
 
-      <InventoryLocationsSection
+      {section === "locations" ? (
+        <InventoryLocationsSection
         onError={setErrorMessage}
         onSuccess={setSuccessMessage}
         onLocationsChanged={loadActiveInventoryLocations}
@@ -1661,8 +1742,10 @@ export function ProductsPage() {
           ]);
         }}
       />
+      ) : null}
 
-      <PendingReceiptsSection
+      {section === "pending-receipts" ? (
+        <PendingReceiptsSection
         sectionRef={pendingReceiptsSectionRef}
         pendingReceipts={pendingReceipts}
         columns={pendingReceiptColumns}
@@ -1691,8 +1774,10 @@ export function ProductsPage() {
         onExportView={() => void handleExportPendingReceipts("view")}
         onExportOfficial={() => void handleExportPendingReceipts("official")}
       />
+      ) : null}
 
-      <PendingReceiptHistoryDialog
+      {section === "pending-receipts" ? (
+        <PendingReceiptHistoryDialog
         open={pendingReceiptHistoryOpen}
         pendingReceipt={historyPendingReceipt}
         operations={pendingReceiptHistoryOperations}
@@ -1700,8 +1785,10 @@ export function ProductsPage() {
         errorMessage={pendingReceiptHistoryError}
         onClose={closePendingReceiptHistory}
       />
+      ) : null}
 
-      <GlobalKardexSection
+      {section === "kardex" ? (
+        <GlobalKardexSection
         hasLoaded={hasLoadedGlobalKardex}
         movements={globalKardexMovements}
         columns={globalKardexColumns}
@@ -1720,6 +1807,7 @@ export function ProductsPage() {
         sortModel={globalKardexSortModel}
         onSortModelChange={handleGlobalKardexSortModelChange}
       />
+      ) : null}
 
       <ProductDialog
         key={

@@ -86,19 +86,19 @@ export type ProductActionMenuState = {
 
 export type ProductFilterOverrides = {
   search?: string;
-  category?: string;
+  category?: string[];
   page?: number;
   pageSize?: number;
-  status?: string;
+  status?: string[];
   stockControl?: string;
-  stockStatus?: ProductStockStatus | "";
+  stockStatus?: ProductStockStatus[];
   ordering?: string;
   columnFilters?: SerkanGridFilter[];
 };
 
 export type PendingReceiptFilterOverrides = {
   search?: string;
-  status?: PendingReceiptStatus | "";
+  status?: PendingReceiptStatus[];
   dateFrom?: string;
   dateTo?: string;
   ordering?: string;
@@ -109,8 +109,8 @@ export type PendingReceiptFilterOverrides = {
 
 export type KardexFilterOverrides = {
   search?: string;
-  movementType?: string;
-  origin?: AuditOrigin | "";
+  movementType?: string[];
+  origin?: AuditOrigin[];
   ordering?: string;
   product?: number;
   page?: number;

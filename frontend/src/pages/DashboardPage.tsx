@@ -66,6 +66,10 @@ const sectionAccessRules: Record<string, SectionAccessRule> = {
     moduleKey: "inventario",
     fallbackRoles: READ_ROLES,
   },
+  Kardex: {
+    moduleKey: "inventario",
+    fallbackRoles: READ_ROLES,
+  },
   "Ventas / Ingresos": {
     moduleKey: "ventas",
     fallbackRoles: READ_ROLES,
@@ -97,7 +101,8 @@ const sectionPaths: Record<string, string> = {
   Usuarios: "/usuarios",
   Colaboradores: "/colaboradores",
   "Entidades comerciales": "/entidades-comerciales",
-  Inventario: "/inventario",
+  Inventario: "/inventario/catalogo",
+  Kardex: "/kardex",
   "Ventas / Ingresos": "/ventas",
   "Compras / Egresos": "/compras",
   "Importaciones Excel": "/importaciones",
@@ -106,9 +111,14 @@ const sectionPaths: Record<string, string> = {
   Auditoría: "/auditoria",
 };
 
-const pathSections = Object.fromEntries(
-  Object.entries(sectionPaths).map(([section, path]) => [path, section]),
-) as Record<string, string>;
+const pathSections: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.entries(sectionPaths).map(([section, path]) => [path, section]),
+  ),
+  "/inventario": "Inventario",
+  "/inventario/por-recibir": "Inventario",
+  "/inventario/ubicaciones": "Inventario",
+};
 
 function normalizePathname(pathname: string) {
   const normalizedPath = pathname.replace(/\/+$/, "");
@@ -152,7 +162,14 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   useEffect(() => {
     const currentPath = normalizePathname(location.pathname);
 
-    if (currentPath !== activeSectionPath) {
+    if (currentPath === "/inventario") {
+      navigate("/inventario/catalogo", {
+        replace: true,
+      });
+      return;
+    }
+
+    if (!pathSections[currentPath]) {
       navigate(activeSectionPath, {
         replace: true,
       });
@@ -181,7 +198,18 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
         return <UsersPage currentUser={user} />;
 
       case "Inventario":
-        return <ProductsPage />;
+        if (normalizePathname(location.pathname) === "/inventario/por-recibir") {
+          return <ProductsPage section="pending-receipts" />;
+        }
+
+        if (normalizePathname(location.pathname) === "/inventario/ubicaciones") {
+          return <ProductsPage section="locations" />;
+        }
+
+        return <ProductsPage section="catalog" />;
+
+      case "Kardex":
+        return <ProductsPage section="kardex" />;
 
       case "Ventas / Ingresos":
         return <SalesPage />;

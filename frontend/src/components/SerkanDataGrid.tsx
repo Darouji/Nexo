@@ -6,7 +6,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import { AgGridReact } from "ag-grid-react";
 import { colors } from "../theme/colors";
 import { serkanGridLocaleEs } from "./serkanGridLocaleEs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getApiErrorMessage } from "../services/api";
 import {
   fetchGridDefinition,
@@ -110,6 +110,7 @@ type SerkanDataGridProps<TRow extends IdentifiableRow> = {
   onVisibleColumnsChange?: (fieldKeys: string[]) => void;
   namedViewFilters?: Record<string, string>;
   onNamedViewApply?: (config: SavedGridViewConfig) => void;
+  footerSummary?: ReactNode;
 };
 
 const serkanGridTheme = themeQuartz.withParams({
@@ -223,6 +224,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   onVisibleColumnsChange,
   namedViewFilters = {},
   onNamedViewApply,
+  footerSummary,
 }: SerkanDataGridProps<TRow>) {
   const gridApiRef = useRef<GridApi<TRow> | null>(null);
 
@@ -934,6 +936,22 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           bgcolor: colors.background.header,
         }}
       >
+        {footerSummary ? (
+          <Box
+            sx={{
+              px: { xs: 1.5, sm: 2 },
+              py: 0.8,
+              borderBottom: { xs: `1px solid ${colors.border.light}`, sm: 0 },
+              borderRight: { xs: 0, sm: `1px solid ${colors.border.light}` },
+              display: "flex",
+              alignItems: "center",
+              flexShrink: 0,
+            }}
+          >
+            {footerSummary}
+          </Box>
+        ) : null}
+
         <Button
           size="small"
           variant="text"
@@ -951,8 +969,8 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           }}
         >
           Restablecer columnas
-        </Button>
 
+        </Button>
         {serverManaged && definition ? (
           <Button
             size="small"

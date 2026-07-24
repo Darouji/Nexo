@@ -17,10 +17,10 @@ import { parseOptionalBoolean } from "./inventoryFormatters";
 
 type ProductQueryState = {
   searchTerm: string;
-  categoryFilter: string;
-  statusFilter: string;
+  categoryFilter: string[];
+  statusFilter: string[];
   stockControlFilter: string;
-  stockStatusFilter: ProductStockStatus | "";
+  stockStatusFilter: ProductStockStatus[];
   ordering: string;
   paginationModel: SerkanGridPaginationModel;
   columnFilters: SerkanGridFilter[];
@@ -28,15 +28,15 @@ type ProductQueryState = {
 
 type KardexQueryState = {
   searchTerm: string;
-  movementType: string;
-  origin: AuditOrigin | "";
+  movementType: string[];
+  origin: AuditOrigin[];
   ordering: string;
   paginationModel: SerkanGridPaginationModel;
 };
 
 type PendingReceiptQueryState = {
   searchTerm: string;
-  statusFilter: PendingReceiptStatus | "";
+  statusFilter: PendingReceiptStatus[];
   dateFrom: string;
   dateTo: string;
   ordering: string;
@@ -66,10 +66,17 @@ export function buildProductPageParams(
   return {
     search: resolvedSearch,
     ordering: resolvedOrdering,
-    categoria: resolvedCategory ? Number(resolvedCategory) : undefined,
-    status: resolvedStatus || undefined,
+    categoria:
+      resolvedCategory.length > 0
+        ? resolvedCategory.map(Number).join(",")
+        : undefined,
+    status:
+      resolvedStatus.length > 0 ? resolvedStatus.join(",") : undefined,
     controla_stock: parseOptionalBoolean(resolvedStockControl),
-    stock_status: resolvedStockStatus || undefined,
+    stock_status:
+      resolvedStockStatus.length > 0
+        ? resolvedStockStatus.join(",")
+        : undefined,
     grid_filters:
       resolvedColumnFilters.length > 0
         ? JSON.stringify(resolvedColumnFilters)
@@ -92,8 +99,11 @@ export function buildKardexMovementPageParams(
 
   return {
     search: resolvedSearch,
-    movement_type: resolvedMovementType || undefined,
-    origin: resolvedOrigin || undefined,
+    movement_type:
+      resolvedMovementType.length > 0
+        ? resolvedMovementType.join(",")
+        : undefined,
+    origin: resolvedOrigin.length > 0 ? resolvedOrigin.join(",") : undefined,
     producto: filters.product,
     ordering: resolvedOrdering,
     page: resolvedPage + 1,
@@ -117,7 +127,7 @@ export function buildPendingReceiptPageParams(
   return {
     ordering: resolvedOrdering,
     search: resolvedSearch,
-    estado: resolvedStatus || undefined,
+    estado: resolvedStatus.length > 0 ? resolvedStatus.join(",") : undefined,
     fecha_desde: resolvedDateFrom || undefined,
     fecha_hasta: resolvedDateTo || undefined,
     grid_filters:

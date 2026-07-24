@@ -29,6 +29,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import GroupsIcon from "@mui/icons-material/Groups";
 import HomeIcon from "@mui/icons-material/Home";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
+import HistoryIcon from "@mui/icons-material/History";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -135,7 +136,22 @@ const menuItems: MenuItem[] = [
       "CONSULTA",
     ],
     icon: <Inventory2Icon />,
-    helper: "Inventario y Kardex",
+    helper: "Catálogo, ubicaciones y recepciones",
+    accent: colors.modules.inventory,
+  },
+  {
+    label: "Kardex",
+    moduleKey: "inventario",
+    fallbackRoles: [
+      "ADMINISTRADOR",
+      "FINANZAS_COMERCIAL",
+      "RRHH",
+      "INFORMATICO",
+      "OPERATIVO",
+      "CONSULTA",
+    ],
+    icon: <HistoryIcon />,
+    helper: "Historial global de stock",
     accent: colors.modules.inventory,
   },
   {

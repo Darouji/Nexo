@@ -22,11 +22,13 @@ import { buildProductPageParams } from "../utils/inventoryQueryParams";
 
 type ProductCatalogControllerOptions = {
   onError: (message: string) => void;
+  enabled?: boolean;
 };
 
 
 export function useProductCatalogController({
   onError,
+  enabled = true,
 }: ProductCatalogControllerOptions) {
   const [products, setProducts] = useState<Product[]>([]);
   const [rowCount, setRowCount] = useState(0);
@@ -41,14 +43,14 @@ export function useProductCatalogController({
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ACTIVO");
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>(["ACTIVO"]);
   const [stockControlFilter, setStockControlFilter] = useState("");
   const [stockStatusFilter, setStockStatusFilter] = useState<
-    ProductStockStatus | ""
-  >("");
+    ProductStockStatus[]
+  >([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
 
   const requestSequenceRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -110,6 +112,10 @@ export function useProductCatalogController({
   );
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     const requestSequence = ++requestSequenceRef.current;
@@ -143,7 +149,7 @@ export function useProductCatalogController({
       });
 
     return () => abortController.abort();
-  }, [onError]);
+  }, [enabled, onError]);
 
   const loadFirstPage = useCallback(
     (filters: ProductFilterOverrides = {}) => {
@@ -205,19 +211,19 @@ export function useProductCatalogController({
 
   const clearFilters = useCallback(() => {
     setSearchTerm("");
-    setCategoryFilter("");
-    setStatusFilter("ACTIVO");
+    setCategoryFilter([]);
+    setStatusFilter(["ACTIVO"]);
     setStockControlFilter("");
-    setStockStatusFilter("");
+    setStockStatusFilter([]);
     setFiltersOpen(false);
     setColumnFilters([]);
     setFilterResetKey((current) => current + 1);
     loadFirstPage({
       search: "",
-      category: "",
-      status: "ACTIVO",
+      category: [],
+      status: ["ACTIVO"],
       stockControl: "",
-      stockStatus: "",
+      stockStatus: [],
       columnFilters: [],
     });
   }, [loadFirstPage]);
@@ -228,6 +234,16 @@ export function useProductCatalogController({
         const value = config.filters[key];
         return typeof value === "string" ? value : "";
       };
+      const readMultiFilter = (key: string, fallback: string[] = []) => {
+        const value = config.filters[key];
+
+
+        if (typeof value === "string" && value) {
+          return value.split(",").filter(Boolean);
+        }
+
+        return fallback;
+      };
       const savedColumnFilters = config.filters.column_filters;
       const nextColumnFilters = Array.isArray(savedColumnFilters)
         ? (savedColumnFilters as SerkanGridFilter[])
@@ -237,12 +253,12 @@ export function useProductCatalogController({
         ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
         : "categoria__name,modelo";
       const nextSearch = readFilter("search");
-      const nextCategory = readFilter("category");
-      const nextStatus = readFilter("status");
+      const nextCategory = readMultiFilter("category");
+      const nextStatus = readMultiFilter("status", ["ACTIVO"]);
       const nextStockControl = readFilter("stock_control");
-      const nextStockStatus = readFilter(
+      const nextStockStatus = readMultiFilter(
         "stock_status",
-      ) as ProductStockStatus | "";
+      ) as ProductStockStatus[];
       const nextPaginationModel = {
         page: 0,
         pageSize: config.page_size,
@@ -259,10 +275,10 @@ export function useProductCatalogController({
       setPaginationModel(nextPaginationModel);
       setFiltersOpen(
         Boolean(
-          nextCategory ||
-            (nextStatus && nextStatus !== "ACTIVO") ||
+          nextCategory.length ||
+            (nextStatus.length !== 1 || nextStatus[0] !== "ACTIVO") ||
             nextStockControl ||
-            nextStockStatus ||
+            nextStockStatus.length ||
             nextColumnFilters.length,
         ),
       );
@@ -284,12 +300,13 @@ export function useProductCatalogController({
 
   const activeFiltersCount = useMemo(
     () =>
-      [
-        categoryFilter,
-        statusFilter === "ACTIVO" ? "" : statusFilter,
-        stockControlFilter,
-        stockStatusFilter,
-      ].filter(Boolean).length + columnFilters.length,
+      Number(categoryFilter.length > 0) +
+      Number(
+        statusFilter.length !== 1 || statusFilter[0] !== "ACTIVO",
+      ) +
+      Number(Boolean(stockControlFilter)) +
+      Number(stockStatusFilter.length > 0) +
+      columnFilters.length,
     [
       categoryFilter,
       columnFilters.length,

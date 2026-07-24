@@ -305,7 +305,7 @@ export type CategoryListParams = {
   available?: boolean;
 };
 
-type CsvParam<T extends string | number> = T | T[];
+type CsvParam<T extends string | number> = T | T[] | string;
 
 export type ProductListParams = {
   search?: string;

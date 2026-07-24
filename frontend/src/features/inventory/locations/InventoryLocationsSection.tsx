@@ -27,6 +27,7 @@ import {
 } from "@mui/material";
 
 import { SectionCard } from "../../../components/SectionCard";
+import { colors } from "../../../theme/colors";
 import { formatNumber } from "../utils/inventoryFormatters";
 import {
   emptyArchiveLocation,
@@ -170,7 +171,22 @@ export function InventoryLocationsSection({
         {loading ? <LinearProgress sx={{ mb: 2 }} /> : null}
 
         <Stack spacing={3}>
-          <TableContainer>
+          <Stack spacing={0.35}>
+            <Typography variant="h6" sx={{ fontWeight: 900 }}>
+              Ubicaciones registradas
+            </Typography>
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              Bodegas, custodias y otros lugares habilitados para mantener inventario.
+            </Typography>
+          </Stack>
+
+          <TableContainer
+            sx={{
+              border: `1px solid ${colors.border.light}`,
+              borderLeft: `4px solid ${colors.modules.inventory.main}`,
+              borderRadius: colors.radius.lg,
+            }}
+          >
             <Table size="small" aria-label="Ubicaciones de inventario">
               <TableHead>
                 <TableRow>
@@ -272,9 +288,21 @@ export function InventoryLocationsSection({
             </Table>
           </TableContainer>
 
-          <Stack spacing={1}>
+          <Stack
+            spacing={1}
+            sx={{
+              p: 2,
+              border: `1px solid ${colors.border.light}`,
+              borderLeft: `4px solid ${colors.status.info}`,
+              borderRadius: colors.radius.lg,
+              bgcolor: colors.surface.soft,
+            }}
+          >
             <Typography variant="h6" sx={{ fontWeight: 850 }}>
               Stock distribuido
+            </Typography>
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              Existencias físicas de cada producto, separadas por ubicación.
             </Typography>
             <TableContainer sx={{ maxHeight: 320 }}>
               <Table size="small" stickyHeader aria-label="Stock por ubicación">
@@ -349,11 +377,23 @@ export function InventoryLocationsSection({
             />
           </Stack>
 
-          <Stack spacing={1}>
+          <Stack
+            spacing={1}
+            sx={{
+              p: 2,
+              border: `1px solid ${colors.border.light}`,
+              borderLeft: `4px solid ${colors.accent.main}`,
+              borderRadius: colors.radius.lg,
+              bgcolor: colors.background.paper,
+            }}
+          >
             <Typography variant="h6" sx={{ fontWeight: 850 }}>
               Traslados recientes
             </Typography>
             <TableContainer sx={{ maxHeight: 300 }}>
+            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+              Movimientos recientes entre ubicaciones; el stock total no cambia.
+            </Typography>
               <Table
                 size="small"
                 stickyHeader

@@ -68,7 +68,7 @@ Cada usuario puede guardar, aplicar y eliminar sus propias vistas, marcar una
 como predeterminada y conservar búsqueda, filtros, orden, columnas y tamaño de
 página sin modificar la experiencia de los demás usuarios.
 
-### 2. Ubicaciones y custodia
+### 2. Ubicaciones de inventario
 
 - Ubicaciones tipadas: bodega, domicilio bajo custodia, tránsito,
   cliente/faena y otro.
@@ -179,6 +179,28 @@ producción).
 - Grilla transversal, filtros oficiales y exportación de vista/oficial.
 - Snapshots históricos, zona America/Santiago y alcance autorizado.
 - Correcciones mediante reversa o ajuste autorizado; nunca update/delete.
+
+Estado actual: base de navegación y filtros transversales implementada; el
+cierre funcional completo de Kardex continúa pendiente.
+
+- Inventario se divide en rutas reales para **Catálogo**, **Por recibir** y
+  **Ubicaciones de inventario**. La URL, el historial del navegador y la
+  pantalla activa se conservan sin apilar cuatro grillas en una sola vista.
+- **Kardex** pasa a ser una pantalla global independiente. No existen Kardex
+  separados para ventas, compras e inventario: todos consultan el mismo libro
+  inmutable y se distinguen mediante tipo de movimiento y origen.
+- La acción contextual **Ver Kardex** desde un producto abre esta pantalla
+  global con la búsqueda del producto preservada en la URL.
+- El Catálogo integra la búsqueda y filtros dentro de la misma tarjeta de la
+  grilla, con una barra compacta reutilizable.
+- Categoría, estado del producto, estado de stock, estado de recepción, tipo
+  de movimiento y origen aceptan varios valores. Los booleanos continúan como
+  tres estados y las fechas como rangos; no se fuerza selección múltiple donde
+  el tipo de dato no corresponde.
+- Las vistas personales existentes conservan compatibilidad: los conjuntos se
+  serializan como CSV dentro de las claves ya autorizadas por el backend.
+- Las rutas que no necesitan Catálogo o Por recibir evitan cargar sus grillas;
+  Kardex no solicita categorías, resumen ni ubicaciones al abrirse.
 
 ### 5. Verificación de producción
 

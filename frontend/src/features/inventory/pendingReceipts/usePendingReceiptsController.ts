@@ -26,11 +26,13 @@ import { buildPendingReceiptPageParams } from "../utils/inventoryQueryParams";
 type PendingReceiptsControllerOptions = {
   onError: (message: string) => void;
   onSuccess: (message: string) => void;
+  enabled?: boolean;
 };
 
 export function usePendingReceiptsController({
   onError,
   onSuccess,
+  enabled = true,
 }: PendingReceiptsControllerOptions) {
   const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
   const [rowCount, setRowCount] = useState(0);
@@ -42,15 +44,13 @@ export function usePendingReceiptsController({
   });
   const [ordering, setOrdering] = useState("-created_at");
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<
-    PendingReceiptStatus | ""
-  >("");
+  const [statusFilter, setStatusFilter] = useState<PendingReceiptStatus[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [exporting, setExporting] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyPendingReceipt, setHistoryPendingReceipt] =
@@ -121,6 +121,10 @@ export function usePendingReceiptsController({
   );
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     const requestSequence = ++requestSequenceRef.current;
@@ -152,7 +156,7 @@ export function usePendingReceiptsController({
       });
 
     return () => abortController.abort();
-  }, [onError]);
+  }, [enabled, onError]);
 
   const loadFirstPage = useCallback(
     (filters: PendingReceiptFilterOverrides = {}) => {
@@ -213,14 +217,14 @@ export function usePendingReceiptsController({
 
   const clearFilters = useCallback(() => {
     setSearchTerm("");
-    setStatusFilter("");
+    setStatusFilter([]);
     setDateFrom("");
     setDateTo("");
     setColumnFilters([]);
     setFilterResetKey((current) => current + 1);
     loadFirstPage({
       search: "",
-      status: "",
+      status: [],
       dateFrom: "",
       dateTo: "",
       columnFilters: [],
@@ -238,7 +242,12 @@ export function usePendingReceiptsController({
         ? (savedColumnFilters as SerkanGridFilter[])
         : [];
       const nextSearch = readFilter("search");
-      const nextStatus = readFilter("status") as PendingReceiptStatus | "";
+      const savedStatus = config.filters.status;
+      const nextStatus = (
+        typeof savedStatus === "string" && savedStatus
+          ? savedStatus.split(",")
+          : []
+      ) as PendingReceiptStatus[];
       const nextDateFrom = readFilter("date_from");
       const nextDateTo = readFilter("date_to");
       const nextSortModel = config.sort;

@@ -1,3 +1,4 @@
+import DownloadIcon from "@mui/icons-material/Download";
 import SearchIcon from "@mui/icons-material/Search";
 import {
   Alert,
@@ -13,10 +14,12 @@ import type { Ref } from "react";
 
 import {
   SerkanDataGrid,
+  type SerkanGridFilter,
   type SerkanGridPaginationModel,
   type SerkanGridSortModel,
 } from "../../../components/SerkanDataGrid";
 import { SectionCard } from "../../../components/SectionCard";
+import type { SavedGridViewConfig } from "../../../services/gridService";
 import type {
   PendingReceipt,
   PendingReceiptStatus,
@@ -36,6 +39,11 @@ type PendingReceiptsSectionProps = {
   statusFilter: PendingReceiptStatus | "";
   onStatusFilterChange: (value: PendingReceiptStatus | "") => void;
 
+  dateFrom: string;
+  onDateFromChange: (value: string) => void;
+  dateTo: string;
+  onDateToChange: (value: string) => void;
+
   onSearch: () => void;
   onClearFilters: () => void;
 
@@ -47,6 +55,15 @@ type PendingReceiptsSectionProps = {
 
   sortModel: SerkanGridSortModel;
   onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
+  onColumnFiltersChange: (filters: SerkanGridFilter[]) => void;
+  filterResetKey: number;
+  onVisibleColumnsChange: (fieldKeys: string[]) => void;
+  onNamedViewApply: (config: SavedGridViewConfig) => void;
+
+  exporting: boolean;
+  canExportOfficial: boolean;
+  onExportView: () => void;
+  onExportOfficial: () => void;
 };
 
 export function PendingReceiptsSection({
@@ -58,6 +75,10 @@ export function PendingReceiptsSection({
   onSearchTermChange,
   statusFilter,
   onStatusFilterChange,
+  dateFrom,
+  onDateFromChange,
+  dateTo,
+  onDateToChange,
   onSearch,
   onClearFilters,
   paginationModel,
@@ -65,6 +86,14 @@ export function PendingReceiptsSection({
   rowCount,
   sortModel,
   onSortModelChange,
+  onColumnFiltersChange,
+  filterResetKey,
+  onVisibleColumnsChange,
+  onNamedViewApply,
+  exporting,
+  canExportOfficial,
+  onExportView,
+  onExportOfficial,
 }: PendingReceiptsSectionProps) {
   return (
     <Box ref={sectionRef} sx={{ scrollMarginTop: 24 }}>
@@ -124,6 +153,24 @@ export function PendingReceiptsSection({
             <MenuItem value="CERRADA_PARCIAL">Cerrada parcial</MenuItem>
           </TextField>
 
+          <TextField
+            label="Desde"
+            type="date"
+            value={dateFrom}
+            onChange={(event) => onDateFromChange(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: { xs: "100%", lg: 165 } }}
+          />
+
+          <TextField
+            label="Hasta"
+            type="date"
+            value={dateTo}
+            onChange={(event) => onDateToChange(event.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{ minWidth: { xs: "100%", lg: 165 } }}
+          />
+
           <Button
             variant="contained"
             onClick={onSearch}
@@ -147,8 +194,35 @@ export function PendingReceiptsSection({
           </Button>
         </Stack>
 
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          sx={{ mb: 2 }}
+        >
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={onExportView}
+            disabled={exporting}
+          >
+            {exporting ? "Exportando..." : "Exportar vista"}
+          </Button>
+
+          {canExportOfficial ? (
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={onExportOfficial}
+              disabled={exporting}
+            >
+              Exportación oficial
+            </Button>
+          ) : null}
+        </Stack>
+
         <SerkanDataGrid
           gridKey="inventory.pending-receipts"
+          serverManaged
           ariaLabel="Pendientes por recibir de inventario"
           rows={pendingReceipts}
           columns={columns}
@@ -158,6 +232,16 @@ export function PendingReceiptsSection({
           rowCount={rowCount}
           sortModel={sortModel}
           onSortModelChange={onSortModelChange}
+          onFilterModelChange={onColumnFiltersChange}
+          filterResetKey={filterResetKey}
+          onVisibleColumnsChange={onVisibleColumnsChange}
+          namedViewFilters={{
+            search: searchTerm,
+            status: statusFilter,
+            date_from: dateFrom,
+            date_to: dateTo,
+          }}
+          onNamedViewApply={onNamedViewApply}
         />
       </SectionCard>
     </Box>

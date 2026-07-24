@@ -56,6 +56,7 @@ from .serializers import (
     MovimientoKardexSerializer,
     OperacionPendientePorRecibirSerializer,
     PendientePorRecibirSerializer,
+    PendingReceiptOperationSerializer,
     ProductLocationBalanceSerializer,
     ProductoCategoriaChangeSerializer,
     ProductoLifecycleActionSerializer,
@@ -80,11 +81,16 @@ from .location_services import (
     transfer_inventory,
 )
 from .exports import (
+    build_pending_receipt_export_response,
     build_product_export_response,
+    record_grid_export,
     record_product_export,
     resolve_export_columns,
 )
-from .grid_definitions import PRODUCT_GRID_DEFINITION
+from .grid_definitions import (
+    PENDING_RECEIPT_GRID_DEFINITION,
+    PRODUCT_GRID_DEFINITION,
+)
 
 
 def raise_drf_validation_error(error):
@@ -882,13 +888,33 @@ class PendientePorRecibirViewSet(
         "cantidad_original",
         "cantidad_recibida",
         "cantidad_cancelada",
+        "cantidad_pendiente_orden",
         "estado",
+        "destination_location__name_normalized",
+        "created_by__username",
     ]
 
     ordering = ["-created_at"]
 
+    def get_required_inventory_capability(self):
+        if self.action == "export":
+            return (
+                InventoryCapability.EXPORT_OFFICIAL
+                if self.request.query_params.get("mode", "view") == "official"
+                else InventoryCapability.EXPORT_VIEW
+            )
+
+        return super().get_required_inventory_capability()
+
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().annotate(
+            cantidad_pendiente_orden=ExpressionWrapper(
+                F("cantidad_original")
+                - F("cantidad_recibida")
+                - F("cantidad_cancelada"),
+                output_field=IntegerField(),
+            )
+        )
         params = self.request.query_params
 
         product_ids = parse_id_values(
@@ -908,7 +934,72 @@ class PendientePorRecibirViewSet(
         if receipt_statuses:
             queryset = queryset.filter(estado__in=receipt_statuses)
 
-        return apply_created_at_date_range(queryset, params)
+        queryset = apply_created_at_date_range(queryset, params)
+        grid_filters = parse_grid_filters_param(params.get("grid_filters"))
+        return apply_grid_filters(
+            queryset,
+            PENDING_RECEIPT_GRID_DEFINITION,
+            grid_filters,
+        )
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        mode = request.query_params.get("mode", "view")
+        export_format = request.query_params.get("file_format", "xlsx")
+
+        if mode not in {"view", "official"}:
+            raise DRFValidationError(
+                {"mode": "Use view para la vista u official para el esquema oficial."}
+            )
+        if export_format not in {"xlsx", "csv"}:
+            raise DRFValidationError({"file_format": "Use xlsx o csv."})
+
+        requested_columns = split_csv_param(request.query_params.get("columns"))
+        columns = resolve_export_columns(
+            mode=mode,
+            requested_columns=requested_columns,
+            definition=PENDING_RECEIPT_GRID_DEFINITION,
+        )
+        pending_receipts = list(
+            self.filter_queryset(self.get_queryset())
+            .select_related(
+                "producto",
+                "producto__categoria",
+                "destination_location",
+                "created_by",
+            )[:5000]
+        )
+
+        record_grid_export(
+            request=getattr(request, "_request", request),
+            definition=PENDING_RECEIPT_GRID_DEFINITION,
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+            row_count=len(pending_receipts),
+            model_name="pendienteporrecibir",
+            object_repr="Pendientes por recibir",
+        )
+        self._skip_activity_audit(request)
+
+        return build_pending_receipt_export_response(
+            queryset=pending_receipts,
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+        )
+
+    @action(detail=True, methods=["get"], url_path="historial")
+    def historial(self, request, pk=None):
+        pending_receipt = self.get_object()
+        operations = pending_receipt.operations.select_related(
+            "responsible",
+            "kardex_movement",
+        )
+        return Response(
+            PendingReceiptOperationSerializer(operations, many=True).data,
+            status=status.HTTP_200_OK,
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = CrearPendientePorRecibirSerializer(data=request.data)
@@ -929,6 +1020,9 @@ class PendientePorRecibirViewSet(
                 destination_location=serializer.validated_data.get(
                     "ubicacion_destino"
                 ),
+                idempotency_key=str(
+                    request.headers.get("Idempotency-Key", "")
+                ).strip(),
                 user=request.user,
                 request=getattr(request, "_request", request),
             )
@@ -956,6 +1050,9 @@ class PendientePorRecibirViewSet(
                 pending_receipt=pending_receipt,
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
+                idempotency_key=str(
+                    request.headers.get("Idempotency-Key", "")
+                ).strip(),
                 user=request.user,
                 request=getattr(
                     request,
@@ -990,6 +1087,9 @@ class PendientePorRecibirViewSet(
                 pending_receipt=pending_receipt,
                 cantidad=serializer.validated_data["cantidad"],
                 motivo=serializer.validated_data["motivo"],
+                idempotency_key=str(
+                    request.headers.get("Idempotency-Key", "")
+                ).strip(),
                 user=request.user,
                 request=getattr(request, "_request", request),
             )

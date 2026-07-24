@@ -11,6 +11,7 @@ from .models import (
     InventoryTransfer,
     MovimientoKardex,
     PendientePorRecibir,
+    PendingReceiptOperation,
     ProductLocationBalance,
     Producto,
     ProductOrigin,
@@ -819,6 +820,59 @@ class PendientePorRecibirSerializer(serializers.ModelSerializer):
             return ""
 
         return obj.updated_by.get_full_name().strip() or obj.updated_by.username
+
+
+class PendingReceiptOperationSerializer(serializers.ModelSerializer):
+    operation_type_display = serializers.CharField(
+        source="get_operation_type_display",
+        read_only=True,
+    )
+    previous_state_display = serializers.CharField(
+        source="get_previous_state_display",
+        read_only=True,
+    )
+    new_state_display = serializers.CharField(
+        source="get_new_state_display",
+        read_only=True,
+    )
+    responsible_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PendingReceiptOperation
+        fields = [
+            "id",
+            "pending_receipt",
+            "operation_type",
+            "operation_type_display",
+            "quantity",
+            "reason",
+            "product_model_snapshot",
+            "product_sap_code_snapshot",
+            "product_category_snapshot",
+            "destination_location_snapshot",
+            "responsible",
+            "responsible_name",
+            "kardex_movement",
+            "received_before",
+            "received_after",
+            "cancelled_before",
+            "cancelled_after",
+            "pending_before",
+            "pending_after",
+            "previous_state",
+            "previous_state_display",
+            "new_state",
+            "new_state_display",
+            "occurred_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_responsible_name(self, obj):
+        return (
+            obj.responsible.get_full_name().strip()
+            or obj.responsible.username
+        )
 
 
 class InventoryLocationSerializer(serializers.ModelSerializer):

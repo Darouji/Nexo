@@ -43,6 +43,7 @@ export type PendingReceiptCreateDialogState = {
   referencia: string;
   motivo: string;
   ubicacionDestino: string;
+  idempotencyKey: string;
 };
 
 export type PendingReceiptOperationMode = "RECIBIR" | "CANCELAR";
@@ -53,6 +54,7 @@ export type PendingReceiptOperationDialogState = {
   pendingReceipt: PendingReceipt | null;
   cantidad: string;
   motivo: string;
+  idempotencyKey: string;
 };
 
 export type ProductLifecycleDialogState = {
@@ -97,7 +99,10 @@ export type ProductFilterOverrides = {
 export type PendingReceiptFilterOverrides = {
   search?: string;
   status?: PendingReceiptStatus | "";
+  dateFrom?: string;
+  dateTo?: string;
   ordering?: string;
+  columnFilters?: SerkanGridFilter[];
   page?: number;
   pageSize?: number;
 };
@@ -167,6 +172,7 @@ export const emptyPendingReceiptCreateDialog: PendingReceiptCreateDialogState =
     referencia: "",
     motivo: "",
     ubicacionDestino: "",
+    idempotencyKey: "",
   };
 
 export const emptyPendingReceiptOperationDialog: PendingReceiptOperationDialogState =
@@ -176,6 +182,7 @@ export const emptyPendingReceiptOperationDialog: PendingReceiptOperationDialogSt
     pendingReceipt: null,
     cantidad: "",
     motivo: "",
+    idempotencyKey: "",
   };
 
 export const emptyProductLifecycleDialog: ProductLifecycleDialogState = {

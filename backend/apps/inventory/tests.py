@@ -11,6 +11,7 @@ from .models import (
     KardexMovementType,
     MovimientoKardex,
     PendientePorRecibir,
+    PendingReceiptOperation,
     PendientePorRecibirStatus,
     Producto,
     ProductOrigin,
@@ -287,6 +288,27 @@ class PendientePorRecibirServiceTests(TestCase):
             PendientePorRecibirStatus.PENDIENTE,
         )
 
+    def test_create_retry_with_same_key_does_not_duplicate_pending_receipt(self):
+        payload = {
+            "producto": self.producto,
+            "cantidad": 6,
+            "motivo": "Compra en tránsito con reintento seguro.",
+            "referencia": "OC-IDEMPOTENTE",
+            "idempotency_key": "pending-create-idempotent-001",
+            "user": self.user,
+        }
+
+        first = create_pending_receipt(**payload)
+        second = create_pending_receipt(**payload)
+
+        self.assertEqual(first.pk, second.pk)
+        self.assertEqual(
+            PendientePorRecibir.objects.filter(
+                creation_idempotency_key="pending-create-idempotent-001"
+            ).count(),
+            1,
+        )
+
     def test_receive_partial_pending_updates_stock_and_creates_kardex(self):
         pending_receipt = create_pending_receipt(
             producto=self.producto,
@@ -300,6 +322,7 @@ class PendientePorRecibirServiceTests(TestCase):
             pending_receipt=pending_receipt,
             cantidad=3,
             motivo="Recepción física parcial de OC-101.",
+            idempotency_key="receive-oc-101-partial-001",
             user=self.user,
         )
 
@@ -332,6 +355,75 @@ class PendientePorRecibirServiceTests(TestCase):
             ).exists()
         )
 
+    def test_receive_retry_with_same_key_is_idempotent(self):
+        pending_receipt = create_pending_receipt(
+            producto=self.producto,
+            cantidad=6,
+            motivo="Compra para validar reintentos.",
+            referencia="OC-IDEMP-001",
+            user=self.user,
+        )
+
+        first_pending, first_movement = receive_pending_receipt(
+            pending_receipt=pending_receipt,
+            cantidad=2,
+            motivo="Recepción parcial idempotente.",
+            idempotency_key="receive-idempotent-001",
+            user=self.user,
+        )
+        retried_pending, retried_movement = receive_pending_receipt(
+            pending_receipt=pending_receipt,
+            cantidad=2,
+            motivo="Recepción parcial idempotente.",
+            idempotency_key="receive-idempotent-001",
+            user=self.user,
+        )
+
+        self.producto.refresh_from_db()
+        retried_pending.refresh_from_db()
+
+        self.assertEqual(first_pending.pk, retried_pending.pk)
+        self.assertEqual(first_movement.pk, retried_movement.pk)
+        self.assertEqual(self.producto.stock_actual, 12)
+        self.assertEqual(retried_pending.cantidad_recibida, 2)
+        self.assertEqual(
+            PendingReceiptOperation.objects.filter(
+                idempotency_key="receive-idempotent-001"
+            ).count(),
+            1,
+        )
+
+    def test_reused_idempotency_key_with_different_payload_is_rejected(self):
+        pending_receipt = create_pending_receipt(
+            producto=self.producto,
+            cantidad=6,
+            motivo="Compra para validar conflicto.",
+            referencia="OC-IDEMP-002",
+            user=self.user,
+        )
+
+        receive_pending_receipt(
+            pending_receipt=pending_receipt,
+            cantidad=2,
+            motivo="Recepción original.",
+            idempotency_key="receive-conflict-001",
+            user=self.user,
+        )
+
+        with self.assertRaises(ValidationError):
+            receive_pending_receipt(
+                pending_receipt=pending_receipt,
+                cantidad=3,
+                motivo="Recepción diferente.",
+                idempotency_key="receive-conflict-001",
+                user=self.user,
+            )
+
+        self.producto.refresh_from_db()
+        pending_receipt.refresh_from_db()
+        self.assertEqual(self.producto.stock_actual, 12)
+        self.assertEqual(pending_receipt.cantidad_recibida, 2)
+
     def test_kardex_preserves_product_snapshot_after_product_edit(self):
         pending_receipt = create_pending_receipt(
             producto=self.producto,
@@ -345,6 +437,7 @@ class PendientePorRecibirServiceTests(TestCase):
             pending_receipt=pending_receipt,
             cantidad=2,
             motivo="Recepción física para prueba de snapshot.",
+            idempotency_key="receive-snapshot-001",
             user=self.user,
         )
 
@@ -392,6 +485,7 @@ class PendientePorRecibirServiceTests(TestCase):
             pending_receipt=pending_receipt,
             cantidad=8,
             motivo="Proveedor canceló la orden de compra.",
+            idempotency_key="cancel-oc-102-001",
             user=self.user,
         )
 
@@ -416,6 +510,43 @@ class PendientePorRecibirServiceTests(TestCase):
             ).exists()
         )
 
+    def test_cancel_retry_with_same_key_is_idempotent(self):
+        pending_receipt = create_pending_receipt(
+            producto=self.producto,
+            cantidad=5,
+            motivo="Compra para cancelar de forma segura.",
+            referencia="OC-IDEMP-CANCEL-001",
+            user=self.user,
+        )
+
+        cancel_pending_receipt(
+            pending_receipt=pending_receipt,
+            cantidad=2,
+            motivo="Cancelación parcial idempotente.",
+            idempotency_key="cancel-idempotent-001",
+            user=self.user,
+        )
+        retried_pending = cancel_pending_receipt(
+            pending_receipt=pending_receipt,
+            cantidad=2,
+            motivo="Cancelación parcial idempotente.",
+            idempotency_key="cancel-idempotent-001",
+            user=self.user,
+        )
+
+        retried_pending.refresh_from_db()
+        self.producto.refresh_from_db()
+
+        self.assertEqual(retried_pending.cantidad_cancelada, 2)
+        self.assertEqual(retried_pending.cantidad_pendiente, 3)
+        self.assertEqual(self.producto.stock_actual, 10)
+        self.assertEqual(
+            PendingReceiptOperation.objects.filter(
+                idempotency_key="cancel-idempotent-001"
+            ).count(),
+            1,
+        )
+
     def test_quantity_cannot_exceed_pending_units(self):
         pending_receipt = create_pending_receipt(
             producto=self.producto,
@@ -429,6 +560,7 @@ class PendientePorRecibirServiceTests(TestCase):
                 pending_receipt=pending_receipt,
                 cantidad=6,
                 motivo="Intento inválido.",
+                idempotency_key="receive-invalid-quantity-001",
                 user=self.user,
             )
 
@@ -803,6 +935,7 @@ class PendientePorRecibirApiTests(TestCase):
                 "referencia": "OC-200",
             },
             format="json",
+            HTTP_IDEMPOTENCY_KEY="pending-create-api-001",
         )
 
         self.assertEqual(
@@ -852,11 +985,37 @@ class PendientePorRecibirApiTests(TestCase):
                 "motivo": "Recepción física total de OC-200.",
             },
             format="json",
+            HTTP_IDEMPOTENCY_KEY="receive-api-oc-200-001",
         )
 
         self.assertEqual(
             receive_response.status_code,
             status.HTTP_200_OK,
+        )
+
+        retry_response = client.post(
+            (
+                f"/api/inventory/pendientes-por-recibir/"
+                f"{pending_receipt_id}/recibir/"
+            ),
+            {
+                "cantidad": 4,
+                "motivo": "Recepción física total de OC-200.",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="receive-api-oc-200-001",
+        )
+
+        self.assertEqual(retry_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            retry_response.data["movimiento_kardex"]["id"],
+            receive_response.data["movimiento_kardex"]["id"],
+        )
+        self.assertEqual(
+            PendingReceiptOperation.objects.filter(
+                idempotency_key="receive-api-oc-200-001"
+            ).count(),
+            1,
         )
 
         self.assertEqual(

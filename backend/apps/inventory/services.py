@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -26,6 +28,8 @@ from .models import (
     MovimientoKardex,
     PendientePorRecibir,
     ProductLocationBalance,
+    PendingReceiptOperation,
+    PendingReceiptOperationType,
     Producto,
     ProductOrigin,
 )
@@ -1621,11 +1625,25 @@ def create_pending_receipt(
     motivo="",
     referencia="",
     destination_location=None,
+    idempotency_key="",
     user=None,
     request=None,
 ):
     motivo = str(motivo or "").strip()
     referencia = str(referencia or "").strip()
+    idempotency_key = str(idempotency_key or "").strip()
+
+    if not idempotency_key:
+        if request is not None:
+            raise ValidationError(
+                {
+                    "idempotency_key": (
+                        "La clave de idempotencia es obligatoria para registrar "
+                        "un pendiente por recibir."
+                    )
+                }
+            )
+        idempotency_key = f"internal-pending-create-{uuid4()}"
 
     if cantidad <= 0:
         raise ValidationError(
@@ -1642,71 +1660,158 @@ def create_pending_receipt(
             }
         )
 
-    with transaction.atomic():
-        locked_product = Producto.objects.select_for_update().get(pk=producto.pk)
+    resolved_destination = destination_location or get_regularization_location()
 
-        if locked_product.status != BaseStatus.ACTIVO or locked_product.descontinuado:
+    def find_existing():
+        existing = (
+            PendientePorRecibir.objects.select_related(
+                "producto",
+                "destination_location",
+            )
+            .filter(creation_idempotency_key=idempotency_key)
+            .first()
+        )
+        if existing is None:
+            return None
+        if (
+            existing.producto_id != producto.pk
+            or existing.destination_location_id != resolved_destination.pk
+            or existing.cantidad_original != cantidad
+            or existing.referencia != referencia
+            or existing.motivo != motivo
+        ):
             raise ValidationError(
                 {
-                    "producto": (
-                        "Solo se pueden registrar unidades por recibir para "
-                        "productos activos y no descontinuados."
+                    "idempotency_key": (
+                        "La clave de idempotencia ya fue utilizada para un "
+                        "registro por recibir diferente."
                     )
                 }
             )
+        return existing
 
-        if not locked_product.controla_stock:
-            raise ValidationError(
-                {
-                    "producto": (
-                        "Este producto no maneja inventario y no puede registrar "
-                        "unidades por recibir."
-                    )
-                }
+    existing = find_existing()
+    if existing is not None:
+        return existing
+
+    try:
+        with transaction.atomic():
+            existing = find_existing()
+            if existing is not None:
+                return existing
+
+            locked_product = Producto.objects.select_for_update().get(
+                pk=producto.pk
             )
 
-        resolved_destination = (
-            destination_location or get_regularization_location()
-        )
-        if resolved_destination.status != BaseStatus.ACTIVO:
-            raise ValidationError(
-                {
-                    "destination_location": (
-                        "La ubicación de destino no se encuentra activa."
-                    )
-                }
+            if (
+                locked_product.status != BaseStatus.ACTIVO
+                or locked_product.descontinuado
+            ):
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "Solo se pueden registrar unidades por recibir para "
+                            "productos activos y no descontinuados."
+                        )
+                    }
+                )
+
+            if not locked_product.controla_stock:
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "Este producto no maneja inventario y no puede "
+                            "registrar unidades por recibir."
+                        )
+                    }
+                )
+
+            if resolved_destination.status != BaseStatus.ACTIVO:
+                raise ValidationError(
+                    {
+                        "destination_location": (
+                            "La ubicación de destino no se encuentra activa."
+                        )
+                    }
+                )
+
+            pending_receipt = PendientePorRecibir.objects.create(
+                producto=locked_product,
+                destination_location=resolved_destination,
+                cantidad_original=cantidad,
+                referencia=referencia,
+                motivo=motivo,
+                creation_idempotency_key=idempotency_key,
+                created_by=get_operator(user),
+                updated_by=get_operator(user),
             )
 
-        pending_receipt = PendientePorRecibir.objects.create(
-            producto=locked_product,
-            destination_location=resolved_destination,
-            cantidad_original=cantidad,
-            referencia=referencia,
-            motivo=motivo,
-            created_by=get_operator(user),
-            updated_by=get_operator(user),
-        )
-
-        create_business_audit_log(
-            instance=pending_receipt,
-            action=AuditAction.CREAR,
-            user=user,
-            origin=AuditOrigin.MANUAL,
-            reason=motivo or referencia,
-            metadata={
-                "operation": "pending_receipt_create",
-                "product_id": locked_product.pk,
-                "product_model": locked_product.modelo,
-                "original_quantity": pending_receipt.cantidad_original,
-                "reference": pending_receipt.referencia,
-                "destination_location_id": resolved_destination.pk,
-                "destination_location_name": resolved_destination.name,
-                "initial_status": pending_receipt.estado,
-            },
-            request=request,
-        )
+            create_business_audit_log(
+                instance=pending_receipt,
+                action=AuditAction.CREAR,
+                user=user,
+                origin=AuditOrigin.MANUAL,
+                reason=motivo or referencia,
+                metadata={
+                    "operation": "pending_receipt_create",
+                    "product_id": locked_product.pk,
+                    "product_model": locked_product.modelo,
+                    "original_quantity": pending_receipt.cantidad_original,
+                    "reference": pending_receipt.referencia,
+                    "destination_location_id": resolved_destination.pk,
+                    "destination_location_name": resolved_destination.name,
+                    "initial_status": pending_receipt.estado,
+                    "idempotency_key": idempotency_key,
+                },
+                request=request,
+            )
+    except IntegrityError:
+        existing = find_existing()
+        if existing is not None:
+            return existing
+        raise
 
     return pending_receipt
+
+
+def _find_matching_pending_receipt_operation(
+    *,
+    idempotency_key,
+    pending_receipt,
+    operation_type,
+    cantidad,
+    motivo,
+    lock=False,
+):
+    queryset = PendingReceiptOperation.objects.select_related(
+        "pending_receipt",
+        "pending_receipt__producto",
+        "kardex_movement",
+    )
+    if lock:
+        queryset = queryset.select_for_update()
+
+    operation = queryset.filter(idempotency_key=idempotency_key).first()
+    if operation is None:
+        return None
+
+    if (
+        operation.pending_receipt_id != pending_receipt.pk
+        or operation.operation_type != operation_type
+        or operation.quantity != cantidad
+        or operation.reason != motivo
+    ):
+        raise ValidationError(
+            {
+                "idempotency_key": (
+                    "La clave de idempotencia ya fue utilizada para una "
+                    "operación diferente."
+                )
+            }
+        )
+
+    return operation
 
 
 def receive_pending_receipt(
@@ -1714,10 +1819,13 @@ def receive_pending_receipt(
     pending_receipt,
     cantidad,
     motivo,
+    idempotency_key,
     user=None,
     request=None,
 ):
     motivo = str(motivo or "").strip()
+    idempotency_key = str(idempotency_key or "").strip()
+    responsible = get_operator(user)
 
     if cantidad <= 0:
         raise ValidationError({"cantidad": "La cantidad recibida debe ser positiva."})
@@ -1725,122 +1833,205 @@ def receive_pending_receipt(
     if not motivo:
         raise ValidationError({"motivo": "El motivo de la recepción es obligatorio."})
 
-    with transaction.atomic():
-        pending_product_id = pending_receipt.producto_id
-
-        locked_product = Producto.objects.select_for_update().get(pk=pending_product_id)
-
-        locked_pending_receipt = (
-            PendientePorRecibir.objects.select_for_update()
-            .select_related("producto", "destination_location")
-            .get(pk=pending_receipt.pk)
+    if not idempotency_key:
+        raise ValidationError(
+            {
+                "idempotency_key": (
+                    "La recepción requiere una clave de idempotencia."
+                )
+            }
+        )
+    if responsible is None:
+        raise ValidationError(
+            {"responsible": "La recepción requiere un usuario responsable."}
         )
 
-        if locked_pending_receipt.producto_id != locked_product.pk:
-            raise ValidationError(
-                {
-                    "producto": (
-                        "La recepción pendiente no corresponde al producto indicado."
-                    )
-                }
+    existing = _find_matching_pending_receipt_operation(
+        idempotency_key=idempotency_key,
+        pending_receipt=pending_receipt,
+        operation_type=PendingReceiptOperationType.RECEIVE,
+        cantidad=cantidad,
+        motivo=motivo,
+    )
+    if existing is not None:
+        return existing.pending_receipt, existing.kardex_movement
+
+    try:
+        with transaction.atomic():
+            locked_product = Producto.objects.select_for_update().get(
+                pk=pending_receipt.producto_id
+            )
+            locked_pending_receipt = (
+                PendientePorRecibir.objects.select_for_update()
+                .select_related("producto", "destination_location")
+                .get(pk=pending_receipt.pk)
             )
 
-        if not locked_product.controla_stock:
-            raise ValidationError(
-                {
-                    "producto": (
-                        "Este producto no maneja inventario y no puede "
-                        "recibir stock físico."
-                    )
-                }
+            existing = _find_matching_pending_receipt_operation(
+                idempotency_key=idempotency_key,
+                pending_receipt=locked_pending_receipt,
+                operation_type=PendingReceiptOperationType.RECEIVE,
+                cantidad=cantidad,
+                motivo=motivo,
+                lock=True,
+            )
+            if existing is not None:
+                return existing.pending_receipt, existing.kardex_movement
+
+            if locked_pending_receipt.producto_id != locked_product.pk:
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "La recepción pendiente no corresponde al "
+                            "producto indicado."
+                        )
+                    }
+                )
+            if (
+                locked_product.status != BaseStatus.ACTIVO
+                or locked_product.descontinuado
+            ):
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "El producto debe estar activo y no descontinuado "
+                            "para recibir stock físico."
+                        )
+                    }
+                )
+            if not locked_product.controla_stock:
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "Este producto no maneja inventario y no puede "
+                            "recibir stock físico."
+                        )
+                    }
+                )
+            if cantidad > locked_pending_receipt.cantidad_pendiente:
+                raise ValidationError(
+                    {
+                        "cantidad": (
+                            "La cantidad recibida no puede superar las "
+                            "unidades pendientes. "
+                            f"Pendiente actual: "
+                            f"{locked_pending_receipt.cantidad_pendiente}."
+                        )
+                    }
+                )
+
+            old_values = capture_field_values(
+                locked_pending_receipt,
+                PENDING_RECEIPT_AUDIT_FIELDS,
+            )
+            pending_before = locked_pending_receipt.cantidad_pendiente
+
+            movement = register_kardex_movement(
+                producto=locked_product,
+                movement_type=KardexMovementType.ENTRADA_RECEPCION,
+                cantidad=cantidad,
+                motivo=motivo,
+                user=user,
+                origin=AuditOrigin.MANUAL,
+                reference=locked_pending_receipt,
+                location=locked_pending_receipt.destination_location,
+                request=request,
             )
 
-        if cantidad > locked_pending_receipt.cantidad_pendiente:
-            raise ValidationError(
-                {
-                    "cantidad": (
-                        "La cantidad recibida no puede superar las "
-                        "unidades pendientes. "
-                        f"Pendiente actual: "
-                        f"{locked_pending_receipt.cantidad_pendiente}."
-                    )
-                }
+            locked_pending_receipt.cantidad_recibida += cantidad
+            locked_pending_receipt.updated_by = responsible
+            locked_pending_receipt.save(
+                update_fields=[
+                    "cantidad_recibida",
+                    "updated_by",
+                    "updated_at",
+                ]
             )
 
-        old_values = capture_field_values(
-            locked_pending_receipt,
-            PENDING_RECEIPT_AUDIT_FIELDS,
-        )
-
-        pending_before = locked_pending_receipt.cantidad_pendiente
-
-        movement = register_kardex_movement(
-            producto=locked_product,
-            movement_type=KardexMovementType.ENTRADA_RECEPCION,
-            cantidad=cantidad,
-            motivo=motivo,
-            user=user,
-            origin=AuditOrigin.MANUAL,
-            reference=locked_pending_receipt,
-            location=locked_pending_receipt.destination_location,
-            request=request,
-        )
-
-        locked_pending_receipt.cantidad_recibida += cantidad
-        locked_pending_receipt.updated_by = get_operator(user)
-        locked_pending_receipt.save(
-            update_fields=[
-                "cantidad_recibida",
-                "updated_by",
-                "updated_at",
-            ]
-        )
-
-        change_logs = create_record_change_logs_from_snapshot(
-            instance=locked_pending_receipt,
-            old_values=old_values,
-            fields=PENDING_RECEIPT_AUDIT_FIELDS,
-            user=user,
-            origin=AuditOrigin.MANUAL,
-            reason=motivo,
-            action=AuditAction.CAMBIAR_ESTADO,
-        )
-
-        create_business_audit_log(
-            instance=locked_pending_receipt,
-            action=AuditAction.CAMBIAR_ESTADO,
-            user=user,
-            origin=AuditOrigin.MANUAL,
-            reason=motivo,
-            metadata={
-                "operation": "pending_receipt_receive",
-                "product_id": locked_product.pk,
-                "product_model": locked_product.modelo,
-                "kardex_movement_id": movement.pk,
-                "destination_location_id": (
-                    locked_pending_receipt.destination_location_id
-                ),
-                "destination_location_name": (
+            operation = PendingReceiptOperation.objects.create(
+                pending_receipt=locked_pending_receipt,
+                operation_type=PendingReceiptOperationType.RECEIVE,
+                quantity=cantidad,
+                reason=motivo,
+                product_model_snapshot=locked_product.modelo,
+                product_sap_code_snapshot=locked_product.codigo_sap,
+                product_category_snapshot=locked_product.categoria.name,
+                destination_location_snapshot=(
                     locked_pending_receipt.destination_location.name
                 ),
-                "received_quantity": cantidad,
-                "received_before": int(old_values.get("cantidad_recibida") or 0),
-                "received_after": (locked_pending_receipt.cantidad_recibida),
-                "pending_before": pending_before,
-                "pending_after": (locked_pending_receipt.cantidad_pendiente),
-                "previous_status": old_values.get("estado", ""),
-                "new_status": locked_pending_receipt.estado,
-                "changes": serialize_audit_changes(
-                    change_logs,
-                    include_fields={
-                        "cantidad_recibida",
-                        "cantidad_pendiente",
-                        "estado",
-                    },
-                ),
-            },
-            request=request,
+                responsible=responsible,
+                kardex_movement=movement,
+                idempotency_key=idempotency_key,
+                received_before=int(old_values.get("cantidad_recibida") or 0),
+                received_after=locked_pending_receipt.cantidad_recibida,
+                cancelled_before=int(old_values.get("cantidad_cancelada") or 0),
+                cancelled_after=locked_pending_receipt.cantidad_cancelada,
+                pending_before=pending_before,
+                pending_after=locked_pending_receipt.cantidad_pendiente,
+                previous_state=old_values.get("estado", ""),
+                new_state=locked_pending_receipt.estado,
+                created_by=responsible,
+                updated_by=responsible,
+            )
+
+            change_logs = create_record_change_logs_from_snapshot(
+                instance=locked_pending_receipt,
+                old_values=old_values,
+                fields=PENDING_RECEIPT_AUDIT_FIELDS,
+                user=user,
+                origin=AuditOrigin.MANUAL,
+                reason=motivo,
+                action=AuditAction.CAMBIAR_ESTADO,
+            )
+
+            create_business_audit_log(
+                instance=locked_pending_receipt,
+                action=AuditAction.CAMBIAR_ESTADO,
+                user=user,
+                origin=AuditOrigin.MANUAL,
+                reason=motivo,
+                metadata={
+                    "operation": "pending_receipt_receive",
+                    "operation_record_id": operation.pk,
+                    "idempotency_key": idempotency_key,
+                    "product_id": locked_product.pk,
+                    "product_model": locked_product.modelo,
+                    "kardex_movement_id": movement.pk,
+                    "destination_location_id": (
+                        locked_pending_receipt.destination_location_id
+                    ),
+                    "destination_location_name": (
+                        locked_pending_receipt.destination_location.name
+                    ),
+                    "received_quantity": cantidad,
+                    "received_before": operation.received_before,
+                    "received_after": operation.received_after,
+                    "pending_before": operation.pending_before,
+                    "pending_after": operation.pending_after,
+                    "previous_status": operation.previous_state,
+                    "new_status": operation.new_state,
+                    "changes": serialize_audit_changes(
+                        change_logs,
+                        include_fields={
+                            "cantidad_recibida",
+                            "cantidad_pendiente",
+                            "estado",
+                        },
+                    ),
+                },
+                request=request,
+            )
+    except IntegrityError:
+        existing = _find_matching_pending_receipt_operation(
+            idempotency_key=idempotency_key,
+            pending_receipt=pending_receipt,
+            operation_type=PendingReceiptOperationType.RECEIVE,
+            cantidad=cantidad,
+            motivo=motivo,
         )
+        if existing is None:
+            raise
+        return existing.pending_receipt, existing.kardex_movement
 
     return locked_pending_receipt, movement
 
@@ -1850,10 +2041,13 @@ def cancel_pending_receipt(
     pending_receipt,
     cantidad,
     motivo,
+    idempotency_key,
     user=None,
     request=None,
 ):
     motivo = str(motivo or "").strip()
+    idempotency_key = str(idempotency_key or "").strip()
+    responsible = get_operator(user)
 
     if cantidad <= 0:
         raise ValidationError({"cantidad": "La cantidad a cancelar debe ser positiva."})
@@ -1861,92 +2055,185 @@ def cancel_pending_receipt(
     if not motivo:
         raise ValidationError({"motivo": "El motivo de la cancelación es obligatorio."})
 
-    with transaction.atomic():
-        locked_product = Producto.objects.select_for_update().get(
-            pk=pending_receipt.producto_id
+    if not idempotency_key:
+        raise ValidationError(
+            {
+                "idempotency_key": (
+                    "La cancelación requiere una clave de idempotencia."
+                )
+            }
+        )
+    if responsible is None:
+        raise ValidationError(
+            {"responsible": "La cancelación requiere un usuario responsable."}
         )
 
-        locked_pending_receipt = (
-            PendientePorRecibir.objects.select_for_update()
-            .select_related("producto")
-            .get(pk=pending_receipt.pk)
-        )
+    existing = _find_matching_pending_receipt_operation(
+        idempotency_key=idempotency_key,
+        pending_receipt=pending_receipt,
+        operation_type=PendingReceiptOperationType.CANCEL,
+        cantidad=cantidad,
+        motivo=motivo,
+    )
+    if existing is not None:
+        return existing.pending_receipt
 
-        if locked_pending_receipt.producto_id != locked_product.pk:
-            raise ValidationError(
-                {
-                    "producto": (
-                        "La recepción pendiente no corresponde al producto indicado."
-                    )
-                }
+    try:
+        with transaction.atomic():
+            locked_product = Producto.objects.select_for_update().get(
+                pk=pending_receipt.producto_id
+            )
+            locked_pending_receipt = (
+                PendientePorRecibir.objects.select_for_update()
+                .select_related("producto")
+                .get(pk=pending_receipt.pk)
             )
 
-        if cantidad > locked_pending_receipt.cantidad_pendiente:
-            raise ValidationError(
-                {
-                    "cantidad": (
-                        "La cantidad cancelada no puede superar las "
-                        "unidades pendientes. "
-                        f"Pendiente actual: "
-                        f"{locked_pending_receipt.cantidad_pendiente}."
-                    )
-                }
+            existing = _find_matching_pending_receipt_operation(
+                idempotency_key=idempotency_key,
+                pending_receipt=locked_pending_receipt,
+                operation_type=PendingReceiptOperationType.CANCEL,
+                cantidad=cantidad,
+                motivo=motivo,
+                lock=True,
+            )
+            if existing is not None:
+                return existing.pending_receipt
+
+            if locked_pending_receipt.producto_id != locked_product.pk:
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "La recepción pendiente no corresponde al "
+                            "producto indicado."
+                        )
+                    }
+                )
+            if (
+                locked_product.status != BaseStatus.ACTIVO
+                or locked_product.descontinuado
+            ):
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "El producto debe estar activo y no descontinuado "
+                            "para cancelar unidades pendientes."
+                        )
+                    }
+                )
+            if not locked_product.controla_stock:
+                raise ValidationError(
+                    {
+                        "producto": (
+                            "Este producto no maneja inventario y no puede "
+                            "cancelar unidades pendientes."
+                        )
+                    }
+                )
+            if cantidad > locked_pending_receipt.cantidad_pendiente:
+                raise ValidationError(
+                    {
+                        "cantidad": (
+                            "La cantidad cancelada no puede superar las "
+                            "unidades pendientes. "
+                            f"Pendiente actual: "
+                            f"{locked_pending_receipt.cantidad_pendiente}."
+                        )
+                    }
+                )
+
+            old_values = capture_field_values(
+                locked_pending_receipt,
+                PENDING_RECEIPT_AUDIT_FIELDS,
+            )
+            pending_before = locked_pending_receipt.cantidad_pendiente
+
+            locked_pending_receipt.cantidad_cancelada += cantidad
+            locked_pending_receipt.updated_by = responsible
+            locked_pending_receipt.save(
+                update_fields=[
+                    "cantidad_cancelada",
+                    "updated_by",
+                    "updated_at",
+                ]
             )
 
-        old_values = capture_field_values(
-            locked_pending_receipt,
-            PENDING_RECEIPT_AUDIT_FIELDS,
-        )
-
-        pending_before = locked_pending_receipt.cantidad_pendiente
-
-        locked_pending_receipt.cantidad_cancelada += cantidad
-        locked_pending_receipt.updated_by = get_operator(user)
-        locked_pending_receipt.save(
-            update_fields=[
-                "cantidad_cancelada",
-                "updated_by",
-                "updated_at",
-            ]
-        )
-
-        change_logs = create_record_change_logs_from_snapshot(
-            instance=locked_pending_receipt,
-            old_values=old_values,
-            fields=PENDING_RECEIPT_AUDIT_FIELDS,
-            user=user,
-            origin=AuditOrigin.MANUAL,
-            reason=motivo,
-            action=AuditAction.CAMBIAR_ESTADO,
-        )
-
-        create_business_audit_log(
-            instance=locked_pending_receipt,
-            action=AuditAction.CAMBIAR_ESTADO,
-            user=user,
-            origin=AuditOrigin.MANUAL,
-            reason=motivo,
-            metadata={
-                "operation": "pending_receipt_cancel",
-                "product_id": locked_product.pk,
-                "product_model": locked_product.modelo,
-                "cancelled_quantity": cantidad,
-                "cancelled_before": int(old_values.get("cantidad_cancelada") or 0),
-                "cancelled_after": (locked_pending_receipt.cantidad_cancelada),
-                "pending_before": pending_before,
-                "pending_after": (locked_pending_receipt.cantidad_pendiente),
-                "previous_status": old_values.get("estado", ""),
-                "new_status": locked_pending_receipt.estado,
-                "changes": serialize_audit_changes(
-                    change_logs,
-                    include_fields={
-                        "cantidad_cancelada",
-                        "cantidad_pendiente",
-                        "estado",
-                    },
+            operation = PendingReceiptOperation.objects.create(
+                pending_receipt=locked_pending_receipt,
+                operation_type=PendingReceiptOperationType.CANCEL,
+                quantity=cantidad,
+                reason=motivo,
+                product_model_snapshot=locked_product.modelo,
+                product_sap_code_snapshot=locked_product.codigo_sap,
+                product_category_snapshot=locked_product.categoria.name,
+                destination_location_snapshot=(
+                    locked_pending_receipt.destination_location.name
                 ),
-            },
-            request=request,
+                responsible=responsible,
+                kardex_movement=None,
+                idempotency_key=idempotency_key,
+                received_before=int(old_values.get("cantidad_recibida") or 0),
+                received_after=locked_pending_receipt.cantidad_recibida,
+                cancelled_before=int(old_values.get("cantidad_cancelada") or 0),
+                cancelled_after=locked_pending_receipt.cantidad_cancelada,
+                pending_before=pending_before,
+                pending_after=locked_pending_receipt.cantidad_pendiente,
+                previous_state=old_values.get("estado", ""),
+                new_state=locked_pending_receipt.estado,
+                created_by=responsible,
+                updated_by=responsible,
+            )
+
+            change_logs = create_record_change_logs_from_snapshot(
+                instance=locked_pending_receipt,
+                old_values=old_values,
+                fields=PENDING_RECEIPT_AUDIT_FIELDS,
+                user=user,
+                origin=AuditOrigin.MANUAL,
+                reason=motivo,
+                action=AuditAction.CAMBIAR_ESTADO,
+            )
+
+            create_business_audit_log(
+                instance=locked_pending_receipt,
+                action=AuditAction.CAMBIAR_ESTADO,
+                user=user,
+                origin=AuditOrigin.MANUAL,
+                reason=motivo,
+                metadata={
+                    "operation": "pending_receipt_cancel",
+                    "operation_record_id": operation.pk,
+                    "idempotency_key": idempotency_key,
+                    "product_id": locked_product.pk,
+                    "product_model": locked_product.modelo,
+                    "cancelled_quantity": cantidad,
+                    "cancelled_before": operation.cancelled_before,
+                    "cancelled_after": operation.cancelled_after,
+                    "pending_before": operation.pending_before,
+                    "pending_after": operation.pending_after,
+                    "previous_status": operation.previous_state,
+                    "new_status": operation.new_state,
+                    "changes": serialize_audit_changes(
+                        change_logs,
+                        include_fields={
+                            "cantidad_cancelada",
+                            "cantidad_pendiente",
+                            "estado",
+                        },
+                    ),
+                },
+                request=request,
+            )
+    except IntegrityError:
+        existing = _find_matching_pending_receipt_operation(
+            idempotency_key=idempotency_key,
+            pending_receipt=pending_receipt,
+            operation_type=PendingReceiptOperationType.CANCEL,
+            cantidad=cantidad,
+            motivo=motivo,
         )
+        if existing is None:
+            raise
+        return existing.pending_receipt
 
     return locked_pending_receipt

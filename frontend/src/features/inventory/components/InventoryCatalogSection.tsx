@@ -5,6 +5,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DownloadIcon from "@mui/icons-material/Download";
+import WarehouseOutlinedIcon from "@mui/icons-material/WarehouseOutlined";
 
 import { colors } from "../../../theme/colors";
 import { MetricCard } from "../../../components/MetricCard";
@@ -91,8 +92,11 @@ type InventoryCatalogSectionProps = {
 
 const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
 
-function formatNumber(value: number) {
-  return chileanNumberFormatter.format(value);
+function formatNumber(value: number | null | undefined) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue)
+    ? chileanNumberFormatter.format(numericValue)
+    : "—";
 }
 
 function isValidStockStatusFilter(
@@ -153,7 +157,7 @@ export function InventoryCatalogSection({
           gridTemplateColumns: {
             xs: "1fr",
             sm: "repeat(2, minmax(0, 1fr))",
-            xl: "repeat(3, minmax(0, 1fr))",
+            xl: "repeat(4, minmax(0, 1fr))",
           },
           gap: 2,
         }}
@@ -163,6 +167,14 @@ export function InventoryCatalogSection({
           value={formatNumber(inventorySummary.productos_activos)}
           helper="Disponibles en el catálogo operativo"
           icon={<Inventory2Icon />}
+          tone={colors.modules.inventory}
+        />
+
+        <MetricCard
+          title="Stock físico total"
+          value={formatNumber(inventorySummary.stock_fisico_total)}
+          helper="Unidades registradas en todas las ubicaciones"
+          icon={<WarehouseOutlinedIcon />}
           tone={colors.modules.inventory}
         />
 

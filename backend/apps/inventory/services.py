@@ -25,6 +25,7 @@ from .models import (
     KardexMovementType,
     MovimientoKardex,
     PendientePorRecibir,
+    ProductLocationBalance,
     Producto,
     ProductOrigin,
 )
@@ -1145,6 +1146,7 @@ def register_kardex_movement(
     origin=AuditOrigin.MANUAL,
     reference=None,
     location=None,
+    require_existing_positive_balance=False,
     request=None,
 ):
     """
@@ -1218,6 +1220,32 @@ def register_kardex_movement(
                     )
                 }
             )
+
+        if require_existing_positive_balance:
+            if location is None:
+                raise ValidationError(
+                    {"ubicacion": "La ubicación del ajuste es obligatoria."}
+                )
+
+            location_balance = (
+                ProductLocationBalance.objects.select_for_update()
+                .filter(
+                    product_id=locked_product.pk,
+                    location_id=location.pk,
+                    quantity__gt=0,
+                )
+                .first()
+            )
+            if location_balance is None:
+                raise ValidationError(
+                    {
+                        "ubicacion": (
+                            f"{locked_product.modelo} no tiene stock registrado "
+                            f"en {location.name}. Seleccione una ubicación donde "
+                            "el producto tenga existencias."
+                        )
+                    }
+                )
 
         stock_antes = locked_product.stock_actual
         stock_despues = stock_antes + cantidad
@@ -1342,6 +1370,7 @@ def register_inventory_adjustment(
         cantidad=cantidad,
         motivo=motivo,
         location=location,
+        require_existing_positive_balance=True,
         user=user,
         origin=AuditOrigin.MANUAL,
         request=request,

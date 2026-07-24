@@ -329,6 +329,30 @@ class InventoryLocationApiTests(TestCase):
             user=self.admin,
         )
 
+    def test_inventory_summary_reports_total_physical_stock(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        initial_response = client.get("/api/inventory/productos/resumen/")
+
+        self.assertEqual(initial_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(initial_response.data["stock_fisico_total"], 5)
+
+        transfer_inventory(
+            product=self.product,
+            origin_location=self.origin,
+            destination_location=self.destination,
+            quantity=2,
+            reason="Comprobar que una transferencia no altera el total.",
+            user=self.admin,
+            idempotency_key="summary-transfer-001",
+        )
+
+        transferred_response = client.get("/api/inventory/productos/resumen/")
+
+        self.assertEqual(transferred_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(transferred_response.data["stock_fisico_total"], 5)
+
     def test_admin_can_transfer_and_retry_returns_same_record(self):
         client = APIClient()
         client.force_authenticate(user=self.admin)
@@ -378,3 +402,28 @@ class InventoryLocationApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(InventoryTransfer.objects.count(), 0)
+
+    def test_inventory_adjustment_rejects_location_without_product_stock(self):
+        client = APIClient()
+        client.force_authenticate(user=self.admin)
+
+        response = client.post(
+            f"/api/inventory/productos/{self.product.pk}/ajuste-inventario/",
+            {
+                "cantidad": 1,
+                "motivo": "Intento de ajuste en ubicación incorrecta.",
+                "ubicacion": self.destination.pk,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("ubicacion", response.data["error"]["details"])
+        self.product.refresh_from_db()
+        self.assertEqual(self.product.stock_actual, 5)
+        self.assertFalse(
+            ProductLocationBalance.objects.filter(
+                product=self.product,
+                location=self.destination,
+            ).exists()
+        )

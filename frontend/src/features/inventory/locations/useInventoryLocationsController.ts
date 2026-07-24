@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { getApiErrorMessage } from "../../../services/api";
+import {
+  getApiErrorMessage,
+  getApiFieldErrors,
+} from "../../../services/api";
 import { getStoredAccess } from "../../../services/authService";
 import { fetchCollaborators } from "../../../services/collaboratorService";
 import {
@@ -107,6 +110,10 @@ export function useInventoryLocationsController({
     useState<LocationFormState>(emptyLocationForm);
   const [transferForm, setTransferForm] =
     useState<TransferFormState>(emptyTransferForm);
+  const [transferErrorMessage, setTransferErrorMessage] = useState("");
+  const [transferFieldErrors, setTransferFieldErrors] = useState<
+    Record<string, string>
+  >({});
   const [archiveState, setArchiveState] =
     useState<ArchiveLocationState>(emptyArchiveLocation);
 
@@ -324,6 +331,8 @@ export function useInventoryLocationsController({
     productId: number,
     originLocationId: number,
   ) => {
+    setTransferErrorMessage("");
+    setTransferFieldErrors({});
     setTransferForm({
       ...emptyTransferForm,
       open: true,
@@ -342,18 +351,31 @@ export function useInventoryLocationsController({
           originLocation: String(originLocationId),
         }));
       })
-      .catch((error: unknown) => onError(getApiErrorMessage(error)));
+      .catch((error: unknown) =>
+        setTransferErrorMessage(getApiErrorMessage(error)),
+      );
   };
 
   const closeTransfer = () => {
     setTransferForm(emptyTransferForm);
     setTransferBalances([]);
+    setTransferErrorMessage("");
+    setTransferFieldErrors({});
+  };
+
+  const clearTransferFieldError = (field: string) => {
+    setTransferFieldErrors((errors) => {
+      const nextErrors = { ...errors };
+      delete nextErrors[field];
+      return nextErrors;
+    });
   };
 
   const saveTransfer = async () => {
     try {
       setSaving(true);
-      onError("");
+      setTransferErrorMessage("");
+      setTransferFieldErrors({});
       await createInventoryTransfer(
         {
           product: Number(transferForm.product),
@@ -370,7 +392,13 @@ export function useInventoryLocationsController({
       await loadData();
       await onInventoryChanged?.();
     } catch (error: unknown) {
-      onError(getApiErrorMessage(error));
+      const fieldErrors = getApiFieldErrors(error);
+      setTransferFieldErrors(fieldErrors);
+      setTransferErrorMessage(
+        Object.keys(fieldErrors).length > 0
+          ? ""
+          : getApiErrorMessage(error),
+      );
     } finally {
       setSaving(false);
     }
@@ -395,6 +423,9 @@ export function useInventoryLocationsController({
     setLocationForm,
     transferForm,
     setTransferForm,
+    transferErrorMessage,
+    transferFieldErrors,
+    clearTransferFieldError,
     archiveState,
     setArchiveState,
     loadData,

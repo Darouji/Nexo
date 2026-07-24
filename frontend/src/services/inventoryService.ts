@@ -63,6 +63,7 @@ export type Product = {
 
 export type InventorySummary = {
   productos_activos: number;
+  stock_fisico_total: number;
   bajo_minimo: number;
   por_recibir: number;
 };

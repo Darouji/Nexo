@@ -33,7 +33,10 @@ import {
   buildPendingReceiptPageParams,
   buildProductPageParams,
 } from "../features/inventory/utils/inventoryQueryParams";
-import { getApiErrorMessage as getErrorMessage } from "../services/api";
+import {
+  getApiErrorMessage as getErrorMessage,
+  getApiFieldErrors,
+} from "../services/api";
 import {
   cancelPendingReceipt,
   changeProductCategory,
@@ -46,6 +49,7 @@ import {
   fetchInventorySummary,
   fetchKardexMovementsPage,
   fetchPendingReceiptsPage,
+  fetchProductLocationBalances,
   exportProducts,
   receivePendingReceipt,
   registerInventoryAdjustment,
@@ -110,6 +114,15 @@ import {
   type ProductLifecycleDialogState,
   type ProductOriginDialogState,
 } from "../features/inventory/state/inventoryPageState";
+
+function removeFieldErrors(
+  errors: Record<string, string>,
+  fields: string[],
+) {
+  const remaining = { ...errors };
+  fields.forEach((field) => delete remaining[field]);
+  return remaining;
+}
 
 export function ProductsPage() {
   const [errorMessage, setErrorMessage] = useState("");
@@ -178,6 +191,16 @@ export function ProductsPage() {
     useState<ProductFormState>(emptyProductForm);
   const [movementDialog, setMovementDialog] =
     useState<MovementDialogState>(emptyMovementDialog);
+  const [movementLocations, setMovementLocations] = useState<
+    InventoryLocation[]
+  >([]);
+  const [movementLocationsLoading, setMovementLocationsLoading] =
+    useState(false);
+  const [movementErrorMessage, setMovementErrorMessage] = useState("");
+  const [movementFieldErrors, setMovementFieldErrors] = useState<
+    Record<string, string>
+  >({});
+  const movementLocationsRequestId = useRef(0);
   const [kardexDialog, setKardexDialog] =
     useState<KardexDialogState>(emptyKardexDialog);
   const [globalKardexMovements, setGlobalKardexMovements] = useState<
@@ -915,26 +938,87 @@ export function ProductsPage() {
     product: Product,
     mode: MovementDialogState["mode"],
   ) => {
+    const requestId = movementLocationsRequestId.current + 1;
+    movementLocationsRequestId.current = requestId;
+    const isManualEntry = mode === "ENTRADA_MANUAL";
+    const initialLocations = isManualEntry ? inventoryLocations : [];
+
+    setMovementLocations(initialLocations);
+    setMovementLocationsLoading(!isManualEntry);
+    setMovementErrorMessage("");
+    setMovementFieldErrors({});
     setMovementDialog({
       open: true,
       mode,
       product,
       cantidad: "",
       motivo:
-        mode === "ENTRADA_MANUAL"
+        isManualEntry
           ? "Entrada manual de stock."
           : "Ajuste autorizado de inventario.",
       ubicacion:
-        inventoryLocations.length === 1
-          ? String(inventoryLocations[0].id)
+        initialLocations.length === 1
+          ? String(initialLocations[0].id)
           : "",
     });
     setErrorMessage("");
     setSuccessMessage("");
+
+    if (!isManualEntry) {
+      void fetchProductLocationBalances({
+        product: product.id,
+        positiveOnly: true,
+      })
+        .then((balances) => {
+          if (movementLocationsRequestId.current !== requestId) {
+            return;
+          }
+
+          const locationIdsWithStock = new Set(
+            balances
+              .filter((balance) => balance.quantity > 0)
+              .map((balance) => balance.location),
+          );
+          const validLocations = inventoryLocations.filter((location) =>
+            locationIdsWithStock.has(location.id),
+          );
+
+          setMovementLocations(validLocations);
+          setMovementDialog((current) => ({
+            ...current,
+            ubicacion:
+              validLocations.length === 1
+                ? String(validLocations[0].id)
+                : "",
+          }));
+        })
+        .catch((error: unknown) => {
+          if (movementLocationsRequestId.current !== requestId) {
+            return;
+          }
+
+          setMovementErrorMessage(
+            getErrorMessage(
+              error,
+              "No se pudieron cargar las ubicaciones con stock para este producto.",
+            ),
+          );
+        })
+        .finally(() => {
+          if (movementLocationsRequestId.current === requestId) {
+            setMovementLocationsLoading(false);
+          }
+        });
+    }
   };
 
   const closeMovementDialog = () => {
+    movementLocationsRequestId.current += 1;
     setMovementDialog(emptyMovementDialog);
+    setMovementLocations([]);
+    setMovementLocationsLoading(false);
+    setMovementErrorMessage("");
+    setMovementFieldErrors({});
   };
 
   const loadProductKardexPage = async (
@@ -1283,13 +1367,16 @@ export function ProductsPage() {
     }
 
     if (!movementDialog.ubicacion) {
-      setErrorMessage("Debe indicar la ubicación física del movimiento.");
+      setMovementErrorMessage(
+        "Debe indicar la ubicación física del movimiento.",
+      );
       return;
     }
 
     try {
       setSavingMovement(true);
-      setErrorMessage("");
+      setMovementErrorMessage("");
+      setMovementFieldErrors({});
       setSuccessMessage("");
 
       const cantidad = parseInteger(movementDialog.cantidad);
@@ -1310,10 +1397,17 @@ export function ProductsPage() {
 
       setSuccessMessage("Movimiento Kardex registrado correctamente.");
       closeMovementDialog();
-      await loadProducts(searchTerm);
-      await refreshGlobalKardexIfLoaded();
+      await Promise.all([
+        loadProducts(searchTerm),
+        loadInventorySummary(),
+        refreshGlobalKardexIfLoaded(),
+      ]);
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
+      const fieldErrors = getApiFieldErrors(error);
+      setMovementFieldErrors(fieldErrors);
+      setMovementErrorMessage(
+        Object.keys(fieldErrors).length > 0 ? "" : getErrorMessage(error),
+      );
     } finally {
       setSavingMovement(false);
     }
@@ -1695,32 +1789,49 @@ export function ProductsPage() {
       />
 
       <StockMovementDialog
+        key={
+          movementDialog.open
+            ? `${movementDialog.mode}-${movementDialog.product?.id || "sin-producto"}`
+            : "movimiento-cerrado"
+        }
         open={movementDialog.open}
         mode={movementDialog.mode}
         product={movementDialog.product}
         cantidad={movementDialog.cantidad}
         motivo={movementDialog.motivo}
         ubicacion={movementDialog.ubicacion}
-        locations={inventoryLocations}
+        locations={movementLocations}
+        locationsLoading={movementLocationsLoading}
+        errorMessage={movementErrorMessage}
+        fieldErrors={movementFieldErrors}
         saving={savingMovement}
-        onCantidadChange={(cantidad) =>
+        onCantidadChange={(cantidad) => {
+          setMovementFieldErrors((errors) =>
+            removeFieldErrors(errors, ["cantidad", "stock"]),
+          );
           setMovementDialog((current) => ({
             ...current,
             cantidad,
-          }))
-        }
-        onMotivoChange={(motivo) =>
+          }));
+        }}
+        onMotivoChange={(motivo) => {
+          setMovementFieldErrors((errors) =>
+            removeFieldErrors(errors, ["motivo"]),
+          );
           setMovementDialog((current) => ({
             ...current,
             motivo,
-          }))
-        }
-        onUbicacionChange={(ubicacion) =>
+          }));
+        }}
+        onUbicacionChange={(ubicacion) => {
+          setMovementFieldErrors((errors) =>
+            removeFieldErrors(errors, ["ubicacion"]),
+          );
           setMovementDialog((current) => ({
             ...current,
             ubicacion,
-          }))
-        }
+          }));
+        }}
         onClose={closeMovementDialog}
         onConfirm={() => void handleSaveMovement()}
       />

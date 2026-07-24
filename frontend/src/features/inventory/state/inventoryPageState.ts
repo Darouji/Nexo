@@ -134,6 +134,7 @@ export const defaultPendingReceiptPaginationModel: SerkanGridPaginationModel = {
 
 export const emptyInventorySummary: InventorySummary = {
   productos_activos: 0,
+  stock_fisico_total: 0,
   bajo_minimo: 0,
   por_recibir: 0,
 };

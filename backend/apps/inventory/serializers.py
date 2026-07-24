@@ -549,8 +549,8 @@ class InventoryAdjustmentSerializer(serializers.Serializer):
     motivo = serializers.CharField(max_length=255)
     ubicacion = serializers.PrimaryKeyRelatedField(
         queryset=InventoryLocation.objects.all(),
-        required=False,
-        allow_null=True,
+        required=True,
+        allow_null=False,
     )
 
     def validate_cantidad(self, value):

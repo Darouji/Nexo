@@ -464,6 +464,14 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
             descontinuado=False,
         )
 
+        stock_fisico_total = ProductLocationBalance.objects.aggregate(
+            total=Coalesce(
+                Sum("quantity"),
+                Value(0),
+                output_field=IntegerField(),
+            ),
+        )["total"]
+
         bajo_minimo = productos_activos.filter(
             controla_stock=True,
             stock_actual__gt=0,
@@ -488,6 +496,7 @@ class ProductoViewSet(InventoryPermissionMixin, viewsets.ModelViewSet):
         return Response(
             {
                 "productos_activos": productos_activos.count(),
+                "stock_fisico_total": stock_fisico_total or 0,
                 "bajo_minimo": bajo_minimo,
                 "por_recibir": por_recibir or 0,
             },

@@ -90,6 +90,9 @@ export function InventoryLocationsSection({
     setLocationForm,
     transferForm,
     setTransferForm,
+    transferErrorMessage,
+    transferFieldErrors,
+    clearTransferFieldError,
     archiveState,
     setArchiveState,
     loadData,
@@ -525,6 +528,16 @@ export function InventoryLocationsSection({
               El traslado cambia la custodia física, pero no aumenta ni
               disminuye el stock total del producto.
             </Alert>
+            {transferErrorMessage ? (
+              <Alert severity="error" variant="outlined">
+                {transferErrorMessage}
+              </Alert>
+            ) : null}
+            {Object.keys(transferFieldErrors).length > 0 ? (
+              <Alert severity="warning" variant="outlined">
+                Revisa los campos marcados antes de confirmar el traslado.
+              </Alert>
+            ) : null}
             <TextField
               label="Producto"
               value={
@@ -540,15 +553,23 @@ export function InventoryLocationsSection({
                 select
                 value={transferForm.originLocation}
                 onChange={(event) =>
-                  setTransferForm((current) => ({
-                    ...current,
-                    originLocation: event.target.value,
-                    quantity: "",
-                  }))
+                  {
+                    clearTransferFieldError("origin_location");
+                    setTransferForm((current) => ({
+                      ...current,
+                      originLocation: event.target.value,
+                      quantity: "",
+                    }));
+                  }
                 }
                 fullWidth
                 required
                 disabled={!transferForm.product}
+                error={Boolean(transferFieldErrors.origin_location)}
+                helperText={
+                  transferFieldErrors.origin_location ||
+                  "Solo se muestran ubicaciones donde el producto tiene stock."
+                }
               >
                 {originBalances.map((balance) => (
                   <MenuItem
@@ -564,14 +585,22 @@ export function InventoryLocationsSection({
                 select
                 value={transferForm.destinationLocation}
                 onChange={(event) =>
-                  setTransferForm((current) => ({
-                    ...current,
-                    destinationLocation: event.target.value,
-                  }))
+                  {
+                    clearTransferFieldError("destination_location");
+                    setTransferForm((current) => ({
+                      ...current,
+                      destinationLocation: event.target.value,
+                    }));
+                  }
                 }
                 fullWidth
                 required
                 disabled={!transferForm.originLocation}
+                error={Boolean(transferFieldErrors.destination_location)}
+                helperText={
+                  transferFieldErrors.destination_location ||
+                  "El destino puede ser cualquier ubicación activa distinta del origen."
+                }
               >
                 {activeLocations
                   .filter(
@@ -590,53 +619,71 @@ export function InventoryLocationsSection({
               type="number"
               value={transferForm.quantity}
               onChange={(event) =>
-                setTransferForm((current) => ({
-                  ...current,
-                  quantity: event.target.value,
-                }))
+                {
+                  clearTransferFieldError("quantity");
+                  setTransferForm((current) => ({
+                    ...current,
+                    quantity: event.target.value,
+                  }));
+                }
               }
               required
               error={
+                Boolean(transferFieldErrors.quantity) ||
                 transferQuantity >
                 (selectedOriginBalance?.quantity || Number.POSITIVE_INFINITY)
               }
               helperText={
-                selectedOriginBalance
+                transferFieldErrors.quantity ||
+                (selectedOriginBalance
                   ? `Disponible en origen: ${formatNumber(selectedOriginBalance.quantity)}`
-                  : "Seleccione el producto y la ubicación de origen."
+                  : "Seleccione el producto y la ubicación de origen.")
               }
             />
             <TextField
               label="Motivo"
               value={transferForm.reason}
               onChange={(event) =>
-                setTransferForm((current) => ({
-                  ...current,
-                  reason: event.target.value,
-                }))
+                {
+                  clearTransferFieldError("reason");
+                  setTransferForm((current) => ({
+                    ...current,
+                    reason: event.target.value,
+                  }));
+                }
               }
               required
               multiline
               minRows={2}
+              error={Boolean(transferFieldErrors.reason)}
+              helperText={
+                transferFieldErrors.reason ||
+                "El motivo quedará registrado en la trazabilidad."
+              }
             />
             <TextField
               label="Referencia o evidencia"
               value={transferForm.evidenceReference}
               onChange={(event) =>
-                setTransferForm((current) => ({
-                  ...current,
-                  evidenceReference: event.target.value,
-                }))
+                {
+                  clearTransferFieldError("evidence_reference");
+                  setTransferForm((current) => ({
+                    ...current,
+                    evidenceReference: event.target.value,
+                  }));
+                }
               }
               required={sensitiveTransfer}
               error={
+                Boolean(transferFieldErrors.evidence_reference) ||
                 sensitiveTransfer &&
                 !transferForm.evidenceReference.trim()
               }
               helperText={
-                sensitiveTransfer
+                transferFieldErrors.evidence_reference ||
+                (sensitiveTransfer
                   ? "Obligatoria porque interviene custodia o cliente/faena."
-                  : "Opcional. Ej.: guía de despacho, acta o ticket."
+                  : "Opcional. Ej.: guía de despacho, acta o ticket.")
               }
             />
           </Stack>

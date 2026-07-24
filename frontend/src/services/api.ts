@@ -100,6 +100,59 @@ export function getApiErrorMessage(
   );
 }
 
+function getFirstErrorText(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const text = getFirstErrorText(item);
+      if (text) {
+        return text;
+      }
+    }
+  }
+
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) {
+      const text = getFirstErrorText(item);
+      if (text) {
+        return text;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function getApiFieldErrors(error: unknown): Record<string, string> {
+  if (!axios.isAxiosError(error)) {
+    return {};
+  }
+
+  const data = error.response?.data as Record<string, unknown> | undefined;
+  const errorPayload =
+    data?.error && typeof data.error === "object"
+      ? (data.error as Record<string, unknown>)
+      : null;
+  const details =
+    errorPayload?.details && typeof errorPayload.details === "object"
+      ? (errorPayload.details as Record<string, unknown>)
+      : null;
+
+  if (!details) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(details).flatMap(([field, value]) => {
+      const message = getFirstErrorText(value);
+      return message ? [[field, message]] : [];
+    }),
+  );
+}
+
 export function getApiRequestId(error: unknown) {
   if (!axios.isAxiosError(error)) {
     return null;

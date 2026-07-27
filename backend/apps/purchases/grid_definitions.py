@@ -180,3 +180,5 @@ RECEIPT_GRID_DEFINITION = GridDefinition(
     ),
 )
 register_grid_definition(RECEIPT_GRID_DEFINITION)
+
+from . import logistics_grid_definitions  # noqa: E402,F401

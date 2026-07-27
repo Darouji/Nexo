@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import F, Sum
+from django.utils import timezone
 
 from apps.core.audit import create_business_audit_log
 from apps.core.models import AuditAction, AuditOrigin, BaseStatus
@@ -24,6 +25,7 @@ from .models import (
     PurchaseOrderLine,
     PurchaseOrderOperation,
     PurchaseOrderStatus,
+    PurchaseOrderSequence,
     PurchaseReceiptCommitment,
 )
 
@@ -237,6 +239,21 @@ def _find_create_operation(idempotency_key, payload):
     return operation
 
 
+def _next_purchase_order_number():
+    year = timezone.localdate().year
+    sequence, created = PurchaseOrderSequence.objects.select_for_update().get_or_create(
+        year=year,
+        defaults={"next_value": 2},
+    )
+    if created:
+        value = 1
+    else:
+        value = sequence.next_value
+        sequence.next_value = F("next_value") + 1
+        sequence.save(update_fields=["next_value"])
+    return f"OC-{year}-{value:05d}"
+
+
 def create_purchase_order(*, data, lines, idempotency_key, user, request=None):
     user = _require_user(user)
     if not lines:
@@ -255,6 +272,8 @@ def create_purchase_order(*, data, lines, idempotency_key, user, request=None):
             if existing:
                 return existing.order
             order_data = dict(data)
+            if not str(order_data.get("number") or "").strip():
+                order_data["number"] = _next_purchase_order_number()
             order_data["responsible"] = order_data.get("responsible") or user
             order = PurchaseOrder(
                 **order_data,

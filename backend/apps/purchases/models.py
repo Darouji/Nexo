@@ -355,3 +355,20 @@ class CostAllocation(BaseModel):
             models.CheckConstraint(condition=models.Q(amount_clp__gte=0), name="cost_allocation_nonnegative"),
             models.UniqueConstraint(fields=["landed_cost", "order_line"], name="cost_allocation_unique_cost_line"),
         ]
+
+
+# Los modelos logísticos viven en un archivo separado para mantener este
+# núcleo de compras enfocado. La importación los registra bajo la misma app.
+from .logistics_models import (  # noqa: E402,F401
+    Carrier,
+    PurchaseOrderSequence,
+    PurchaseShipment,
+    ShipmentCharge,
+    ShipmentChargeStatus,
+    ShipmentChargeType,
+    ShipmentCustodian,
+    ShipmentEvent,
+    ShipmentEventType,
+    ShipmentStatus,
+    ShipmentTransportMode,
+)

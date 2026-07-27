@@ -1,0 +1,121 @@
+from apps.core.grid_registry import (
+    GridColumnDefinition,
+    GridDefinition,
+    register_grid_definition,
+)
+
+SHIPMENT_GRID_KEY = "purchases.shipments"
+
+SHIPMENT_GRID_DEFINITION = GridDefinition(
+    key=SHIPMENT_GRID_KEY,
+    module="purchases",
+    model_name="purchaseshipment",
+    version=1,
+    default_page_size=25,
+    saved_filter_keys=("search", "state", "carrier", "transport_mode"),
+    columns=(
+        GridColumnDefinition(
+            key="order__number",
+            system_label="Orden de compra",
+            query_field="order__number",
+            filter_operators=("contains", "equals", "startsWith"),
+            required=True,
+        ),
+        GridColumnDefinition(
+            key="order__supplier__legal_name",
+            system_label="Proveedor",
+            query_field="order__supplier__legal_name",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="carrier__name",
+            system_label="Empresa transportista",
+            query_field="carrier__name",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="tracking_number",
+            system_label="Seguimiento",
+            query_field="tracking_number",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="transport_mode",
+            system_label="Medio",
+            data_type="choice",
+            query_field="transport_mode",
+            filter_operators=("equals",),
+        ),
+        GridColumnDefinition(
+            key="state",
+            system_label="Estado",
+            data_type="choice",
+            query_field="state",
+            filter_operators=("equals",),
+        ),
+        GridColumnDefinition(
+            key="current_custodian",
+            system_label="Custodia actual",
+            data_type="choice",
+            query_field="current_custodian",
+            filter_operators=("equals",),
+        ),
+        GridColumnDefinition(
+            key="initial_eta",
+            system_label="Estimación inicial",
+            data_type="date",
+            query_field="initial_eta",
+            filter_operators=(),
+        ),
+        GridColumnDefinition(
+            key="current_eta",
+            system_label="Estimación actual",
+            data_type="date",
+            query_field="current_eta",
+            filter_operators=(),
+        ),
+        GridColumnDefinition(
+            key="days_remaining",
+            system_label="Días restantes",
+            sortable=False,
+            filter_operators=(),
+        ),
+        GridColumnDefinition(
+            key="customs_review_expected",
+            system_label="Gestión aduanera",
+            data_type="boolean",
+            query_field="customs_review_expected",
+            filter_operators=("equals",),
+        ),
+        GridColumnDefinition(
+            key="responsible__username",
+            system_label="Responsable",
+            query_field="responsible__username",
+            filter_operators=("contains", "equals", "startsWith"),
+        ),
+        GridColumnDefinition(
+            key="actions",
+            system_label="Acciones",
+            sortable=False,
+            hideable=False,
+            pinnable=False,
+            required=True,
+            exportable=False,
+        ),
+    ),
+    official_export_columns=(
+        "order__number",
+        "order__supplier__legal_name",
+        "carrier__name",
+        "tracking_number",
+        "transport_mode",
+        "state",
+        "current_custodian",
+        "initial_eta",
+        "current_eta",
+        "days_remaining",
+        "customs_review_expected",
+        "responsible__username",
+    ),
+)
+register_grid_definition(SHIPMENT_GRID_DEFINITION)

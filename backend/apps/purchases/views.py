@@ -1,7 +1,7 @@
 import json
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Prefetch
-from apps.inventory.models import PendingReceiptOperation
+from apps.inventory.models import PendientePorRecibir, PendingReceiptOperation
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -9,6 +9,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.grid_registry import apply_grid_filters
+from apps.inventory.exports import (
+    build_pending_receipt_export_response,
+    record_grid_export,
+)
+from apps.inventory.grid_definitions import PENDING_RECEIPT_GRID_DEFINITION
+from apps.inventory.serializers import PendingReceiptOperationSerializer
+from apps.inventory.services import cancel_pending_receipt, receive_pending_receipt
 from apps.core.models import AuditAction, AuditLog, AuditOrigin
 
 from .exports import build_export_response, resolve_export_columns
@@ -36,6 +43,7 @@ from .serializers import (
     LandedCostInputSerializer,
     LandedCostSerializer,
     OperationRequestSerializer,
+    PhysicalReceiptSerializer,
     PurchaseOrderOperationSerializer,
     PurchaseOrderSerializer,
     PurchaseOrderWriteSerializer,
@@ -50,6 +58,7 @@ from .services import (
     close_purchase_order,
     issue_purchase_order,
     receive_purchase_commitment,
+    _refresh_receipt_state,
     register_landed_cost,
     submit_for_review,
 )
@@ -128,6 +137,7 @@ def _domain_call(function, **kwargs):
 class PurchasePermissionMixin:
     purchase_action_capabilities = {}
     purchase_default_write_capability = None
+    purchase_official_export_capability = PurchaseCapability.EXPORT_OFFICIAL
     permission_classes = [
         IsAuthenticated,
         IsAuthenticatedAndActive,
@@ -137,7 +147,7 @@ class PurchasePermissionMixin:
     def get_required_purchase_capability(self):
         if self.action == "export":
             if self.request.query_params.get("mode", "view") == "official":
-                return PurchaseCapability.EXPORT_OFFICIAL
+                return self.purchase_official_export_capability
             return PurchaseCapability.EXPORT_VIEW
         explicit = self.purchase_action_capabilities.get(self.action)
         if explicit:
@@ -315,6 +325,177 @@ class PurchaseOrderViewSet(
         )
         return Response(LandedCostSerializer(cost).data, status=status.HTTP_201_CREATED)
 
+
+class PhysicalReceiptViewSet(
+    PurchasePermissionMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    """Bandeja operativa única para recepciones de compra y registros manuales."""
+
+    purchase_action_capabilities = {
+        "receive": PurchaseCapability.RECEIVE_ORDER,
+        "cancel": PurchaseCapability.CANCEL_ORDER,
+        "history": PurchaseCapability.VIEW,
+    }
+    purchase_default_write_capability = PurchaseCapability.RECEIVE_ORDER
+    serializer_class = PhysicalReceiptSerializer
+    queryset = PendientePorRecibir.objects.select_related(
+        "producto",
+        "producto__categoria",
+        "destination_location",
+        "created_by",
+        "purchase_commitment",
+        "purchase_commitment__order_line",
+        "purchase_commitment__order_line__order",
+        "purchase_commitment__order_line__order__supplier",
+    ).prefetch_related(
+        Prefetch(
+            "operations",
+            queryset=PendingReceiptOperation.objects.select_related("responsible"),
+        )
+    )
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = [
+        "producto__modelo",
+        "producto__codigo_sap",
+        "producto__categoria__name",
+        "destination_location__name",
+        "referencia",
+        "motivo",
+        "purchase_commitment__order_line__order__number",
+        "purchase_commitment__order_line__order__supplier__legal_name",
+    ]
+    ordering_fields = [
+        "created_at",
+        "cantidad_original",
+        "cantidad_recibida",
+        "cantidad_cancelada",
+        "estado",
+        "producto__modelo",
+        "destination_location__name",
+    ]
+    ordering = ["-created_at"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+        states = _split_csv(params.get("state") or params.get("status"))
+        if states:
+            queryset = queryset.filter(estado__in=states)
+        origin = str(params.get("origin") or "").strip().upper()
+        if origin == "PURCHASE_ORDER":
+            queryset = queryset.filter(purchase_commitment__isnull=False)
+        elif origin == "MANUAL":
+            queryset = queryset.filter(purchase_commitment__isnull=True)
+        date_from = str(params.get("date_from") or "").strip()
+        date_to = str(params.get("date_to") or "").strip()
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+        return apply_grid_filters(
+            queryset,
+            PENDING_RECEIPT_GRID_DEFINITION,
+            _parse_grid_filters(params.get("grid_filters")),
+        )
+
+    @action(detail=False, methods=["get"], url_path="export")
+    def export(self, request):
+        mode = request.query_params.get("mode", "view")
+        export_format = request.query_params.get("file_format", "xlsx")
+        if mode not in {"view", "official"}:
+            raise ValidationError({"mode": "Use view u official."})
+        if export_format not in {"xlsx", "csv"}:
+            raise ValidationError({"file_format": "Use xlsx o csv."})
+        columns = resolve_export_columns(
+            definition=PENDING_RECEIPT_GRID_DEFINITION,
+            mode=mode,
+            requested_columns=_split_csv(request.query_params.get("columns")),
+        )
+        records = list(self.filter_queryset(self.get_queryset())[:5000])
+        if not records:
+            raise ValidationError({
+                "export": "No hay resultados para exportar. Ajuste o elimine los filtros."
+            })
+        record_grid_export(
+            request=getattr(request, "_request", request),
+            definition=PENDING_RECEIPT_GRID_DEFINITION,
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+            row_count=len(records),
+            model_name="physicalreceipt",
+            object_repr="Recepciones físicas",
+        )
+        return build_pending_receipt_export_response(
+            queryset=records,
+            mode=mode,
+            export_format=export_format,
+            columns=columns,
+        )
+
+    @action(detail=True, methods=["get"], url_path="historial")
+    def history(self, request, pk=None):
+        pending = self.get_object()
+        operations = pending.operations.select_related("responsible", "kardex_movement")
+        return Response(PendingReceiptOperationSerializer(operations, many=True).data)
+
+    @action(detail=True, methods=["post"], url_path="recibir")
+    def receive(self, request, pk=None):
+        serializer = ReceiveCommitmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        pending = self.get_object()
+        try:
+            commitment = pending.purchase_commitment
+        except PurchaseReceiptCommitment.DoesNotExist:
+            commitment = None
+        if commitment:
+            _domain_call(
+                receive_purchase_commitment,
+                commitment=commitment,
+                quantity=serializer.validated_data["quantity"],
+                reason=serializer.validated_data["reason"],
+                idempotency_key=_idempotency_key(request),
+                user=request.user,
+                request=request,
+            )
+        else:
+            _domain_call(
+                receive_pending_receipt,
+                pending_receipt=pending,
+                cantidad=serializer.validated_data["quantity"],
+                motivo=serializer.validated_data["reason"],
+                idempotency_key=_idempotency_key(request),
+                user=request.user,
+                request=request,
+            )
+        pending.refresh_from_db()
+        return Response(PhysicalReceiptSerializer(pending).data)
+
+    @action(detail=True, methods=["post"], url_path="cancelar")
+    def cancel(self, request, pk=None):
+        serializer = ReceiveCommitmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        pending = self.get_object()
+        _domain_call(
+            cancel_pending_receipt,
+            pending_receipt=pending,
+            cantidad=serializer.validated_data["quantity"],
+            motivo=serializer.validated_data["reason"],
+            idempotency_key=_idempotency_key(request),
+            user=request.user,
+            request=request,
+        )
+        try:
+            commitment = pending.purchase_commitment
+        except PurchaseReceiptCommitment.DoesNotExist:
+            commitment = None
+        if commitment:
+            _refresh_receipt_state(commitment.order_line.order, request.user)
+        pending.refresh_from_db()
+        return Response(PhysicalReceiptSerializer(pending).data)
 
 class PurchaseReceiptCommitmentViewSet(
     PurchasePermissionMixin,

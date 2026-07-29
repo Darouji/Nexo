@@ -1197,13 +1197,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
 
   const focusPendingReceipts = () => {
     closeProductActionMenus();
-
-    window.requestAnimationFrame(() => {
-      pendingReceiptsSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
+    navigate("/compras/recepcion");
   };
 
   const openPendingReceiptCreateDialog = (product: Product) => {

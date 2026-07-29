@@ -5,7 +5,6 @@ import { colors } from "../../../theme/colors";
 
 const inventorySections = [
   { label: "Catálogo", path: "/inventario/catalogo" },
-  { label: "Por recibir", path: "/inventario/por-recibir" },
   { label: "Ubicaciones de inventario", path: "/inventario/ubicaciones" },
 ] as const;
 

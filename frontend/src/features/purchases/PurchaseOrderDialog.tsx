@@ -32,6 +32,8 @@ type Props = {
   locations: InventoryLocation[];
   errors: Record<string, string>;
   generalError: string;
+  optionsError: string;
+  optionsLoading: boolean;
   loading: boolean;
   onChange: (form: PurchaseOrderForm) => void;
   onClose: () => void;
@@ -46,6 +48,8 @@ export function PurchaseOrderDialog({
   locations,
   errors,
   generalError,
+  optionsError,
+  optionsLoading,
   loading,
   onChange,
   onClose,
@@ -68,6 +72,12 @@ export function PurchaseOrderDialog({
       <DialogTitle>Nueva orden de compra</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={3}>
+          {optionsLoading ? (
+            <Alert severity="info">
+              Cargando proveedores, productos y ubicaciones disponibles...
+            </Alert>
+          ) : null}
+          {optionsError ? <Alert severity="error">{optionsError}</Alert> : null}
           {generalError ? <Alert severity="error">{generalError}</Alert> : null}
 
           <Box>
@@ -82,11 +92,11 @@ export function PurchaseOrderDialog({
               }}
             >
               <TextField
-                label="Número de orden"
+                label="Número de orden (opcional)"
                 value={form.number}
                 onChange={(event) => onChange({ ...form, number: event.target.value })}
                 error={Boolean(errors.number)}
-                helperText={errors.number}
+                helperText={errors.number || "Si lo dejas vacío, SERKAN asignará el siguiente número oficial."}
               />
               <TextField
                 select
@@ -254,7 +264,7 @@ export function PurchaseOrderDialog({
                       error={Boolean(errors[`lines.${index}.destination_location`])}
                       helperText={errors[`lines.${index}.destination_location`]}
                     >
-                      {locations.filter((location) => location.status === "ACTIVA").map((location) => (
+                      {locations.filter((location) => location.status === "ACTIVO").map((location) => (
                         <MenuItem key={location.id} value={location.id}>
                           {location.name}
                         </MenuItem>
@@ -295,8 +305,16 @@ export function PurchaseOrderDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={loading}>Cancelar</Button>
-        <Button variant="contained" onClick={onSave} disabled={loading}>
-          {loading ? "Guardando..." : "Guardar borrador"}
+        <Button
+          variant="contained"
+          onClick={onSave}
+          disabled={loading || optionsLoading || Boolean(optionsError)}
+        >
+          {loading
+            ? "Guardando..."
+            : optionsLoading
+              ? "Cargando opciones..."
+              : "Guardar borrador"}
         </Button>
       </DialogActions>
     </Dialog>

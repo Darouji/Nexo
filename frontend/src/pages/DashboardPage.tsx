@@ -116,7 +116,8 @@ const pathSections: Record<string, string> = {
     Object.entries(sectionPaths).map(([section, path]) => [path, section]),
   ),
   "/inventario": "Inventario",
-  "/inventario/por-recibir": "Inventario",
+  "/inventario/por-recibir": "Compras / Egresos",
+  "/compras/recepcion": "Compras / Egresos",
   "/inventario/ubicaciones": "Inventario",
 };
 
@@ -164,6 +165,13 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
 
     if (currentPath === "/inventario") {
       navigate("/inventario/catalogo", {
+        replace: true,
+      });
+      return;
+    }
+
+    if (currentPath === "/inventario/por-recibir") {
+      navigate("/compras/recepcion", {
         replace: true,
       });
       return;

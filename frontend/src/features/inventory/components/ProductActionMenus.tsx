@@ -108,14 +108,14 @@ export function ProductActionMenus({
               <ListItemIcon>
                 <LocalShippingIcon fontSize="small" />
               </ListItemIcon>
-              <ListItemText>Registrar por recibir</ListItemText>
+              <ListItemText>Registrar recepción esperada</ListItemText>
             </MenuItem>
 
             <MenuItem onClick={onFocusPendingReceipts}>
               <ListItemIcon>
                 <LocalShippingIcon fontSize="small" />
               </ListItemIcon>
-              <ListItemText>Gestionar pendientes por recibir</ListItemText>
+              <ListItemText>Ir a recepción física</ListItemText>
             </MenuItem>
           </>
         ) : null}

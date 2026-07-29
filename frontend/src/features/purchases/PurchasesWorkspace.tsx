@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { ColDef } from "ag-grid-community";
 import { Alert, Box, Button, ButtonGroup, Stack } from "@mui/material";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
@@ -19,16 +20,19 @@ import { downloadBlob } from "../../services/download";
 import { createIdempotencyKey } from "../../services/idempotency";
 import { fetchInventoryLocations, fetchProducts, type InventoryLocation, type Product } from "../../services/inventoryService";
 import {
+  cancelPhysicalReceipt,
   createPurchaseOrder,
   createSupplier,
   exportPurchases,
+  fetchPhysicalReceiptHistory,
   fetchPurchaseOrders,
   fetchPurchaseReceipts,
   fetchSuppliers,
-  receivePurchaseCommitment,
+  receivePhysicalReceipt,
   transitionPurchaseOrder,
   type PurchaseOrder,
   type PurchaseReceipt,
+  type PurchaseReceiptHistory,
   type Supplier,
   type SupplierPayload,
 } from "../../services/purchasesService";
@@ -46,19 +50,37 @@ import { buildPurchaseQueryParams, type PurchaseQueryState } from "./purchaseQue
 import { PurchaseOrderDialog } from "./PurchaseOrderDialog";
 import {
   OrderDetailDialog,
+  PhysicalReceiptHistoryDialog,
   ReceiveCommitmentDialog,
   SupplierDialog,
   TransitionReasonDialog,
   type PurchaseTransition,
 } from "./PurchaseOperationsDialogs";
+import { PurchaseLogisticsSection } from "./PurchaseLogisticsSection";
 
-type Section = "orders" | "suppliers" | "receipts";
+type Section = "orders" | "suppliers" | "shipments" | "receipts";
 type Row = PurchaseOrder | Supplier | PurchaseReceipt;
 const sections: Record<Section, { label: string; gridKey: string }> = {
   orders: { label: "Órdenes", gridKey: "purchases.orders" },
   suppliers: { label: "Proveedores", gridKey: "purchases.suppliers" },
-  receipts: { label: "Recepciones", gridKey: "purchases.receipts" },
+  shipments: { label: "Envíos e importaciones", gridKey: "purchases.shipments" },
+  receipts: { label: "Recepción física", gridKey: "inventory.pending-receipts" },
 };
+const RECEIPT_EXPORTABLE_COLUMNS = new Set([
+  "producto__modelo_normalized",
+  "producto__categoria__name_normalized",
+  "producto__codigo_sap_normalized",
+  "destination_location__name_normalized",
+  "cantidad_original",
+  "cantidad_recibida",
+  "cantidad_cancelada",
+  "cantidad_pendiente_orden",
+  "estado",
+  "referencia",
+  "motivo",
+  "created_by__username",
+  "created_at",
+]);
 const emptyQuery = (): PurchaseQueryState => ({
   search: "",
   statuses: [],
@@ -69,7 +91,8 @@ const emptyQuery = (): PurchaseQueryState => ({
 });
 
 export function PurchasesWorkspace() {
-  const [section, setSection] = useState<Section>("orders");
+  const navigate = useNavigate();
+  const [section, setSection] = useState<Section>(() => window.location.pathname.replace(/\/+$/, "") === "/compras/recepcion" ? "receipts" : "orders");
   const [query, setQuery] = useState(emptyQuery);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState(false);
@@ -85,6 +108,8 @@ export function PurchasesWorkspace() {
   const [form, setForm] = useState<PurchaseOrderForm>(createEmptyPurchaseOrderForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [dialogError, setDialogError] = useState("");
+  const [optionsError, setOptionsError] = useState("");
+  const [loadingOrderOptions, setLoadingOrderOptions] = useState(false);
   const [saving, setSaving] = useState(false);
   const creationKey = useRef(createIdempotencyKey("purchase-order"));
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -94,15 +119,26 @@ export function PurchasesWorkspace() {
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [supplierForm, setSupplierForm] = useState<SupplierPayload>(emptySupplier);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+  const [shipmentOrder, setShipmentOrder] = useState<PurchaseOrder | null>(null);
   const [transition, setTransition] = useState<PurchaseTransition | null>(null);
   const [transitionReason, setTransitionReason] = useState("");
   const transitionKey = useRef(createIdempotencyKey("purchase-transition"));
   const [selectedCommitment, setSelectedCommitment] = useState<PurchaseReceipt | null>(null);
+  const [receiptMode, setReceiptMode] = useState<"RECEIVE" | "CANCEL">("RECEIVE");
   const [receiptQuantity, setReceiptQuantity] = useState("");
   const [receiptReason, setReceiptReason] = useState("");
   const [receiptKey, setReceiptKey] = useState(() => createIdempotencyKey("purchase-receipt"));
+  const [historyReceipt, setHistoryReceipt] = useState<PurchaseReceipt | null>(null);
+  const [receiptHistory, setReceiptHistory] = useState<PurchaseReceiptHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   const load = useCallback(async (target: Section, state: PurchaseQueryState) => {
+    if (target === "shipments") {
+      request.current?.abort();
+      setLoading(false);
+      return;
+    }
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
@@ -147,6 +183,7 @@ export function PurchasesWorkspace() {
     }));
 
   const changeSection = (target: Section) => {
+    navigate(target === "receipts" ? "/compras/recepcion" : "/compras");
     setSection(target);
     setRows([]);
     setCount(0);
@@ -156,27 +193,40 @@ export function PurchasesWorkspace() {
     setFilterResetKey((value) => value + 1);
   };
 
+  const registerShipmentForOrder = (order: PurchaseOrder) => {
+    setShipmentOrder(order);
+    setSelectedOrder(null);
+    changeSection("shipments");
+  };
+
   const openOrderDialog = async () => {
     setForm(createEmptyPurchaseOrderForm());
     creationKey.current = createIdempotencyKey("purchase-order");
     setFieldErrors({});
     setDialogError("");
+    setOptionsError("");
+    setLoadingOrderOptions(true);
     setDialogOpen(true);
     try {
       const [supplierPage, productRows, locationRows] = await Promise.all([
-        fetchSuppliers({ page_size: 200 }),
+        fetchSuppliers({ page_size: 100 }),
         fetchProducts({ status: "ACTIVO" }),
-        fetchInventoryLocations({ status: "ACTIVA" }),
+        fetchInventoryLocations({ status: "ACTIVO" }),
       ]);
       setSuppliers(supplierPage.results.filter((supplier) => supplier.active));
       setProducts(productRows);
       setLocations(locationRows);
-    } catch (reason: unknown) {
-      setDialogError(getApiErrorMessage(reason, "No se pudieron cargar las opciones."));
+    } catch {
+      setOptionsError(
+        "No se pudieron cargar proveedores, productos o ubicaciones. Cierra el formulario y vuelve a intentarlo.",
+      );
+    } finally {
+      setLoadingOrderOptions(false);
     }
   };
 
   const saveOrder = async () => {
+    setDialogError("");
     const errors = validatePurchaseOrderForm(form);
     setFieldErrors(errors);
     if (Object.keys(errors).length) return;
@@ -252,12 +302,27 @@ export function PurchasesWorkspace() {
     }
   };
 
-  const openReceipt = useCallback((commitment: PurchaseReceipt) => {
-    setReceiptKey(createIdempotencyKey("purchase-receipt"));
+  const openReceiptOperation = useCallback((commitment: PurchaseReceipt, mode: "RECEIVE" | "CANCEL") => {
+    setReceiptKey(createIdempotencyKey(mode === "RECEIVE" ? "physical-receipt" : "physical-receipt-cancel"));
+    setReceiptMode(mode);
     setSelectedCommitment(commitment);
     setReceiptQuantity("");
     setReceiptReason("");
     setDialogError("");
+  }, []);
+
+  const openReceiptHistory = useCallback(async (receipt: PurchaseReceipt) => {
+    setHistoryReceipt(receipt);
+    setReceiptHistory([]);
+    setHistoryError("");
+    setHistoryLoading(true);
+    try {
+      setReceiptHistory(await fetchPhysicalReceiptHistory(receipt.id));
+    } catch (reason: unknown) {
+      setHistoryError(getApiErrorMessage(reason, "No se pudo cargar el historial."));
+    } finally {
+      setHistoryLoading(false);
+    }
   }, []);
 
   const saveReceipt = async () => {
@@ -270,20 +335,31 @@ export function PurchasesWorkspace() {
     setSaving(true);
     setDialogError("");
     try {
-      await receivePurchaseCommitment(
-        selectedCommitment.id, quantity, receiptReason.trim(), receiptKey,
-      );
+      if (receiptMode === "RECEIVE") {
+        await receivePhysicalReceipt(
+          selectedCommitment.id, quantity, receiptReason.trim(), receiptKey,
+        );
+      } else {
+        await cancelPhysicalReceipt(
+          selectedCommitment.id, quantity, receiptReason.trim(), receiptKey,
+        );
+      }
       setSelectedCommitment(null);
-      setSuccess("Recepción registrada; Inventario y Kardex fueron actualizados.");
+      setSuccess(
+        receiptMode === "RECEIVE"
+          ? "Recepción registrada; Inventario y Kardex fueron actualizados."
+          : "Unidades pendientes canceladas con trazabilidad.",
+      );
       await load("receipts", query);
     } catch (reason: unknown) {
-      setDialogError(getApiErrorMessage(reason, "No se pudo registrar la recepción."));
+      setDialogError(getApiErrorMessage(reason, receiptMode === "RECEIVE" ? "No se pudo registrar la recepción." : "No se pudo cancelar el pendiente."));
     } finally {
       setSaving(false);
     }
   };
 
   const handleExport = async (scope: "view" | "official") => {
+    if (section === "shipments") return;
     if (!count) {
       setError("No hay resultados para exportar. Ajusta o elimina los filtros.");
       return;
@@ -292,7 +368,12 @@ export function PurchasesWorkspace() {
       const blob = await exportPurchases(section, {
         ...buildPurchaseQueryParams(query),
         scope,
-        columns: scope === "view" ? visibleColumns.join(",") : undefined,
+        columns: scope === "view"
+          ? (section === "receipts"
+              ? visibleColumns.filter((column) => RECEIPT_EXPORTABLE_COLUMNS.has(column))
+              : visibleColumns
+            ).join(",")
+          : undefined,
       });
       downloadBlob(blob, `compras-${section}-${scope}.xlsx`);
       setSuccess("Archivo Excel generado correctamente.");
@@ -322,11 +403,13 @@ export function PurchasesWorkspace() {
   };
 
   const columns: ColDef<Row>[] =
-    section === "orders"
+    section === "shipments"
+      ? []
+      : section === "orders"
       ? (buildOrderColumns(setSelectedOrder) as ColDef<Row>[])
       : section === "suppliers"
         ? (buildSupplierColumns() as ColDef<Row>[])
-        : (buildReceiptColumns(openReceipt) as ColDef<Row>[]);
+        : (buildReceiptColumns({ onReceive: (receipt) => openReceiptOperation(receipt, "RECEIVE"), onCancel: (receipt) => openReceiptOperation(receipt, "CANCEL"), onHistory: (receipt) => void openReceiptHistory(receipt) }) as ColDef<Row>[]);
   const statusOptions =
     section === "orders"
       ? PURCHASE_STATUSES
@@ -347,33 +430,19 @@ export function PurchasesWorkspace() {
     <Stack spacing={3}>
       <PageHeader
         title="Compras"
-        subtitle="Órdenes, proveedores y recepciones conectadas con Inventario y Kardex."
+        subtitle="Órdenes, seguimiento logístico y recepción física conectados con Inventario y Kardex."
         eyebrow="Abastecimiento"
         icon={<ReceiptLongIcon />}
         tone={colors.modules.purchases}
-        actions={
-          section === "orders" ? (
-            <CapabilityGate capability="purchases.create_order">
-              <Button variant="contained" startIcon={<AddShoppingCartIcon />} onClick={() => void openOrderDialog()}>
-                Nueva orden
-              </Button>
-            </CapabilityGate>
-          ) : section === "suppliers" ? (
-            <CapabilityGate capability="purchases.manage_suppliers">
-              <Button variant="contained" startIcon={<BusinessIcon />} onClick={() => {
-                setSupplierForm(emptySupplier);
-                setFieldErrors({});
-                setDialogError("");
-                setSupplierOpen(true);
-              }}>
-                Nuevo proveedor
-              </Button>
-            </CapabilityGate>
-          ) : null
-        }
       />
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 2 }}>
-        <MetricCard title="Resultados" value={String(count)} helper="Según los filtros actuales" icon={<ReceiptLongIcon />} tone={colors.modules.purchases} />
+        <MetricCard
+          title={section === "shipments" ? "Control logístico" : "Resultados"}
+          value={section === "shipments" ? "En vivo" : String(count)}
+          helper={section === "shipments" ? "Plazos, Aduanas e incidencias" : "Según los filtros actuales"}
+          icon={<ReceiptLongIcon />}
+          tone={colors.modules.purchases}
+        />
         <MetricCard title="Recepción física" value="Controlada" helper="Solo entonces cambia stock y Kardex" icon={<Inventory2Icon />} tone={colors.modules.inventory} />
         <MetricCard title="Monedas" value="CLP / USD" helper="Tipo de cambio congelado" icon={<BusinessIcon />} tone={colors.modules.analytics} />
       </Box>
@@ -390,16 +459,47 @@ export function PurchasesWorkspace() {
         title={sections[section].label}
         subtitle="Filtros remotos, vistas personales, columnas configurables y exportación."
         actions={
-          <>
+          section !== "shipments" ? (
+            <>
+              {section === "orders" ? (
+                <CapabilityGate capability="purchases.create_order">
+                  <Button
+                    variant="contained"
+                    startIcon={<AddShoppingCartIcon />}
+                    onClick={() => void openOrderDialog()}
+                  >
+                    Nueva orden
+                  </Button>
+                </CapabilityGate>
+              ) : section === "suppliers" ? (
+                <CapabilityGate capability="purchases.manage_suppliers">
+                  <Button variant="contained" startIcon={<BusinessIcon />} onClick={() => {
+                    setSupplierForm(emptySupplier);
+                    setFieldErrors({});
+                    setDialogError("");
+                    setSupplierOpen(true);
+                  }}>
+                    Nuevo proveedor
+                  </Button>
+                </CapabilityGate>
+              ) : null}
             <CapabilityGate capability="purchases.export_view">
               <Button startIcon={<DownloadIcon />} onClick={() => void handleExport("view")}>Exportar resultados filtrados</Button>
             </CapabilityGate>
             <CapabilityGate capability="purchases.export_official">
               <Button variant="outlined" onClick={() => void handleExport("official")}>Exportación oficial</Button>
             </CapabilityGate>
-          </>
+            </>
+          ) : undefined
         }
       >
+        {section === "shipments" ? (
+          <PurchaseLogisticsSection
+            initialOrder={shipmentOrder}
+            onInitialOrderHandled={() => setShipmentOrder(null)}
+          />
+        ) : (
+          <>
         <SerkanFilterToolbar
           searchLabel={`Buscar ${sections[section].label.toLowerCase()}`}
           searchPlaceholder="Número, proveedor, identificación o estado..."
@@ -453,6 +553,8 @@ export function PurchasesWorkspace() {
             onNamedViewApply={applyNamedView}
           />
         )}
+          </>
+        )}
       </SectionCard>
       <PurchaseOrderDialog
         open={dialogOpen}
@@ -462,6 +564,8 @@ export function PurchasesWorkspace() {
         locations={locations}
         errors={fieldErrors}
         generalError={dialogError}
+        optionsError={optionsError}
+        optionsLoading={loadingOrderOptions}
         loading={saving}
         onChange={setForm}
         onClose={() => setDialogOpen(false)}
@@ -482,6 +586,7 @@ export function PurchasesWorkspace() {
         loading={saving}
         onClose={() => setSelectedOrder(null)}
         onTransition={openTransition}
+        onRegisterShipment={registerShipmentForOrder}
       />
       <TransitionReasonDialog
         open={Boolean(transition)}
@@ -493,8 +598,16 @@ export function PurchasesWorkspace() {
         onClose={() => setTransition(null)}
         onConfirm={() => void runTransition()}
       />
+      <PhysicalReceiptHistoryDialog
+        receipt={historyReceipt}
+        operations={receiptHistory}
+        loading={historyLoading}
+        error={historyError}
+        onClose={() => setHistoryReceipt(null)}
+      />
       <ReceiveCommitmentDialog
         commitment={selectedCommitment}
+        mode={receiptMode}
         quantity={receiptQuantity}
         reason={receiptReason}
         error={dialogError}

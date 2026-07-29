@@ -54,6 +54,7 @@ INVENTORY_CAPABILITY_ROLES = {
 
 PURCHASE_VIEW_ROLES = {
     UserRole.ADMINISTRADOR,
+    UserRole.RRHH,
     UserRole.FINANZAS_COMERCIAL,
     UserRole.OPERATIVO,
     UserRole.CONSULTA,
@@ -63,6 +64,17 @@ PURCHASE_MANAGEMENT_ROLES = {
     UserRole.ADMINISTRADOR,
     UserRole.FINANZAS_COMERCIAL,
 }
+
+
+PURCHASE_LOGISTICS_MANAGEMENT_ROLES = {
+    UserRole.ADMINISTRADOR,
+    UserRole.RRHH,
+    UserRole.FINANZAS_COMERCIAL,
+}
+
+PURCHASE_LOGISTICS_EVENT_ROLES = (
+    PURCHASE_LOGISTICS_MANAGEMENT_ROLES | {UserRole.OPERATIVO}
+)
 
 
 class PurchaseCapability:
@@ -79,6 +91,11 @@ class PurchaseCapability:
     CLOSE_ORDER = "purchases.close_order"
     EXPORT_VIEW = "purchases.export_view"
     EXPORT_OFFICIAL = "purchases.export_official"
+    MANAGE_CARRIERS = "purchases.manage_carriers"
+    CREATE_SHIPMENT = "purchases.create_shipment"
+    UPDATE_SHIPMENT = "purchases.update_shipment"
+    MANAGE_SHIPMENT_COSTS = "purchases.manage_shipment_costs"
+    EXPORT_SHIPMENTS_OFFICIAL = "purchases.export_shipments_official"
 
 
 PURCHASE_CAPABILITY_ROLES = {
@@ -95,6 +112,11 @@ PURCHASE_CAPABILITY_ROLES = {
     PurchaseCapability.CLOSE_ORDER: PURCHASE_MANAGEMENT_ROLES,
     PurchaseCapability.EXPORT_VIEW: PURCHASE_VIEW_ROLES,
     PurchaseCapability.EXPORT_OFFICIAL: PURCHASE_MANAGEMENT_ROLES,
+    PurchaseCapability.MANAGE_CARRIERS: PURCHASE_LOGISTICS_MANAGEMENT_ROLES,
+    PurchaseCapability.CREATE_SHIPMENT: PURCHASE_LOGISTICS_MANAGEMENT_ROLES,
+    PurchaseCapability.UPDATE_SHIPMENT: PURCHASE_LOGISTICS_EVENT_ROLES,
+    PurchaseCapability.MANAGE_SHIPMENT_COSTS: PURCHASE_LOGISTICS_MANAGEMENT_ROLES,
+    PurchaseCapability.EXPORT_SHIPMENTS_OFFICIAL: PURCHASE_LOGISTICS_MANAGEMENT_ROLES,
 }
 
 
@@ -179,8 +201,12 @@ def build_module_permissions(user):
     can_manage = has_management_access(user)
     can_audit = has_audit_access(user)
     can_view_purchases = has_purchase_capability(user, PurchaseCapability.VIEW)
-    can_create_purchases = has_purchase_capability(
-        user, PurchaseCapability.CREATE_ORDER
+    can_create_purchases = any(
+        has_purchase_capability(user, capability)
+        for capability in (
+            PurchaseCapability.CREATE_ORDER,
+            PurchaseCapability.CREATE_SHIPMENT,
+        )
     )
     can_update_purchases = any(
         has_purchase_capability(user, capability)
@@ -193,6 +219,10 @@ def build_module_permissions(user):
             PurchaseCapability.MANAGE_COSTS,
             PurchaseCapability.CANCEL_ORDER,
             PurchaseCapability.CLOSE_ORDER,
+            PurchaseCapability.MANAGE_CARRIERS,
+            PurchaseCapability.CREATE_SHIPMENT,
+            PurchaseCapability.UPDATE_SHIPMENT,
+            PurchaseCapability.MANAGE_SHIPMENT_COSTS,
         )
     )
 

@@ -171,7 +171,7 @@ def build_pending_receipt_export_response(
         ]
         for pending_receipt in queryset
     ]
-    filename = f"serkan_pendientes_por_recibir_{mode}.{export_format}"
+    filename = f"serkan_recepciones_fisicas_{mode}.{export_format}"
 
     if export_format == "csv":
         output = StringIO(newline="")
@@ -184,7 +184,7 @@ def build_pending_receipt_export_response(
         )
     else:
         workbook = Workbook(write_only=True)
-        worksheet = workbook.create_sheet("Por recibir")
+        worksheet = workbook.create_sheet("Recepciones físicas")
         worksheet.append(headers)
         for row in rows:
             worksheet.append(row)

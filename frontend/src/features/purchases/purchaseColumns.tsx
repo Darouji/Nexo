@@ -1,5 +1,7 @@
 import { Button, Chip, Stack } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import HistoryIcon from "@mui/icons-material/History";
+import DeleteIcon from "@mui/icons-material/Delete";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { colors } from "../../theme/colors";
 import { CapabilityGate } from "../../components/CapabilityGate";
@@ -114,37 +116,67 @@ export function buildSupplierColumns(): ColDef<Supplier>[] {
   ];
 }
 
-export function buildReceiptColumns(
-  onReceive: (receipt: PurchaseReceipt) => void,
-): ColDef<PurchaseReceipt>[] {
+export function buildReceiptColumns({
+  onReceive,
+  onCancel,
+  onHistory,
+}: {
+  onReceive: (receipt: PurchaseReceipt) => void;
+  onCancel: (receipt: PurchaseReceipt) => void;
+  onHistory: (receipt: PurchaseReceipt) => void;
+}): ColDef<PurchaseReceipt>[] {
   return [
-    { field: "order_number", colId: "order_line__order__number", headerName: "N° orden", width: 145 },
     {
       field: "product_model",
-      colId: "order_line__product_model_snapshot",
+      colId: "producto__modelo_normalized",
       headerName: "Producto / Modelo",
       minWidth: 220,
       flex: 1,
     },
-    { field: "status", colId: "pending_receipt__estado", headerName: "Estado", width: 165 },
-    { field: "destination_location_name", colId: "destination_location__name", headerName: "Ubicación destino", width: 190 },
-    { field: "committed_units", colId: "committed_quantity", headerName: "Cantidad comprometida", width: 190, cellStyle: { textAlign: "right" } },
-    { field: "pending_units", colId: "pending_quantity", headerName: "Cantidad pendiente", width: 175, cellStyle: { textAlign: "right" } },
-    { field: "received_units", colId: "pending_receipt__cantidad_recibida", headerName: "Cantidad recibida", width: 170, cellStyle: { textAlign: "right" } },
+    { field: "product_category", colId: "producto__categoria__name_normalized", headerName: "Categoría", width: 155 },
+    { field: "supplier_name", colId: "supplier", headerName: "Proveedor", minWidth: 190 },
+    { field: "product_sap", colId: "producto__codigo_sap_normalized", headerName: "Código SAP", width: 145 },
     {
+      field: "order_number",
+      colId: "referencia",
+      headerName: "OC / Factura",
+      width: 175,
+      valueFormatter: (params) => String(params.value || params.data?.reference || "Sin referencia"),
+    },
+    { field: "destination_location_name", colId: "destination_location__name_normalized", headerName: "Ubicación de recepción", width: 205 },
+    { field: "committed_units", colId: "cantidad_original", headerName: "Cantidad original", width: 155, cellStyle: { textAlign: "right" } },
+    { field: "received_units", colId: "cantidad_recibida", headerName: "Cantidad recibida", width: 150, cellStyle: { textAlign: "right" } },
+    { field: "cancelled_units", colId: "cantidad_cancelada", headerName: "Cantidad cancelada", width: 155, cellStyle: { textAlign: "right" } },
+    { field: "pending_units", colId: "cantidad_pendiente_orden", headerName: "Cantidad pendiente", width: 160, cellStyle: { textAlign: "right" } },
+    { field: "status_display", colId: "estado", headerName: "Estado", width: 165 },
+    { field: "origin_display", colId: "origin", headerName: "Origen", width: 155 },    {
       colId: "actions",
       headerName: "Acciones",
-      width: 130,
+      width: 325,
       sortable: false,
       filter: false,
-      cellRenderer: (params: ICellRendererParams<PurchaseReceipt>) =>
-        params.data && params.data.pending_units > 0 ? (
-          <CapabilityGate capability="purchases.receive_order">
-            <Button size="small" variant="contained" onClick={() => onReceive(params.data!)}>
-              Recibir
+      cellRenderer: (params: ICellRendererParams<PurchaseReceipt>) => {
+        const receipt = params.data;
+        if (!receipt) return null;
+        const canOperate = receipt.pending_units > 0 && ["PENDIENTE", "PARCIAL"].includes(receipt.status);
+        return (
+          <Stack direction="row" spacing={0.5} sx={{ height: "100%", alignItems: "center" }}>
+            <Button size="small" startIcon={<HistoryIcon />} onClick={() => onHistory(receipt)}>
+              Historial
             </Button>
-          </CapabilityGate>
-        ) : null,
+            <CapabilityGate capability="purchases.receive_order">
+              <Button size="small" variant="contained" disabled={!canOperate} onClick={() => onReceive(receipt)}>
+                Recibir
+              </Button>
+            </CapabilityGate>
+            <CapabilityGate capability="purchases.cancel_order">
+              <Button size="small" color="error" startIcon={<DeleteIcon />} disabled={!canOperate} onClick={() => onCancel(receipt)}>
+                Cancelar
+              </Button>
+            </CapabilityGate>
+          </Stack>
+        );
+      },
     },
   ];
 }

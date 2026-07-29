@@ -94,11 +94,12 @@ class PurchaseShipmentViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
-    purchase_default_write_capability = PurchaseCapability.MANAGE_SHIPMENTS
+    purchase_default_write_capability = PurchaseCapability.CREATE_SHIPMENT
+    purchase_official_export_capability = PurchaseCapability.EXPORT_SHIPMENTS_OFFICIAL
     purchase_action_capabilities = {
-        "create": PurchaseCapability.MANAGE_SHIPMENTS,
-        "event": PurchaseCapability.MANAGE_SHIPMENTS,
-        "charge": PurchaseCapability.MANAGE_COSTS,
+        "create": PurchaseCapability.CREATE_SHIPMENT,
+        "event": PurchaseCapability.UPDATE_SHIPMENT,
+        "charge": PurchaseCapability.MANAGE_SHIPMENT_COSTS,
         "summary": PurchaseCapability.VIEW,
     }
     serializer_class = PurchaseShipmentSerializer

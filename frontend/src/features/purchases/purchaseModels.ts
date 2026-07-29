@@ -67,7 +67,6 @@ function numberValue(value: string) {
 export function validatePurchaseOrderForm(form: PurchaseOrderForm) {
   const errors: Record<string, string> = {};
 
-  if (!form.number.trim()) errors.number = "Indica el número oficial de la orden.";
   if (!form.supplier) errors.supplier = "Selecciona un proveedor.";
   if (!form.issueDate) errors.issue_date = "Indica la fecha de emisión.";
   if (form.currency === "USD" && numberValue(form.exchangeRate) <= 0) {
@@ -123,6 +122,16 @@ export function toPurchaseOrderPayload(
     notes: form.notes.trim(),
     lines,
   };
+}
+
+const SHIPMENT_ELIGIBLE_ORDER_STATUSES: PurchaseOrderStatus[] = [
+  "APROBADA",
+  "EMITIDA",
+  "PARCIALMENTE_RECIBIDA",
+];
+
+export function canRegisterShipmentForOrder(status: PurchaseOrderStatus) {
+  return SHIPMENT_ELIGIBLE_ORDER_STATUSES.includes(status);
 }
 
 export function formatPurchaseStatus(status: PurchaseOrderStatus) {

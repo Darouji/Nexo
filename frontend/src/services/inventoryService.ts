@@ -219,6 +219,13 @@ export type InventoryLocationType =
   | "CLIENTE_FAENA"
   | "OTRO";
 
+export type InventoryLocationStatus =
+  | "ACTIVO"
+  | "INACTIVO"
+  | "ANULADO"
+  | "ARCHIVADO";
+
+
 export type InventoryLocation = {
   [key: string]: unknown;
   id: number;
@@ -231,7 +238,7 @@ export type InventoryLocation = {
   description: string;
   is_regularization: boolean;
   total_units: number;
-  status: string;
+  status: InventoryLocationStatus;
   created_at: string;
   updated_at: string;
 };
@@ -1030,7 +1037,7 @@ export async function createPendingReceipt(
 }
 
 export async function fetchInventoryLocations(params: {
-  status?: string;
+  status?: InventoryLocationStatus;
   search?: string;
 } = {}) {
   const response = await api.get<InventoryLocationListResponse>(
@@ -1040,7 +1047,7 @@ export async function fetchInventoryLocations(params: {
         status: params.status || undefined,
         search: params.search?.trim() || undefined,
         ordering: "name",
-        page_size: 200,
+        page_size: 100,
       },
     },
   );

@@ -312,6 +312,13 @@ SPECTACULAR_SETTINGS = {
     "SORT_OPERATIONS": True,
     "ENUM_NAME_OVERRIDES": {
         "PurchaseCostQualityEnum": "apps.purchases.models.CostQuality.choices",
+        "PurchaseOrderStatusEnum": "apps.purchases.models.PurchaseOrderStatus.choices",
+        "ShipmentStatusEnum": "apps.purchases.logistics_models.ShipmentStatus.choices",
+        "ShipmentCustodianEnum": "apps.purchases.logistics_models.ShipmentCustodian.choices",
+        "ShipmentTransportModeEnum": "apps.purchases.logistics_models.ShipmentTransportMode.choices",
+        "ShipmentEventTypeEnum": "apps.purchases.logistics_models.ShipmentEventType.choices",
+        "ShipmentChargeTypeEnum": "apps.purchases.logistics_models.ShipmentChargeType.choices",
+        "ShipmentChargeStatusEnum": "apps.purchases.logistics_models.ShipmentChargeStatus.choices",
     },
     "TAGS": [
         {
@@ -349,3 +356,8 @@ SPECTACULAR_SETTINGS = {
         },
     ],
 }
+
+# Umbral operativo interno de SERKAN; no sustituye una regla legal aduanera.
+PURCHASE_CUSTOMS_ALERT_THRESHOLD_USD = os.getenv(
+    "PURCHASE_CUSTOMS_ALERT_THRESHOLD_USD", "5000"
+)

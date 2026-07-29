@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canRegisterShipmentForOrder,
   createEmptyPurchaseOrderForm,
   toPurchaseOrderPayload,
   validatePurchaseOrderForm,
@@ -27,5 +28,14 @@ describe("purchaseModels", () => {
       unitPrice: "120",
     };
     expect(toPurchaseOrderPayload(form).exchange_rate).toBe(945.5);
+  });
+
+  it("habilita seguimiento sólo para órdenes operativamente autorizadas", () => {
+    expect(canRegisterShipmentForOrder("APROBADA")).toBe(true);
+    expect(canRegisterShipmentForOrder("EMITIDA")).toBe(true);
+    expect(canRegisterShipmentForOrder("PARCIALMENTE_RECIBIDA")).toBe(true);
+    expect(canRegisterShipmentForOrder("BORRADOR")).toBe(false);
+    expect(canRegisterShipmentForOrder("EN_REVISION")).toBe(false);
+    expect(canRegisterShipmentForOrder("CERRADA")).toBe(false);
   });
 });

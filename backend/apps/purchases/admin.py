@@ -1,12 +1,16 @@
 from django.contrib import admin
 
 from .models import (
+    Carrier,
     CostAllocation,
     LandedCost,
     PurchaseOrder,
     PurchaseOrderLine,
     PurchaseOrderOperation,
     PurchaseReceiptCommitment,
+    PurchaseShipment,
+    ShipmentCharge,
+    ShipmentEvent,
     Supplier,
 )
 
@@ -69,3 +73,59 @@ class PurchaseOrderOperationAdmin(admin.ModelAdmin):
 
 admin.site.register(LandedCost)
 admin.site.register(CostAllocation)
+
+
+@admin.register(Carrier)
+class CarrierAdmin(admin.ModelAdmin):
+    list_display = ("name", "country", "status", "updated_at")
+    search_fields = ("name", "country", "aliases")
+    list_filter = ("status", "country")
+
+
+class ReadOnlyLogisticsAdmin(admin.ModelAdmin):
+    def get_readonly_fields(self, request, obj=None):
+        return tuple(field.name for field in self.model._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PurchaseShipment)
+class PurchaseShipmentAdmin(ReadOnlyLogisticsAdmin):
+    list_display = (
+        "order", "carrier", "tracking_number", "state",
+        "current_custodian", "current_eta",
+    )
+    search_fields = (
+        "order__number", "order__supplier__legal_name",
+        "carrier__name", "tracking_number",
+    )
+    list_filter = ("state", "transport_mode", "current_custodian")
+
+
+@admin.register(ShipmentEvent)
+class ShipmentEventAdmin(ReadOnlyLogisticsAdmin):
+    list_display = (
+        "shipment", "event_type", "title", "occurred_at", "responsible",
+    )
+    search_fields = (
+        "shipment__order__number", "shipment__tracking_number",
+        "title", "description",
+    )
+    list_filter = ("event_type", "new_state", "new_custodian")
+
+
+@admin.register(ShipmentCharge)
+class ShipmentChargeAdmin(ReadOnlyLogisticsAdmin):
+    list_display = (
+        "shipment", "charge_type", "amount_original", "currency",
+        "amount_clp", "charge_status",
+    )
+    search_fields = (
+        "shipment__order__number", "shipment__tracking_number",
+        "description", "source_reference",
+    )
+    list_filter = ("charge_type", "charge_status", "currency")

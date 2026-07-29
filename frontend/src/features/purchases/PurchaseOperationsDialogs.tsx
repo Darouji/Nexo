@@ -1,3 +1,4 @@
+import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import {
   Alert,
   Button,
@@ -13,9 +14,10 @@ import { CapabilityGate } from "../../components/CapabilityGate";
 import type {
   PurchaseOrder,
   PurchaseReceipt,
+  PurchaseReceiptHistory,
   SupplierPayload,
 } from "../../services/purchasesService";
-import { formatPurchaseStatus } from "./purchaseModels";
+import { canRegisterShipmentForOrder, formatPurchaseStatus } from "./purchaseModels";
 
 export type PurchaseTransition =
   | "submit-review"
@@ -86,11 +88,13 @@ export function OrderDetailDialog({
   loading,
   onClose,
   onTransition,
+  onRegisterShipment,
 }: {
   order: PurchaseOrder | null;
   loading: boolean;
   onClose: () => void;
   onTransition: (action: PurchaseTransition) => void;
+  onRegisterShipment: (order: PurchaseOrder) => void;
 }) {
   if (!order) return null;
 
@@ -121,6 +125,16 @@ export function OrderDetailDialog({
       </DialogContent>
       <DialogActions sx={{ flexWrap: "wrap" }}>
         <Button onClick={onClose} disabled={loading}>Cerrar</Button>
+        {canRegisterShipmentForOrder(order.status) ? (
+          <CapabilityGate capability="purchases.create_shipment">
+            <Button
+              startIcon={<LocalShippingIcon />}
+              onClick={() => onRegisterShipment(order)}
+            >
+              Registrar envío
+            </Button>
+          </CapabilityGate>
+        ) : null}
         {order.status === "BORRADOR" ? (
           <CapabilityGate capability="purchases.submit_review"><Button onClick={() => onTransition("submit-review")}>Enviar a revisión</Button></CapabilityGate>
         ) : null}
@@ -189,6 +203,7 @@ export function TransitionReasonDialog({
 
 export function ReceiveCommitmentDialog({
   commitment,
+  mode,
   quantity,
   reason,
   error,
@@ -199,6 +214,7 @@ export function ReceiveCommitmentDialog({
   onConfirm,
 }: {
   commitment: PurchaseReceipt | null;
+  mode: "RECEIVE" | "CANCEL";
   quantity: string;
   reason: string;
   error: string;
@@ -209,18 +225,25 @@ export function ReceiveCommitmentDialog({
   onConfirm: () => void;
 }) {
   if (!commitment) return null;
+  const receiving = mode === "RECEIVE";
   return (
     <Dialog open fullWidth maxWidth="sm" onClose={loading ? undefined : onClose}>
-      <DialogTitle>Registrar recepción física</DialogTitle>
+      <DialogTitle>{receiving ? "Registrar recepción física" : "Cancelar unidades pendientes"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          <Alert severity="warning">
-            Esta acción sí incrementará stock y generará Kardex. Pendiente:{" "}
-            <strong>{commitment.pending_units}</strong>.
+          <Alert severity={receiving ? "warning" : "info"}>
+            {receiving
+              ? "Esta acción incrementará stock y generará Kardex."
+              : "Esta acción cerrará unidades pendientes sin modificar stock ni generar Kardex."}{" "}
+            Pendiente: <strong>{commitment.pending_units}</strong>.
           </Alert>
+          <Typography sx={{ fontWeight: 800 }}>
+            {commitment.product_model} · {commitment.origin_display}
+            {commitment.order_number ? ` · ${commitment.order_number}` : ""}
+          </Typography>
           {error ? <Alert severity="error">{error}</Alert> : null}
           <TextField
-            label="Cantidad recibida"
+            label={receiving ? "Cantidad recibida" : "Cantidad a cancelar"}
             type="number"
             value={quantity}
             onChange={(event) => onQuantityChange(event.target.value)}
@@ -231,31 +254,81 @@ export function ReceiveCommitmentDialog({
             helperText={`Máximo permitido: ${commitment.pending_units}`}
           />
           <TextField
-            label="Motivo / respaldo de recepción"
+            label="Motivo / respaldo"
             value={reason}
             onChange={(event) => onReasonChange(event.target.value)}
             error={!reason.trim() && Boolean(quantity)}
-            helperText="Obligatorio; quedará en auditoría y Kardex."
+            helperText="Obligatorio; quedará registrado en la trazabilidad."
             multiline
             minRows={3}
           />
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>Cancelar</Button>
+        <Button onClick={onClose} disabled={loading}>Volver</Button>
         <Button
           variant="contained"
+          color={receiving ? "primary" : "error"}
           onClick={onConfirm}
           disabled={
-            loading ||
-            !reason.trim() ||
-            Number(quantity) < 1 ||
+            loading || !reason.trim() || Number(quantity) < 1 ||
             Number(quantity) > commitment.pending_units
           }
         >
-          {loading ? "Registrando..." : "Confirmar recepción"}
+          {loading ? "Procesando..." : receiving ? "Confirmar recepción" : "Confirmar cancelación"}
         </Button>
       </DialogActions>
+    </Dialog>
+  );
+}
+
+export function PhysicalReceiptHistoryDialog({
+  receipt,
+  operations,
+  loading,
+  error,
+  onClose,
+}: {
+  receipt: PurchaseReceipt | null;
+  operations: PurchaseReceiptHistory[];
+  loading: boolean;
+  error: string;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={Boolean(receipt)} fullWidth maxWidth="md" onClose={onClose}>
+      <DialogTitle>Historial de recepción física</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          {receipt ? (
+            <Alert severity="info">
+              {receipt.product_model} · SAP {receipt.product_sap || "sin código"} · {receipt.product_category}
+              {receipt.order_number ? ` · Orden ${receipt.order_number}` : " · Registro manual"}
+            </Alert>
+          ) : null}
+          {loading ? <Typography>Cargando historial...</Typography> : null}
+          {error ? <Alert severity="error">{error}</Alert> : null}
+          {!loading && !error && operations.length === 0 ? (
+            <Alert severity="info">Esta recepción todavía no tiene operaciones.</Alert>
+          ) : null}
+          {operations.map((operation) => (
+            <Stack key={operation.id} spacing={0.5} sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
+              <Typography sx={{ fontWeight: 900 }}>
+                {operation.responsible_name} {operation.operation_type === "RECEIVE" ? "recibió" : "canceló"} {operation.quantity} unidades
+              </Typography>
+              <Typography color="text.secondary">
+                Pendiente: {operation.pending_before} → {operation.pending_after}. Estado: {operation.previous_state_display} → {operation.new_state_display}.
+              </Typography>
+              <Typography>Motivo: {operation.reason}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {new Date(operation.occurred_at).toLocaleString("es-CL")}
+                {operation.kardex_movement ? ` · Kardex N.º ${operation.kardex_movement}` : ""}
+              </Typography>
+            </Stack>
+          ))}
+        </Stack>
+      </DialogContent>
+      <DialogActions><Button onClick={onClose}>Cerrar</Button></DialogActions>
     </Dialog>
   );
 }

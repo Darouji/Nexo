@@ -489,10 +489,15 @@ def _refresh_receipt_state(order, user):
     if not commitments:
         return order.state
     received = sum(item.pending_receipt.cantidad_recibida for item in commitments)
+    cancelled = sum(item.pending_receipt.cantidad_cancelada for item in commitments)
     pending = sum(item.pending_receipt.cantidad_pendiente for item in commitments)
     new_state = order.state
-    if pending == 0:
+    if pending == 0 and cancelled == 0:
         new_state = PurchaseOrderStatus.RECIBIDA
+    elif pending == 0 and received > 0:
+        new_state = PurchaseOrderStatus.PARCIALMENTE_RECIBIDA
+    elif pending == 0:
+        new_state = PurchaseOrderStatus.CANCELADA
     elif received > 0:
         new_state = PurchaseOrderStatus.PARCIALMENTE_RECIBIDA
     elif order.state in {PurchaseOrderStatus.PARCIALMENTE_RECIBIDA, PurchaseOrderStatus.RECIBIDA}:

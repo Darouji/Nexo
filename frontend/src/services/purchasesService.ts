@@ -50,14 +50,40 @@ export type PurchaseOrder = {
 
 export type PurchaseReceipt = {
   id: number;
-  order: number;
+  pending_receipt_id: number;
+  order: number | null;
   order_number: string;
+  supplier_name: string;
+  origin: "PURCHASE_ORDER" | "MANUAL";
+  origin_display: string;
   product_model: string;
+  product_sap: string;
+  product_category: string;
   destination_location_name: string;
   status: string;
+  status_display: string;
+  reference: string;
+  reason: string;
   committed_units: number;
   pending_units: number;
   received_units: number;
+  cancelled_units: number;
+  created_at: string;
+};
+
+export type PurchaseReceiptHistory = {
+  id: number;
+  operation_type: "RECEIVE" | "CANCEL";
+  operation_type_display: string;
+  quantity: number;
+  reason: string;
+  responsible_name: string;
+  pending_before: number;
+  pending_after: number;
+  previous_state_display: string;
+  new_state_display: string;
+  kardex_movement: number | null;
+  occurred_at: string;
 };
 
 export type PaginatedResponse<T> = {
@@ -90,10 +116,6 @@ export type PurchaseOrderPayload = {
 };
 
 export type SupplierPayload = Omit<Supplier, "id">;
-export type ReceiptPayload = {
-  notes: string;
-  lines: Array<{ line: number; quantity: number; destination_location: number | null }>;
-};
 
 type ApiSupplier = {
   id: number; legal_name: string; trade_name: string; tax_id: string; country: string;
@@ -112,9 +134,12 @@ type ApiOrder = {
   lines: ApiLine[]; receipt_commitments?: ApiCommitment[];
 };
 type ApiCommitment = {
-  id: number; order_id: number; order_number: string; product_model: string;
+  id: number; pending_receipt_id: number; order_id: number | null; order_number: string;
+  supplier_name: string; origin: "PURCHASE_ORDER" | "MANUAL"; origin_display: string;
+  product_model: string; product_sap: string; product_category: string;
   destination_location_name: string; committed_quantity: number;
-  received_quantity: number; pending_quantity: number; state: string;
+  received_quantity: number; cancelled_quantity: number; pending_quantity: number;
+  state: string; state_display: string; referencia: string; motivo: string; created_at: string;
 };
 
 function normalizePage<T>(data: PaginatedResponse<T> | T[]): PaginatedResponse<T> {
@@ -148,11 +173,16 @@ function mapOrder(value: ApiOrder): PurchaseOrder {
 }
 function mapCommitment(value: ApiCommitment): PurchaseReceipt {
   return {
-    id: value.id, order: value.order_id, order_number: value.order_number,
-    product_model: value.product_model,
+    id: value.id, pending_receipt_id: value.pending_receipt_id,
+    order: value.order_id, order_number: value.order_number,
+    supplier_name: value.supplier_name, origin: value.origin,
+    origin_display: value.origin_display, product_model: value.product_model,
+    product_sap: value.product_sap, product_category: value.product_category,
     destination_location_name: value.destination_location_name, status: value.state,
+    status_display: value.state_display, reference: value.referencia, reason: value.motivo,
     committed_units: value.committed_quantity, pending_units: value.pending_quantity,
-    received_units: value.received_quantity,
+    received_units: value.received_quantity, cancelled_units: value.cancelled_quantity,
+    created_at: value.created_at,
   };
 }
 
@@ -173,7 +203,7 @@ export async function fetchSuppliers(params: PurchaseListParams, signal?: AbortS
 }
 export async function fetchPurchaseReceipts(params: PurchaseListParams, signal?: AbortSignal) {
   const response = await api.get<PaginatedResponse<ApiCommitment> | ApiCommitment[]>(
-    "/purchases/compromisos-recepcion/",
+    "/purchases/recepciones-fisicas/",
     { params: { ...params, state: params.status, status: undefined }, signal },
   );
   const page = normalizePage(response.data);
@@ -226,33 +256,45 @@ export async function transitionPurchaseOrder(
   );
   return mapOrder(response.data);
 }
-export async function receivePurchaseCommitment(
-  commitmentId: number,
+export async function receivePhysicalReceipt(
+  receiptId: number,
   quantity: number,
   reason: string,
   idempotencyKey: string,
 ) {
   const response = await api.post(
-    `/purchases/compromisos-recepcion/${commitmentId}/recibir/`,
+    `/purchases/recepciones-fisicas/${receiptId}/recibir/`,
     { quantity, reason },
     { headers: { "Idempotency-Key": idempotencyKey } },
   );
   return response.data;
 }
-export async function receivePurchaseOrder(
-  _orderId: number,
-  payload: ReceiptPayload,
+
+export async function cancelPhysicalReceipt(
+  receiptId: number,
+  quantity: number,
+  reason: string,
   idempotencyKey: string,
 ) {
-  const first = payload.lines[0];
-  if (!first) throw new Error("No hay compromisos para recibir.");
-  return receivePurchaseCommitment(first.line, first.quantity, payload.notes, idempotencyKey);
+  const response = await api.post(
+    `/purchases/recepciones-fisicas/${receiptId}/cancelar/`,
+    { quantity, reason },
+    { headers: { "Idempotency-Key": idempotencyKey } },
+  );
+  return response.data;
+}
+
+export async function fetchPhysicalReceiptHistory(receiptId: number) {
+  const response = await api.get<PurchaseReceiptHistory[]>(
+    `/purchases/recepciones-fisicas/${receiptId}/historial/`,
+  );
+  return response.data;
 }
 export async function exportPurchases(
   resource: "orders" | "suppliers" | "receipts",
   params: PurchaseListParams & { columns?: string; scope?: "view" | "official" },
 ) {
-  const endpoint = { orders: "ordenes", suppliers: "proveedores", receipts: "compromisos-recepcion" }[resource];
+  const endpoint = { orders: "ordenes", suppliers: "proveedores", receipts: "recepciones-fisicas" }[resource];
   const response = await api.get<Blob>(`/purchases/${endpoint}/export/`, {
     params: { ...params, mode: params.scope, scope: undefined, file_format: "xlsx" },
     responseType: "blob",

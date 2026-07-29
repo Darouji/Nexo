@@ -1,4 +1,4 @@
-from django.db.models import Sum
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .logistics_models import (
@@ -178,14 +178,18 @@ class PurchaseShipmentSerializer(serializers.ModelSerializer):
         ]
 
     def _sum_charges(self, instance, statuses):
-        value = instance.charges.filter(
-            charge_status__in=statuses
-        ).aggregate(total=Sum("amount_clp"))["total"]
-        return value or 0
+        allowed_statuses = set(statuses)
+        return sum(
+            charge.amount_clp
+            for charge in instance.charges.all()
+            if charge.charge_status in allowed_statuses
+        )
 
+    @extend_schema_field(serializers.DecimalField(max_digits=18, decimal_places=2))
     def get_confirmed_charges_clp(self, instance):
         return self._sum_charges(instance, [ShipmentChargeStatus.CONFIRMADO])
 
+    @extend_schema_field(serializers.DecimalField(max_digits=18, decimal_places=2))
     def get_open_charges_clp(self, instance):
         return self._sum_charges(
             instance,

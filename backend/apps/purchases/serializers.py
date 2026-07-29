@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.inventory.models import InventoryLocation, Producto
+from apps.inventory.models import InventoryLocation, PendientePorRecibir, Producto
 
 from .models import (
     CostAllocation,
@@ -131,6 +131,67 @@ class PurchaseReceiptCommitmentSerializer(serializers.ModelSerializer):
         ]
 
 
+class PhysicalReceiptSerializer(serializers.ModelSerializer):
+    pending_receipt_id = serializers.IntegerField(source="id", read_only=True)
+    order_id = serializers.SerializerMethodField()
+    order_number = serializers.SerializerMethodField()
+    supplier_name = serializers.SerializerMethodField()
+    origin = serializers.SerializerMethodField()
+    origin_display = serializers.SerializerMethodField()
+    product_model = serializers.CharField(source="producto.modelo", read_only=True)
+    product_sap = serializers.CharField(source="producto.codigo_sap", read_only=True)
+    product_category = serializers.CharField(source="producto.categoria.name", read_only=True)
+    destination_location_name = serializers.CharField(
+        source="destination_location.name", read_only=True
+    )
+    committed_quantity = serializers.IntegerField(source="cantidad_original", read_only=True)
+    received_quantity = serializers.IntegerField(source="cantidad_recibida", read_only=True)
+    cancelled_quantity = serializers.IntegerField(source="cantidad_cancelada", read_only=True)
+    pending_quantity = serializers.IntegerField(source="cantidad_pendiente", read_only=True)
+    state = serializers.CharField(source="estado", read_only=True)
+    state_display = serializers.CharField(source="get_estado_display", read_only=True)
+
+    def _commitment(self, instance):
+        try:
+            return instance.purchase_commitment
+        except PurchaseReceiptCommitment.DoesNotExist:
+            return None
+
+    @extend_schema_field(serializers.IntegerField(allow_null=True))
+    def get_order_id(self, instance):
+        commitment = self._commitment(instance)
+        return commitment.order_line.order_id if commitment else None
+
+    @extend_schema_field(serializers.CharField())
+    def get_order_number(self, instance):
+        commitment = self._commitment(instance)
+        return commitment.order_line.order.number if commitment else ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_supplier_name(self, instance):
+        commitment = self._commitment(instance)
+        return commitment.order_line.order.supplier.legal_name if commitment else ""
+
+    @extend_schema_field(serializers.CharField())
+    def get_origin(self, instance):
+        return "PURCHASE_ORDER" if self._commitment(instance) else "MANUAL"
+
+    @extend_schema_field(serializers.CharField())
+    def get_origin_display(self, instance):
+        return "Orden de compra" if self._commitment(instance) else "Registro manual"
+
+    class Meta:
+        model = PendientePorRecibir
+        fields = [
+            "id", "pending_receipt_id", "order_id", "order_number", "supplier_name",
+            "origin", "origin_display", "producto", "product_model", "product_sap",
+            "product_category", "destination_location", "destination_location_name",
+            "committed_quantity", "received_quantity", "cancelled_quantity",
+            "pending_quantity", "state", "state_display", "referencia", "motivo",
+            "created_at",
+        ]
+        read_only_fields = fields
+
 class LandedCostSerializer(serializers.ModelSerializer):
     class Meta:
         model = LandedCost
@@ -209,7 +270,10 @@ class PurchaseOrderWriteSerializer(serializers.ModelSerializer):
             "exchange_rate", "exchange_rate_date", "exchange_rate_source",
             "responsible", "notes", "lines",
         ]
-        extra_kwargs = {"responsible": {"required": False}}
+        extra_kwargs = {
+            "number": {"required": False, "allow_blank": True},
+            "responsible": {"required": False},
+        }
 
     def create(self, validated_data):
         lines = validated_data.pop("lines", [])

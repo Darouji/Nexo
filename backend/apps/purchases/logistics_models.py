@@ -501,6 +501,10 @@ class ShipmentCharge(BaseModel):
         self.source_reference = str(self.source_reference or "").strip()
         if not self.description:
             raise ValidationError({"description": "La descripción del cobro es obligatoria."})
+        if len(self.currency) != 3 or not self.currency.isalpha():
+            raise ValidationError({
+                "currency": "Use un código de moneda de tres letras, por ejemplo CLP."
+            })
         if not self.reason:
             raise ValidationError({"reason": "El motivo del cobro es obligatorio."})
         if self.amount_original < 0:

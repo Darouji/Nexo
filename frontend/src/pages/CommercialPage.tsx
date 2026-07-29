@@ -26,6 +26,8 @@ import BusinessIcon from "@mui/icons-material/Business";
 import CorporateFareIcon from "@mui/icons-material/CorporateFare";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import GroupsIcon from "@mui/icons-material/Groups";
+import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
+import EditIcon from "@mui/icons-material/Edit";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
 import type { GridColDef, GridValidRowModel } from "@mui/x-data-grid";
@@ -42,6 +44,11 @@ import {
   fetchHoldings,
   fetchMineras,
   fetchSubareas,
+  updateArea,
+  updateContacto,
+  updateHolding,
+  updateMinera,
+  updateSubarea,
 } from "../services/commercialService";
 import type {
   Area,
@@ -52,6 +59,8 @@ import type {
   Subarea,
 } from "../services/commercialService";
 import { colors } from "../theme/colors";
+
+type CommercialRecord = Holding | Minera | Area | Subarea | Contacto;
 
 type CommercialTab =
   | "holdings"
@@ -97,8 +106,10 @@ type ContactoForm = {
   city: number | null;
   email: string;
   phone: string;
-  shift: string;
   shift_mode: "DIA" | "NOCHE" | "SIN_DEFINIR";
+  active_days: string;
+  rest_days: string;
+  active_cycle_start_date: string;
   observations: string;
 };
 
@@ -139,8 +150,10 @@ const emptyContactoForm: ContactoForm = {
   city: null,
   email: "",
   phone: "",
-  shift: "",
   shift_mode: "SIN_DEFINIR",
+  active_days: "",
+  rest_days: "",
+  active_cycle_start_date: "",
   observations: "",
 };
 
@@ -151,6 +164,19 @@ const tabLabels: Record<CommercialTab, string> = {
   subareas: "Subáreas",
   contactos: "Contactos",
 };
+function getContactCycleError(form: ContactoForm) {
+  const hasAnyValue = Boolean(
+    form.active_days || form.rest_days || form.active_cycle_start_date,
+  );
+  if (!hasAnyValue) return "";
+  if (!form.active_days || !form.rest_days || !form.active_cycle_start_date) {
+    return "Para calcular la disponibilidad debes completar días activos, días de descanso y fecha de inicio.";
+  }
+  if (Number(form.active_days) < 1 || Number(form.rest_days) < 1) {
+    return "Los días activos y de descanso deben ser mayores a cero.";
+  }
+  return "";
+}
 
 function getErrorMessage(error: unknown) {
   if (axios.isAxiosError(error)) {
@@ -197,6 +223,39 @@ function formatDateTime(value: string) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(date);
+}
+
+function formatContactCycle(contact: Contacto) {
+  if (!contact.active_days || !contact.rest_days || !contact.active_cycle_start_date) {
+    return "Sin ciclo definido";
+  }
+
+  const startDate = new Date(`${contact.active_cycle_start_date}T00:00:00`);
+  const startLabel = new Intl.DateTimeFormat("es-CL", {
+    dateStyle: "short",
+  }).format(startDate);
+
+  return `${contact.active_days}x${contact.rest_days} · desde ${startLabel}`;
+}
+
+function getContactAvailability(contact: Contacto, date: Date) {
+  if (
+    !contact.active_days ||
+    !contact.rest_days ||
+    !contact.active_cycle_start_date
+  ) {
+    return "SIN_DEFINIR";
+  }
+
+  const cycleStart = new Date(`${contact.active_cycle_start_date}T00:00:00`);
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const elapsedDays = Math.floor(
+    (target.getTime() - cycleStart.getTime()) / 86_400_000,
+  );
+  const cycleLength = contact.active_days + contact.rest_days;
+  const cycleDay = ((elapsedDays % cycleLength) + cycleLength) % cycleLength;
+
+  return cycleDay < contact.active_days ? "TRABAJA" : "DESCANSA";
 }
 
 function normalizeSearch(value: unknown) {
@@ -298,13 +357,121 @@ function SummaryCard({
   );
 }
 
+function ContactAvailabilityCalendar({ contact }: { contact: Contacto }) {
+  const [visibleMonth, setVisibleMonth] = useState(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  );
+  const monthNames = Array.from({ length: 12 }, (_, month) =>
+    new Intl.DateTimeFormat("es-CL", { month: "long" }).format(new Date(2026, month, 1)),
+  );
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 21 }, (_, index) => currentYear - 5 + index);
+  const monthStartOffset = (visibleMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(
+    visibleMonth.getFullYear(),
+    visibleMonth.getMonth() + 1,
+    0,
+  ).getDate();
+  const days = Array.from({ length: monthStartOffset + daysInMonth }, (_, index) =>
+    index < monthStartOffset
+      ? null
+      : new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), index - monthStartOffset + 1),
+  );
+
+  return (
+    <Stack spacing={2}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+        <TextField
+          select
+          label="Mes"
+          value={visibleMonth.getMonth()}
+          onChange={(event) =>
+            setVisibleMonth(new Date(visibleMonth.getFullYear(), Number(event.target.value), 1))
+          }
+          fullWidth
+        >
+          {monthNames.map((month, index) => (
+            <MenuItem key={month} value={index} sx={{ textTransform: "capitalize" }}>
+              {month}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          label="Año"
+          value={visibleMonth.getFullYear()}
+          onChange={(event) =>
+            setVisibleMonth(new Date(Number(event.target.value), visibleMonth.getMonth(), 1))
+          }
+          fullWidth
+        >
+          {yearOptions.map((year) => (
+            <MenuItem key={year} value={year}>{year}</MenuItem>
+          ))}
+        </TextField>
+        <Button
+          variant="outlined"
+          onClick={() => setVisibleMonth(new Date(currentYear, new Date().getMonth(), 1))}
+          sx={{ minWidth: 130 }}
+        >
+          Ir a hoy
+        </Button>
+      </Stack>
+      {!contact.active_days || !contact.rest_days || !contact.active_cycle_start_date ? (
+        <Alert severity="warning">
+          Este contacto todavía no tiene un ciclo completo. Edítalo para indicar días activos, descanso y fecha de inicio.
+        </Alert>
+      ) : (
+        <Alert severity="info">
+          Ciclo {contact.active_days}x{contact.rest_days}, modalidad {contact.shift_mode_display.toLowerCase()}.
+        </Alert>
+      )}
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 0.75 }}>
+        {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => (
+          <Typography key={day} variant="caption" align="center" sx={{ fontWeight: 800 }}>
+            {day}
+          </Typography>
+        ))}
+        {days.map((date, index) => {
+          if (!date) return <Box key={`empty-${index}`} />;
+          const availability = getContactAvailability(contact, date);
+          return (
+            <Box
+              key={date.toISOString()}
+              title={availability === "TRABAJA" ? "Trabaja" : availability === "DESCANSA" ? "Descansa" : "Sin definir"}
+              sx={{
+                minHeight: 48,
+                display: "grid",
+                placeItems: "center",
+                borderRadius: 1,
+                fontWeight: 800,
+                bgcolor: availability === "TRABAJA" ? "success.dark" : availability === "DESCANSA" ? "error.dark" : "action.disabledBackground",
+                color: availability === "SIN_DEFINIR" ? "text.secondary" : "common.white",
+              }}
+            >
+              {date.getDate()}
+            </Box>
+          );
+        })}
+      </Box>
+      <Stack direction="row" spacing={2}>
+        <Chip label="Trabaja" color="success" size="small" />
+        <Chip label="Descansa" color="error" size="small" />
+      </Stack>
+    </Stack>
+  );
+}
+
 export function CommercialPage() {
   const [activeTab, setActiveTab] = useState<CommercialTab>("mineras");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [dialogError, setDialogError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [availabilityContact, setAvailabilityContact] = useState<Contacto | null>(null);
+  const [editingRecord, setEditingRecord] = useState<{ type: CommercialTab; id: number } | null>(null);
 
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [mineras, setMineras] = useState<Minera[]>([]);
@@ -363,6 +530,61 @@ export function CommercialPage() {
     return () => window.clearTimeout(timeoutId);
   }, [loadCommercialData]);
 
+  const openEditDialog = (type: CommercialTab, record: CommercialRecord) => {
+    setEditingRecord({ type, id: record.id });
+    setCreateDialog(type);
+    setDialogError("");
+    setSuccessMessage("");
+
+    if (type === "holdings") {
+      const holding = record as Holding;
+      setHoldingForm({ name: holding.name, description: holding.description });
+    } else if (type === "mineras") {
+      const minera = record as Minera;
+      setMineraForm({
+        name: minera.name,
+        rut: minera.rut ?? "",
+        holding: minera.holding,
+        city: minera.city,
+        email: minera.email,
+        phone: minera.phone,
+        address: minera.address,
+        observations: minera.observations,
+      });
+    } else if (type === "areas") {
+      const area = record as Area;
+      setAreaForm({
+        minera: area.minera,
+        name: area.name,
+        location: area.location,
+        description: area.description,
+      });
+    } else if (type === "subareas") {
+      const subarea = record as Subarea;
+      setSubareaForm({
+        area: subarea.area,
+        name: subarea.name,
+        description: subarea.description,
+      });
+    } else {
+      const contact = record as Contacto;
+      setContactoForm({
+        first_name: contact.first_name,
+        last_name: contact.last_name,
+        position: contact.position,
+        subarea: contact.subarea,
+        city: contact.city,
+        email: contact.email,
+        phone: contact.phone,
+        shift_mode: contact.shift_mode as ContactoForm["shift_mode"],
+        active_days: contact.active_days ? String(contact.active_days) : "",
+        rest_days: contact.rest_days ? String(contact.rest_days) : "",
+        active_cycle_start_date: contact.active_cycle_start_date ?? "",
+        observations: contact.observations,
+      });
+    }
+  };
+
   const activeRows = useMemo(() => {
     if (activeTab === "holdings") return filterRows(holdings, searchTerm);
     if (activeTab === "mineras") return filterRows(mineras, searchTerm);
@@ -373,6 +595,23 @@ export function CommercialPage() {
   }, [activeTab, areas, contactos, holdings, mineras, searchTerm, subareas]);
 
   const columns = useMemo<GridColDef[]>(() => {
+    const editColumn: GridColDef = {
+      field: "edit",
+      headerName: "Editar",
+      width: 110,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <Button
+          size="small"
+          startIcon={<EditIcon />}
+          onClick={() => openEditDialog(activeTab, params.row as CommercialRecord)}
+        >
+          Editar
+        </Button>
+      ),
+    };
+
     if (activeTab === "holdings") {
       return [
         { field: "name", headerName: "Holding", minWidth: 220, flex: 1 },
@@ -397,6 +636,7 @@ export function CommercialPage() {
           width: 180,
           renderCell: (params) => formatDateTime(String(params.value || "")),
         },
+        editColumn,
       ];
     }
 
@@ -443,6 +683,7 @@ export function CommercialPage() {
             <StatusChip status={String(params.value || "")} />
           ),
         },
+        editColumn,
       ];
     }
 
@@ -477,6 +718,7 @@ export function CommercialPage() {
             <StatusChip status={String(params.value || "")} />
           ),
         },
+        editColumn,
       ];
     }
 
@@ -517,6 +759,7 @@ export function CommercialPage() {
             <StatusChip status={String(params.value || "")} />
           ),
         },
+        editColumn,
       ];
     }
 
@@ -567,9 +810,19 @@ export function CommercialPage() {
       },
       {
         field: "shift_mode_display",
-        headerName: "Turno",
+        headerName: "Modalidad",
         width: 135,
         renderCell: (params) => params.value || "Sin definir",
+      },
+
+      {
+        field: "cycle",
+        headerName: "Ciclo laboral",
+        minWidth: 200,
+        flex: 0.8,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => formatContactCycle(params.row as Contacto),
       },
       {
         field: "status",
@@ -579,19 +832,41 @@ export function CommercialPage() {
           <StatusChip status={String(params.value || "")} />
         ),
       },
+      {
+        field: "availability",
+        headerName: "Disponibilidad",
+        width: 175,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <Button
+            size="small"
+            startIcon={<CalendarMonthIcon />}
+            onClick={() => setAvailabilityContact(params.row as Contacto)}
+          >
+            Ver calendario
+          </Button>
+        ),
+      },
+      editColumn,
     ];
   }, [activeTab]);
 
   const openCreateDialog = (type: CommercialTab) => {
+    setEditingRecord(null);
+    resetForms();
     setCreateDialog(type);
     setErrorMessage("");
     setSuccessMessage("");
+    setDialogError("");
   };
 
   const closeCreateDialog = () => {
     if (saving) return;
 
     setCreateDialog(null);
+    setEditingRecord(null);
+    setDialogError("");
   };
 
   const resetForms = () => {
@@ -620,7 +895,11 @@ export function CommercialPage() {
     }
 
     if (createDialog === "contactos") {
-      return Boolean(contactoForm.subarea && contactoForm.first_name.trim());
+      return Boolean(
+        contactoForm.subarea &&
+          contactoForm.first_name.trim() &&
+          !getContactCycleError(contactoForm)
+      );
     }
 
     return false;
@@ -631,20 +910,23 @@ export function CommercialPage() {
 
     try {
       setSaving(true);
+      setDialogError("");
       setErrorMessage("");
       setSuccessMessage("");
+      const isEditing = editingRecord?.type === createDialog;
 
       if (createDialog === "holdings") {
-        await createHolding({
+        const payload = {
           name: holdingForm.name.trim(),
           description: holdingForm.description.trim(),
-        });
-
-        setSuccessMessage("Holding creado correctamente.");
+        };
+        if (isEditing) await updateHolding(editingRecord.id, payload);
+        else await createHolding(payload);
+        setSuccessMessage(isEditing ? "Holding actualizado correctamente." : "Holding creado correctamente.");
       }
 
       if (createDialog === "mineras") {
-        await createMinera({
+        const payload = {
           name: mineraForm.name.trim(),
           rut: mineraForm.rut.trim() || null,
           holding: mineraForm.holding,
@@ -653,34 +935,37 @@ export function CommercialPage() {
           phone: mineraForm.phone.trim(),
           address: mineraForm.address.trim(),
           observations: mineraForm.observations.trim(),
-        });
-
-        setSuccessMessage("Minera creada correctamente.");
+        };
+        if (isEditing) await updateMinera(editingRecord.id, payload);
+        else await createMinera(payload);
+        setSuccessMessage(isEditing ? "Minera actualizada correctamente." : "Minera creada correctamente.");
       }
 
       if (createDialog === "areas") {
-        await createArea({
+        const payload = {
           minera: Number(areaForm.minera),
           name: areaForm.name.trim(),
           location: areaForm.location.trim(),
           description: areaForm.description.trim(),
-        });
-
-        setSuccessMessage("Área creada correctamente.");
+        };
+        if (isEditing) await updateArea(editingRecord.id, payload);
+        else await createArea(payload);
+        setSuccessMessage(isEditing ? "Área actualizada correctamente." : "Área creada correctamente.");
       }
 
       if (createDialog === "subareas") {
-        await createSubarea({
+        const payload = {
           area: Number(subareaForm.area),
           name: subareaForm.name.trim(),
           description: subareaForm.description.trim(),
-        });
-
-        setSuccessMessage("Subárea creada correctamente.");
+        };
+        if (isEditing) await updateSubarea(editingRecord.id, payload);
+        else await createSubarea(payload);
+        setSuccessMessage(isEditing ? "Subárea actualizada correctamente." : "Subárea creada correctamente.");
       }
 
       if (createDialog === "contactos") {
-        await createContacto({
+        const payload = {
           first_name: contactoForm.first_name.trim(),
           last_name: contactoForm.last_name.trim(),
           position: contactoForm.position.trim(),
@@ -688,24 +973,27 @@ export function CommercialPage() {
           city: contactoForm.city,
           email: contactoForm.email.trim(),
           phone: contactoForm.phone.trim(),
-          shift: contactoForm.shift.trim(),
           shift_mode: contactoForm.shift_mode,
+          active_days: contactoForm.active_days ? Number(contactoForm.active_days) : null,
+          rest_days: contactoForm.rest_days ? Number(contactoForm.rest_days) : null,
+          active_cycle_start_date: contactoForm.active_cycle_start_date || null,
           observations: contactoForm.observations.trim(),
-        });
-
-        setSuccessMessage("Contacto creado correctamente.");
+        };
+        if (isEditing) await updateContacto(editingRecord.id, payload);
+        else await createContacto(payload);
+        setSuccessMessage(isEditing ? "Contacto actualizado correctamente." : "Contacto creado correctamente.");
       }
 
       setCreateDialog(null);
+      setEditingRecord(null);
       resetForms();
       await loadCommercialData();
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
+      setDialogError(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
   };
-
   const renderCreateDialogContent = () => {
     if (createDialog === "holdings") {
       return (
@@ -1100,19 +1388,78 @@ export function CommercialPage() {
             </TextField>
           </Stack>
 
-          <TextField
-            label="Turno"
-            value={contactoForm.shift}
-            onChange={(event) =>
-              setContactoForm((current) => ({
-                ...current,
-                shift: event.target.value,
-              }))
-            }
-            fullWidth
-            placeholder="Ejemplo: 7x7, 4x3, administrativo"
-          />
 
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
+              gap: 2,
+            }}
+          >
+            <TextField
+              label="Días activos"
+              type="number"
+              value={contactoForm.active_days}
+              onChange={(event) =>
+                setContactoForm((current) => ({
+                  ...current,
+                  active_days: event.target.value,
+                }))
+              }
+              error={Boolean(
+                (contactoForm.rest_days || contactoForm.active_cycle_start_date) &&
+                  (!contactoForm.active_days || Number(contactoForm.active_days) < 1),
+              )}
+              helperText="Junto a los días de descanso define el ciclo laboral."
+              slotProps={{ htmlInput: { min: 1, max: 365 } }}
+            />
+            <TextField
+              label="Días de descanso"
+              type="number"
+              value={contactoForm.rest_days}
+              onChange={(event) =>
+                setContactoForm((current) => ({
+                  ...current,
+                  rest_days: event.target.value,
+                }))
+              }
+              error={Boolean(
+                (contactoForm.active_days || contactoForm.active_cycle_start_date) &&
+                  (!contactoForm.rest_days || Number(contactoForm.rest_days) < 1),
+              )}
+              helperText={
+                contactoForm.active_days && !contactoForm.rest_days
+                  ? "Completa los días de descanso."
+                  : undefined
+              }
+              slotProps={{ htmlInput: { min: 1, max: 365 } }}
+            />
+            <TextField
+              label="Inicio del primer ciclo activo"
+              type="date"
+              value={contactoForm.active_cycle_start_date}
+              onChange={(event) =>
+                setContactoForm((current) => ({
+                  ...current,
+                  active_cycle_start_date: event.target.value,
+                }))
+              }
+              error={Boolean(
+                (contactoForm.active_days || contactoForm.rest_days) &&
+                  !contactoForm.active_cycle_start_date,
+              )}
+              helperText={
+                (contactoForm.active_days || contactoForm.rest_days) &&
+                !contactoForm.active_cycle_start_date
+                  ? "Indica cuándo comienza el ciclo activo."
+                  : undefined
+              }
+              slotProps={{ inputLabel: { shrink: true } }}
+            />          </Box>
+
+          {getContactCycleError(contactoForm) ? (
+            <Alert severity="warning">{getContactCycleError(contactoForm)}</Alert>
+          ) : null}
           <TextField
             label="Observaciones"
             value={contactoForm.observations}
@@ -1302,17 +1649,50 @@ export function CommercialPage() {
       />
 
       <Dialog
+        open={Boolean(availabilityContact)}
+        onClose={() => setAvailabilityContact(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          Disponibilidad de {availabilityContact?.full_name ?? "contacto"}
+        </DialogTitle>
+        <DialogContent>
+          {availabilityContact ? <ContactAvailabilityCalendar contact={availabilityContact} /> : null}
+        </DialogContent>
+        <DialogActions>
+          {availabilityContact ? (
+            <Button
+              startIcon={<EditIcon />}
+              onClick={() => {
+                openEditDialog("contactos", availabilityContact);
+                setAvailabilityContact(null);
+              }}
+            >
+              Editar contacto y turno
+            </Button>
+          ) : null}
+          <Button onClick={() => setAvailabilityContact(null)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
         open={Boolean(createDialog)}
         onClose={closeCreateDialog}
         fullWidth
         maxWidth="md"
       >
         <DialogTitle>
-          Crear{" "}
-          {createDialog ? tabLabels[createDialog].slice(0, -1) : "registro"}
+          {editingRecord
+            ? `Editar ${tabLabels[editingRecord.type].slice(0, -1).toLowerCase()}`
+            : `Crear ${createDialog ? tabLabels[createDialog].slice(0, -1).toLowerCase() : "registro"}`}
         </DialogTitle>
 
-        <DialogContent>{renderCreateDialogContent()}</DialogContent>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {dialogError ? <Alert severity="error">{dialogError}</Alert> : null}
+            {renderCreateDialogContent()}
+          </Stack>
+        </DialogContent>
 
         <DialogActions>
           <Button onClick={closeCreateDialog} disabled={saving}>
@@ -1324,7 +1704,7 @@ export function CommercialPage() {
             onClick={() => void handleCreate()}
             disabled={saving || !canSaveCreate()}
           >
-            {saving ? "Guardando..." : "Guardar"}
+            {saving ? "Guardando..." : editingRecord ? "Guardar cambios" : "Guardar"}
           </Button>
         </DialogActions>
       </Dialog>

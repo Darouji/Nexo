@@ -256,6 +256,31 @@ export async function createContacto(payload: CreateContactoPayload) {
   return response.data;
 }
 
+export async function updateHolding(id: number, payload: CreateHoldingPayload) {
+  const response = await api.patch<Holding>(`/commercial/holdings/${id}/`, payload);
+  return response.data;
+}
+
+export async function updateMinera(id: number, payload: CreateMineraPayload) {
+  const response = await api.patch<Minera>(`/commercial/mineras/${id}/`, payload);
+  return response.data;
+}
+
+export async function updateArea(id: number, payload: CreateAreaPayload) {
+  const response = await api.patch<Area>(`/commercial/areas/${id}/`, payload);
+  return response.data;
+}
+
+export async function updateSubarea(id: number, payload: CreateSubareaPayload) {
+  const response = await api.patch<Subarea>(`/commercial/subareas/${id}/`, payload);
+  return response.data;
+}
+
+export async function updateContacto(id: number, payload: CreateContactoPayload) {
+  const response = await api.patch<Contacto>(`/commercial/contactos/${id}/`, payload);
+  return response.data;
+}
+
 /**
  * Alias temporales para evitar romper imports antiguos si quedó algún archivo usando nombres previos.
  * La UI nueva debe preferir los nombres Holding, Minera, Area, Subarea y Contacto.

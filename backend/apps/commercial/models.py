@@ -430,6 +430,30 @@ class Contacto(BaseModel):
                 }
             )
 
+        cycle_values = (
+            self.active_days,
+            self.rest_days,
+            self.active_cycle_start_date,
+        )
+        if any(value is not None for value in cycle_values):
+            cycle_errors = {}
+            if self.active_days is None:
+                cycle_errors["active_days"] = "Indica los días activos del ciclo."
+            elif self.active_days < 1 or self.active_days > 365:
+                cycle_errors["active_days"] = "Los días activos deben estar entre 1 y 365."
+
+            if self.rest_days is None:
+                cycle_errors["rest_days"] = "Indica los días de descanso del ciclo."
+            elif self.rest_days < 1 or self.rest_days > 365:
+                cycle_errors["rest_days"] = "Los días de descanso deben estar entre 1 y 365."
+
+            if self.active_cycle_start_date is None:
+                cycle_errors["active_cycle_start_date"] = (
+                    "Indica la primera fecha en que comienza el ciclo activo."
+                )
+
+            if cycle_errors:
+                raise ValidationError(cycle_errors)
     def save(self, *args, **kwargs):
         old_subarea_id = None
 

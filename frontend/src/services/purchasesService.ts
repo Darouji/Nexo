@@ -42,6 +42,8 @@ export type PurchaseOrder = {
   issue_date: string;
   expected_date: string | null;
   supplier_amount: number;
+  tax_amount: number;
+  total_original: number;
   total_clp: number;
   notes: string;
   pending_units_total: number;
@@ -107,6 +109,7 @@ export type PurchaseListParams = {
 export type PurchaseOrderPayload = {
   number: string;
   supplier: number;
+  tax_rate: number;
   currency: PurchaseCurrency;
   exchange_rate: number | null;
   issue_date: string;
@@ -130,7 +133,8 @@ type ApiOrder = {
   id: number; number: string; supplier: number; supplier_name: string;
   order_date: string; expected_date: string | null; currency: PurchaseCurrency;
   exchange_rate: number | string; state: PurchaseOrderStatus;
-  subtotal_original: number | string; total_clp: number | string; notes: string;
+  subtotal_original: number | string; tax_total_original: number | string;
+  total_original: number | string; total_clp: number | string; notes: string;
   lines: ApiLine[]; receipt_commitments?: ApiCommitment[];
 };
 type ApiCommitment = {
@@ -160,6 +164,7 @@ function mapOrder(value: ApiOrder): PurchaseOrder {
     supplier_name: value.supplier_name, status: value.state, currency: value.currency,
     exchange_rate: Number(value.exchange_rate), issue_date: value.order_date,
     expected_date: value.expected_date, supplier_amount: Number(value.subtotal_original),
+    tax_amount: Number(value.tax_total_original), total_original: Number(value.total_original),
     total_clp: Number(value.total_clp), notes: value.notes,
     pending_units_total: (value.receipt_commitments || []).reduce((sum, item) => sum + item.pending_quantity, 0),
     lines: value.lines.map((line) => ({
@@ -233,7 +238,7 @@ export async function createPurchaseOrder(payload: PurchaseOrderPayload, idempot
       description: line.description,
       quantity: line.quantity,
       unit_price_original: line.unit_price,
-      tax_rate: 0,
+      tax_rate: payload.tax_rate,
       destination_location: line.destination_location,
     })),
   }, { headers: { "Idempotency-Key": idempotencyKey } });

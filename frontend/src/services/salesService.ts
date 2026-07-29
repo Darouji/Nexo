@@ -165,6 +165,9 @@ export type SaleListParams = {
   validation_summary?: SaleValidationSummary;
   has_factura?: boolean;
   has_guia?: boolean;
+  grid_filters?: string;
+  page?: number;
+  page_size?: number;
 };
 
 export type CreateSaleLinePayload = {
@@ -266,9 +269,28 @@ function buildSaleListParams(params: SaleListParams = {}) {
     validation_summary: params.validation_summary || undefined,
     has_factura: toBooleanParam(params.has_factura),
     has_guia: toBooleanParam(params.has_guia),
+    grid_filters: params.grid_filters || undefined,
+    page: params.page,
+    page_size: params.page_size,
   };
 }
 
+export async function fetchSalesPage(params: SaleListParams = {}) {
+  const response = await api.get<SaleListResponse>("/sales/ventas/", {
+    params: buildSaleListParams(params),
+  });
+
+  if (Array.isArray(response.data)) {
+    return {
+      count: response.data.length,
+      next: null,
+      previous: null,
+      results: response.data,
+    } satisfies PaginatedResponse<Sale>;
+  }
+
+  return response.data;
+}
 export async function fetchSales(params: SaleListParams = {}) {
   const response = await api.get<SaleListResponse>("/sales/ventas/", {
     params: buildSaleListParams(params),

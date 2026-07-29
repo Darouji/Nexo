@@ -43,6 +43,7 @@ import {
   createEmptyPurchaseOrderForm,
   PURCHASE_STATUSES,
   toPurchaseOrderPayload,
+  purchaseTaxRateForCountry,
   validatePurchaseOrderForm,
   type PurchaseOrderForm,
 } from "./purchaseModels";
@@ -232,8 +233,10 @@ export function PurchasesWorkspace() {
     if (Object.keys(errors).length) return;
     setSaving(true);
     try {
+      const selectedSupplier = suppliers.find((supplier) => supplier.id === Number(form.supplier));
+      const taxRate = purchaseTaxRateForCountry(selectedSupplier?.country);
       await createPurchaseOrder(
-        toPurchaseOrderPayload(form),
+        toPurchaseOrderPayload(form, taxRate),
         creationKey.current,
       );
       setDialogOpen(false);

@@ -109,8 +109,18 @@ export function OrderDetailDialog({
           </Alert>
           <Typography>
             <strong>Fecha:</strong> {order.issue_date} · <strong>Moneda:</strong>{" "}
-            {order.currency} · <strong>Total CLP:</strong>{" "}
-            {Number(order.total_clp).toLocaleString("es-CL")}
+            {order.currency}
+          </Typography>
+          <Typography>
+            <strong>Monto neto:</strong>{" "}
+            {Number(order.supplier_amount).toLocaleString("es-CL")} ·{" "}
+            <strong>IVA (19%):</strong>{" "}
+            {Number(order.tax_amount).toLocaleString("es-CL")} ·{" "}
+            <strong>Total con IVA:</strong>{" "}
+            {Number(order.total_original).toLocaleString("es-CL")}
+            {order.currency === "USD" ? (
+              <> · <strong>Equivalente CLP:</strong>{" "}{Number(order.total_clp).toLocaleString("es-CL")}</>
+            ) : null}
           </Typography>
           <Stack spacing={0.75}>
             <Typography sx={{ fontWeight: 900 }}>Líneas de la orden</Typography>

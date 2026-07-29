@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  InputAdornment,
   Stack,
   TextField,
   Typography,
@@ -22,9 +21,13 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
 import InfoIcon from "@mui/icons-material/Info";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SearchIcon from "@mui/icons-material/Search";
-import type { GridColDef } from "@mui/x-data-grid";
-import { SmartDataGrid } from "../components/SmartDataGrid";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { PageHeader } from "../components/PageHeader";
+import { SectionCard } from "../components/SectionCard";
+import { MetricCard } from "../components/MetricCard";
+import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
+import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
+import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
 import { getApiErrorMessage as getErrorMessage } from "../services/api";
 import {
   fetchAreas,
@@ -41,7 +44,7 @@ import {
   annulSale,
   concretarSale,
   createSale,
-  fetchSales,
+  fetchSalesPage,
   fetchSalesSummary,
 } from "../services/salesService";
 import type {
@@ -228,6 +231,17 @@ export function SalesPage() {
   const [contactos, setContactos] = useState<Contacto[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [saleStatuses, setSaleStatuses] = useState<string[]>([]);
+  const [validationSummaries, setValidationSummaries] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
+  const [sortModel, setSortModel] = useState<SerkanGridSortModel>({ field: "fecha_venta", direction: "desc" });
+  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [filterResetKey, setFilterResetKey] = useState(0);
+  const [salesCount, setSalesCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [savingSale, setSavingSale] = useState(false);
   const [updatingSaleId, setUpdatingSaleId] = useState<number | null>(null);
@@ -244,41 +258,43 @@ export function SalesPage() {
     useState<DetailDialogState>(emptyDetailDialog);
   const [annulDialog, setAnnulDialog] =
     useState<AnnulDialogState>(emptyAnnulDialog);
+  const [detailPagination, setDetailPagination] = useState({ page: 0, pageSize: 25 });
+  const [alertPagination, setAlertPagination] = useState({ page: 0, pageSize: 25 });
 
-  const loadSales = async (search = searchTerm) => {
+  const loadSales = async (options?: { search?: string; statuses?: string[]; validations?: string[]; from?: string; to?: string; page?: number; pageSize?: number; sort?: SerkanGridSortModel; filters?: SerkanGridFilter[] }) => {
+    const querySearch = options?.search ?? appliedSearch;
+    const queryStatuses = options?.statuses ?? saleStatuses;
+    const queryValidations = options?.validations ?? validationSummaries;
+    const queryFrom = options?.from ?? dateFrom;
+    const queryTo = options?.to ?? dateTo;
+    const queryPage = options?.page ?? pagination.page;
+    const queryPageSize = options?.pageSize ?? pagination.pageSize;
+    const querySort = options?.sort === undefined ? sortModel : options.sort;
+    const queryFilters = options?.filters ?? columnFilters;
+    const params = {
+      search: querySearch, sale_status: queryStatuses,
+      validation_summary: queryValidations.join(",") || undefined,
+      fecha_desde: queryFrom || undefined, fecha_hasta: queryTo || undefined,
+      ordering: querySort ? `${querySort.direction === "desc" ? "-" : ""}${querySort.field}` : "-fecha_venta,-created_at",
+      grid_filters: queryFilters.length ? JSON.stringify(queryFilters) : undefined,
+      page: queryPage + 1, page_size: queryPageSize,
+    };
     try {
-      setLoading(true);
-      setErrorMessage("");
-
-      const [data, summaryData] = await Promise.all([
-        fetchSales({
-          search,
-          ordering: "-fecha_venta,-created_at",
-        }),
-        fetchSalesSummary({
-          search,
-          ordering: "-fecha_venta,-created_at",
-        }),
-      ]);
-
-      setSales(data);
-      setSummary(summaryData);
-
-      setSales(data);
-    } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
+      setLoading(true); setErrorMessage("");
+      const [pageData, summaryData] = await Promise.all([fetchSalesPage(params), fetchSalesSummary(params)]);
+      setSales(pageData.results); setSalesCount(pageData.count); setSummary(summaryData);
+    } catch (error: unknown) { setErrorMessage(getErrorMessage(error)); }
+    finally { setLoading(false); }
   };
-
   useEffect(() => {
     let isMounted = true;
 
     Promise.all([
-      fetchSales({
+      fetchSalesPage({
         search: "",
         ordering: "-fecha_venta,-created_at",
+        page: 1,
+        page_size: 25,
       }),
       fetchSalesSummary({
         search: "",
@@ -305,7 +321,8 @@ export function SalesPage() {
         ]) => {
           if (!isMounted) return;
 
-          setSales(salesData);
+          setSales(salesData.results);
+          setSalesCount(salesData.count);
           setSummary(summaryData);
           setProducts(productsData);
           setMineras(minerasData);
@@ -496,8 +513,10 @@ export function SalesPage() {
         `Venta #${createdSale.id} ingresada correctamente. Stock y alertas fueron procesados por el backend.`,
       );
       setSaleDialogOpen(false);
-      await loadSales("");
+      await loadSales({ search: "", page: 0 });
       setSearchTerm("");
+      setAppliedSearch("");
+      setPagination((current) => ({ ...current, page: 0 }));
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -514,7 +533,7 @@ export function SalesPage() {
       await concretarSale(sale.id);
 
       setSuccessMessage(`Venta #${sale.id} concretada correctamente.`);
-      await loadSales(searchTerm);
+      await loadSales({ search: appliedSearch });
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -546,7 +565,7 @@ export function SalesPage() {
 
       setSuccessMessage(`Venta #${annulDialog.sale.id} anulada correctamente.`);
       setAnnulDialog(emptyAnnulDialog);
-      await loadSales(searchTerm);
+      await loadSales({ search: appliedSearch });
     } catch (error: unknown) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -554,273 +573,58 @@ export function SalesPage() {
     }
   };
 
-  const columns: GridColDef[] = [
-    {
-      field: "fecha_venta",
-      headerName: "Fecha de emisión factura",
-      width: 210,
-      renderCell: (params) => formatDate(String(params.value || "")),
-    },
-    {
-      field: "orden_compra",
-      headerName: "Orden de compra",
-      minWidth: 160,
-      flex: 0.8,
-      renderCell: (params) => params.value || "Sin OC",
-    },
-    {
-      field: "minera_name",
-      headerName: "Minera",
-      minWidth: 190,
-      flex: 1,
-      renderCell: (params) => params.value || "Sin minera",
-    },
-    {
-      field: "factura_numero",
-      headerName: "Factura",
-      minWidth: 130,
-      flex: 0.7,
-      renderCell: (params) => params.value || "Sin factura",
-    },
-    {
-      field: "numero_guia_hes",
-      headerName: "Guía / HES",
-      minWidth: 140,
-      flex: 0.7,
-      renderCell: (params) => params.value || "Sin guía/HES",
-    },
-    {
-      field: "valor_neto",
-      headerName: "Monto neto",
-      width: 150,
-      type: "number",
-      renderCell: (params) => formatCLP(String(params.value || 0)),
-    },
-    {
-      field: "iva",
-      headerName: "IVA (19%)",
-      width: 140,
-      type: "number",
-      renderCell: (params) => formatCLP(String(params.value || 0)),
-    },
-    {
-      field: "total",
-      headerName: "Total con IVA",
-      width: 165,
-      type: "number",
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 900 }}>
-          {formatCLP(String(params.value || 0))}
-        </Typography>
-      ),
-    },
-    {
-      field: "sale_status",
-      headerName: "Estado",
-      width: 150,
-      renderCell: (params) => {
-        const sale = params.row as Sale;
-        const color = getSaleStatusColor(sale.sale_status);
-
-        return (
-          <Chip
-            label={sale.sale_status_display || sale.sale_status}
-            size="small"
-            sx={{
-              color,
-              bgcolor: colors.surface.soft,
-              borderColor: color,
-              border: "1px solid",
-              fontWeight: 800,
-            }}
-          />
-        );
-      },
-    },
-    {
-      field: "validation_summary",
-      headerName: "Validación",
-      width: 145,
-      renderCell: (params) => {
-        const summary = String(params.value || "OK") as SaleValidationSummary;
-        const color = getValidationColor(summary);
-
-        return (
-          <Chip
-            label={getValidationLabel(summary)}
-            size="small"
-            sx={{
-              color,
-              bgcolor: colors.surface.soft,
-              borderColor: color,
-              border: "1px solid",
-              fontWeight: 800,
-            }}
-          />
-        );
-      },
-    },
-    {
-      field: "stock_descontado",
-      headerName: "Stock",
-      width: 125,
-      renderCell: (params) => {
-        const discounted = Boolean(params.value);
-
-        return (
-          <Chip
-            label={discounted ? "Descontado" : "No"}
-            size="small"
-            sx={{
-              color: discounted ? colors.status.success : colors.text.muted,
-              bgcolor: colors.surface.soft,
-              borderColor: discounted
-                ? colors.status.success
-                : colors.border.medium,
-              border: "1px solid",
-              fontWeight: 800,
-            }}
-          />
-        );
-      },
-    },
-    {
-      field: "actions",
-      headerName: "Acciones",
-      width: 360,
-      sortable: false,
-      filterable: false,
-      renderCell: (params) => {
-        const sale = params.row as Sale;
-        const isUpdating = updatingSaleId === sale.id;
-        const canConcretar = sale.sale_status === "INGRESADA";
-        const canAnular = sale.sale_status !== "ANULADA";
-
-        return (
-          <Stack direction="row" spacing={1}>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<InfoIcon />}
-              onClick={() =>
-                setDetailDialog({
-                  open: true,
-                  sale,
-                })
-              }
-            >
-              Detalle
-            </Button>
-
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<CheckCircleIcon />}
-              disabled={!canConcretar || isUpdating}
-              onClick={() => void handleConcretarSale(sale)}
-            >
-              Concretar
-            </Button>
-
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<BlockIcon />}
-              disabled={!canAnular || isUpdating}
-              onClick={() => handleOpenAnnulDialog(sale)}
-            >
-              Anular
-            </Button>
-          </Stack>
-        );
-      },
-    },
+  const columns: ColDef<Sale>[] = [
+    { field: "fecha_venta", headerName: "Fecha de emisión", width: 165, valueFormatter: (p) => formatDate(String(p.value || "")) },
+    { field: "orden_compra", headerName: "Orden de compra", minWidth: 160, flex: 0.8, valueFormatter: (p) => String(p.value || "Sin OC") },
+    { field: "minera_name", headerName: "Minera", minWidth: 190, flex: 1, valueFormatter: (p) => String(p.value || "Sin minera") },
+    { field: "factura_numero", headerName: "Factura", minWidth: 130, flex: 0.7, valueFormatter: (p) => String(p.value || "Sin factura") },
+    { field: "numero_guia_hes", headerName: "Guía / HES", minWidth: 140, flex: 0.7, valueFormatter: (p) => String(p.value || "Sin guía/HES") },
+    { field: "valor_neto", headerName: "Monto neto", width: 150, filter: "agNumberColumnFilter", valueFormatter: (p) => formatCLP(String(p.value || 0)) },
+    { field: "iva", headerName: "IVA (19%)", width: 140, filter: "agNumberColumnFilter", valueFormatter: (p) => formatCLP(String(p.value || 0)) },
+    { field: "total", headerName: "Total con IVA", width: 165, filter: "agNumberColumnFilter", valueFormatter: (p) => formatCLP(String(p.value || 0)), cellStyle: { fontWeight: 900 } },
+    { field: "sale_status", headerName: "Estado", width: 150, filter: "agTextColumnFilter", cellRenderer: (p: ICellRendererParams<Sale>) => {
+      const sale = p.data; if (!sale) return null; const color = getSaleStatusColor(sale.sale_status);
+      return <Chip label={sale.sale_status_display || sale.sale_status} size="small" sx={{ color, bgcolor: colors.surface.soft, borderColor: color, border: "1px solid", fontWeight: 800 }} />;
+    } },
+    { field: "validation_summary", headerName: "Validación", width: 145, sortable: false, filter: false, cellRenderer: (p: ICellRendererParams<Sale>) => {
+      const value = String(p.value || "OK") as SaleValidationSummary; const color = getValidationColor(value);
+      return <Chip label={getValidationLabel(value)} size="small" sx={{ color, bgcolor: colors.surface.soft, borderColor: color, border: "1px solid", fontWeight: 800 }} />;
+    } },
+    { field: "stock_descontado", headerName: "Stock", width: 125, filter: false, cellRenderer: (p: ICellRendererParams<Sale>) => {
+      const discounted = Boolean(p.value);
+      return <Chip label={discounted ? "Descontado" : "No"} size="small" sx={{ color: discounted ? colors.status.success : colors.text.muted, bgcolor: colors.surface.soft, borderColor: discounted ? colors.status.success : colors.border.medium, border: "1px solid", fontWeight: 800 }} />;
+    } },
+    { colId: "actions", headerName: "Acciones", width: 350, sortable: false, filter: false, pinned: "right", cellRenderer: (p: ICellRendererParams<Sale>) => {
+      const sale = p.data; if (!sale) return null; const isUpdating = updatingSaleId === sale.id;
+      return <Stack direction="row" spacing={1} sx={{ alignItems: "center", height: "100%" }}>
+        <Button size="small" variant="outlined" startIcon={<InfoIcon />} onClick={() => { setDetailPagination({ page: 0, pageSize: 25 }); setAlertPagination({ page: 0, pageSize: 25 }); setDetailDialog({ open: true, sale }); }}>Detalle</Button>
+        <Button size="small" variant="outlined" startIcon={<CheckCircleIcon />} disabled={sale.sale_status !== "INGRESADA" || isUpdating} onClick={() => void handleConcretarSale(sale)}>Concretar</Button>
+        <Button size="small" variant="outlined" startIcon={<BlockIcon />} disabled={sale.sale_status === "ANULADA" || isUpdating} onClick={() => handleOpenAnnulDialog(sale)}>Anular</Button>
+      </Stack>;
+    } },
+  ];
+  const detailColumns: ColDef<SaleDetail>[] = [
+    { field: "producto_categoria", headerName: "Categoría", minWidth: 160, flex: 0.8 },
+    { field: "producto_modelo", headerName: "Producto", minWidth: 220, flex: 1.2 },
+    { field: "codigo_sap", headerName: "Código SAP", minWidth: 130, flex: 0.7, valueFormatter: (params) => String(params.value || "Sin código") },
+    { field: "cantidad", headerName: "Cantidad", width: 120, cellStyle: { textAlign: "right" } },
+    { field: "valor_unitario", headerName: "Valor unitario neto", width: 180, valueFormatter: (params) => formatCLP(String(params.value || 0)) },
+    { field: "valor_total", headerName: "Subtotal neto", width: 160, valueFormatter: (params) => formatCLP(String(params.value || 0)), cellStyle: { fontWeight: 900 } },
+    { field: "controla_stock_snapshot", headerName: "Control stock", width: 140, valueFormatter: (params) => params.value ? "Sí" : "No" },
   ];
 
-  const detailColumns: GridColDef[] = [
-    {
-      field: "producto_categoria",
-      headerName: "Categoría",
-      minWidth: 160,
-      flex: 0.8,
-    },
-    {
-      field: "producto_modelo",
-      headerName: "Producto",
-      minWidth: 220,
-      flex: 1.2,
-    },
-    {
-      field: "codigo_sap",
-      headerName: "Código SAP",
-      minWidth: 130,
-      flex: 0.7,
-      renderCell: (params) => params.value || "Sin código",
-    },
-    {
-      field: "cantidad",
-      headerName: "Cantidad",
-      width: 120,
-      type: "number",
-    },
-    {
-      field: "valor_unitario",
-      headerName: "Valor unitario neto",
-      width: 180,
-      type: "number",
-      renderCell: (params) => formatCLP(String(params.value || 0)),
-    },
-    {
-      field: "valor_total",
-      headerName: "Subtotal neto",
-      width: 160,
-      type: "number",
-      renderCell: (params) => (
-        <Typography sx={{ fontWeight: 900 }}>
-          {formatCLP(String(params.value || 0))}
-        </Typography>
-      ),
-    },
-    {
-      field: "controla_stock_snapshot",
-      headerName: "Control stock",
-      width: 140,
-      renderCell: (params) => (params.value ? "Sí" : "No"),
-    },
+  const alertColumns: ColDef<SaleAlert>[] = [
+    { field: "code_display", headerName: "Alerta", minWidth: 190, flex: 1, valueFormatter: (params) => String(params.value || "Alerta") },
+    { field: "message", headerName: "Mensaje", minWidth: 240, flex: 1.2 },
+    { field: "severity_display", headerName: "Severidad", width: 140, valueFormatter: (params) => String(params.value || "Sin severidad") },
+    { field: "is_active", headerName: "Activa", width: 110, valueFormatter: (params) => params.value ? "Sí" : "No" },
   ];
-
-  const alertColumns: GridColDef[] = [
-    {
-      field: "code_display",
-      headerName: "Alerta",
-      minWidth: 190,
-      flex: 1,
-      renderCell: (params) => params.value || "Alerta",
-    },
-    {
-      field: "message",
-      headerName: "Mensaje",
-      minWidth: 240,
-      flex: 1.2,
-    },
-    {
-      field: "severity_display",
-      headerName: "Severidad",
-      width: 140,
-      renderCell: (params) => params.value || "Sin severidad",
-    },
-    {
-      field: "is_active",
-      headerName: "Activa",
-      width: 110,
-      renderCell: (params) => (params.value ? "Sí" : "No"),
-    },
-  ];
-
   const selectedSale = detailDialog.sale;
   const selectedDetails: SaleDetail[] = selectedSale?.detalles ?? [];
   const selectedAlerts: SaleAlert[] =
     selectedSale?.alerts.filter((alert) => alert.is_active) ?? [];
+  const visibleDetails = selectedDetails.slice(detailPagination.page * detailPagination.pageSize, (detailPagination.page + 1) * detailPagination.pageSize);
+  const visibleAlerts = selectedAlerts.slice(alertPagination.page * alertPagination.pageSize, (alertPagination.page + 1) * alertPagination.pageSize);
   const totalSalesCount = summary?.ventas.total ?? sales.length;
   const activeSalesCount =
     summary?.ventas.vigentes ??
@@ -839,162 +643,14 @@ export function SalesPage() {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        spacing={2}
-        sx={{
-          alignItems: { xs: "flex-start", md: "center" },
-          justifyContent: "space-between",
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{ color: colors.text.primary, fontWeight: 900 }}
-          >
-            Ventas / Ingresos
-          </Typography>
+      <PageHeader title="Ventas / Ingresos" subtitle="Registro comercial, documentos, alertas y descuento de inventario en un único flujo." eyebrow="Gestión comercial" icon={<CheckCircleIcon />} tone={colors.modules.sales} />
 
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Módulo conectado al backend: ventas reales, totales calculados,
-            alertas comerciales, detalle de líneas, descuento Kardex y acciones
-            controladas.
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleOpenCreateSale}
-            disabled={loading}
-          >
-            Nueva venta
-          </Button>
-
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => void loadSales()}
-            disabled={loading}
-          >
-            Actualizar
-          </Button>
-        </Stack>
-      </Stack>
-
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, 1fr)",
-            lg: "repeat(4, 1fr)",
-          },
-          gap: 2,
-        }}
-      >
-        {[
-          {
-            title: "Ventas registradas",
-            value: String(totalSalesCount),
-            helper: `${activeSalesCount} vigentes`,
-          },
-          {
-            title: "Monto vigente",
-            value: formatCLP(totalSalesAmount),
-            helper: "Excluye ventas anuladas",
-          },
-          {
-            title: "Documentos pendientes",
-            value: String(missingDocumentsCount),
-            helper: "Facturas, guías o HES faltantes",
-          },
-          {
-            title: "Alertas activas",
-            value: String(activeAlertsCount),
-            helper: `${summary?.alertas.bloqueantes ?? 0} bloqueantes`,
-          },
-        ].map((card) => (
-          <Card
-            key={card.title}
-            sx={{
-              p: 2,
-              bgcolor: colors.background.paper,
-              border: `1px solid ${colors.border.light}`,
-            }}
-          >
-            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-              {card.title}
-            </Typography>
-
-            <Typography
-              variant="h5"
-              sx={{ color: colors.text.primary, fontWeight: 900 }}
-            >
-              {card.value}
-            </Typography>
-
-            <Typography variant="caption" sx={{ color: colors.text.muted }}>
-              {card.helper}
-            </Typography>
-          </Card>
-        ))}
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(4, 1fr)" }, gap: 2 }}>
+        <MetricCard title="Ventas registradas" value={String(totalSalesCount)} helper={`${activeSalesCount} vigentes`} icon={<CheckCircleIcon />} tone={colors.modules.sales} />
+        <MetricCard title="Monto vigente" value={formatCLP(totalSalesAmount)} helper="Excluye ventas anuladas" icon={<CheckCircleIcon />} tone={colors.modules.analytics} />
+        <MetricCard title="Documentos pendientes" value={String(missingDocumentsCount)} helper="Facturas, guías o HES faltantes" icon={<InfoIcon />} tone={colors.modules.documents} />
+        <MetricCard title="Alertas activas" value={String(activeAlertsCount)} helper={`${summary?.alertas.bloqueantes ?? 0} bloqueantes`} icon={<BlockIcon />} tone={colors.modules.commercial} />
       </Box>
-
-      <Card
-        sx={{
-          p: 2,
-          bgcolor: colors.background.paper,
-          border: `1px solid ${colors.border.light}`,
-        }}
-      >
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-          <TextField
-            label="Buscar venta"
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void loadSales(searchTerm);
-              }
-            }}
-            fullWidth
-            placeholder="Minera, OC, factura, guía, producto o estado"
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ color: colors.text.muted }} />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-
-          <Button
-            variant="contained"
-            onClick={() => void loadSales(searchTerm)}
-            disabled={loading}
-            sx={{ minWidth: { xs: "100%", md: 140 } }}
-          >
-            Buscar
-          </Button>
-
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setSearchTerm("");
-              void loadSales("");
-            }}
-            disabled={loading}
-            sx={{ minWidth: { xs: "100%", md: 120 } }}
-          >
-            Limpiar
-          </Button>
-        </Stack>
-      </Card>
-
       {successMessage ? (
         <Alert severity="success" variant="outlined">
           {successMessage}
@@ -1007,7 +663,37 @@ export function SalesPage() {
         </Alert>
       ) : null}
 
-      <SmartDataGrid rows={sales} columns={columns} loading={loading} />
+      <SectionCard
+        title="Ventas"
+        subtitle="Filtros remotos, vistas personales, columnas configurables y acciones comerciales."
+        actions={<><Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateSale} disabled={loading}>Nueva venta</Button><Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => void loadSales()} disabled={loading}>Actualizar</Button></>}
+      >
+        <SerkanFilterToolbar
+          searchLabel="Buscar ventas" searchPlaceholder="Minera, OC, factura, guía, producto o estado..."
+          searchValue={searchTerm} onSearchValueChange={setSearchTerm}
+          onApply={() => { setAppliedSearch(searchTerm); setPagination((current) => ({ ...current, page: 0 })); void loadSales({ search: searchTerm, page: 0 }); }}
+          onClear={() => {
+            setSearchTerm(""); setAppliedSearch(""); setSaleStatuses([]); setValidationSummaries([]); setDateFrom(""); setDateTo(""); setColumnFilters([]);
+            setPagination((current) => ({ ...current, page: 0 })); setFilterResetKey((current) => current + 1);
+            void loadSales({ search: "", statuses: [], validations: [], from: "", to: "", filters: [], page: 0 });
+          }}
+          loading={loading} expanded={filtersExpanded} onExpandedChange={setFiltersExpanded}
+          activeFiltersCount={saleStatuses.length + validationSummaries.length + Number(Boolean(dateFrom)) + Number(Boolean(dateTo)) + columnFilters.length}
+          panelId="sales-advanced-filters"
+        >
+          <SerkanMultiSelectFilter label="Estado" options={[{ value: "INGRESADA", label: "Ingresada" }, { value: "CONCRETADA", label: "Concretada" }, { value: "ANULADA", label: "Anulada" }]} value={saleStatuses} onChange={setSaleStatuses} />
+          <SerkanMultiSelectFilter label="Validación" options={[{ value: "OK", label: "Sin alertas" }, { value: "CON_ALERTAS", label: "Con alertas" }, { value: "BLOQUEANTE", label: "Bloqueante" }]} value={validationSummaries} onChange={setValidationSummaries} />
+          <TextField label="Desde" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          <TextField label="Hasta" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
+          <Button variant="contained" onClick={() => { setAppliedSearch(searchTerm); setPagination((current) => ({ ...current, page: 0 })); void loadSales({ search: searchTerm, statuses: saleStatuses, validations: validationSummaries, from: dateFrom, to: dateTo, page: 0 }); }}>Aplicar filtros</Button>
+        </SerkanFilterToolbar>
+        <SerkanDataGrid
+          gridKey="sales.sales" serverManaged ariaLabel="Listado de ventas" rows={sales} columns={columns} loading={loading}
+          paginationModel={pagination} onPaginationModelChange={(next) => { setPagination(next); void loadSales({ page: next.page, pageSize: next.pageSize }); }} rowCount={salesCount}
+          sortModel={sortModel} onSortModelChange={(next) => { setSortModel(next); setPagination((current) => ({ ...current, page: 0 })); void loadSales({ sort: next, page: 0 }); }}
+          onFilterModelChange={(next) => { setColumnFilters(next); setPagination((current) => ({ ...current, page: 0 })); void loadSales({ filters: next, page: 0 }); }} filterResetKey={filterResetKey}
+        />
+      </SectionCard>
 
       <Dialog
         open={saleDialogOpen}
@@ -1425,10 +1111,16 @@ export function SalesPage() {
               Líneas de venta
             </Typography>
 
-            <SmartDataGrid
-              rows={selectedDetails}
+            <SerkanDataGrid
+              gridKey="sales.details"
+              ariaLabel="Líneas de la venta"
+              rows={visibleDetails}
               columns={detailColumns}
-              loading={false}
+              paginationModel={detailPagination}
+              onPaginationModelChange={setDetailPagination}
+              rowCount={selectedDetails.length}
+              height={420}
+              minHeight={280}
             />
 
             <Typography variant="h6" sx={{ fontWeight: 900 }}>
@@ -1440,10 +1132,16 @@ export function SalesPage() {
                 Esta venta no tiene alertas activas.
               </Alert>
             ) : (
-              <SmartDataGrid
-                rows={selectedAlerts}
+              <SerkanDataGrid
+                gridKey="sales.alerts"
+                ariaLabel="Alertas activas de la venta"
+                rows={visibleAlerts}
                 columns={alertColumns}
-                loading={false}
+                paginationModel={alertPagination}
+                onPaginationModelChange={setAlertPagination}
+                rowCount={selectedAlerts.length}
+                height={360}
+                minHeight={260}
               />
             )}
           </Stack>

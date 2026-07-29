@@ -97,8 +97,18 @@ export function validatePurchaseOrderForm(form: PurchaseOrderForm) {
   return errors;
 }
 
+export function purchaseTaxRateForCountry(countryValue: string | null | undefined) {
+  const country = String(countryValue || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+
+  return country === "CHILE" || country === "CL" ? 19 : 0;
+}
 export function toPurchaseOrderPayload(
   form: PurchaseOrderForm,
+  taxRate = 19,
 ): PurchaseOrderPayload {
   const lines: PurchaseOrderLine[] = form.lines.map((line) => ({
     description: line.description.trim(),
@@ -114,6 +124,7 @@ export function toPurchaseOrderPayload(
   return {
     number: form.number.trim(),
     supplier: Number(form.supplier),
+    tax_rate: taxRate,
     currency: form.currency,
     exchange_rate:
       form.currency === "USD" ? numberValue(form.exchangeRate) : null,

@@ -64,7 +64,7 @@ ORDER_GRID_DEFINITION = GridDefinition(
     key=ORDER_GRID_KEY,
     module="purchases",
     model_name="purchaseorder",
-    version=1,
+    version=2,
     default_page_size=25,
     saved_filter_keys=("search", "state", "supplier", "currency"),
     columns=(
@@ -94,7 +94,17 @@ ORDER_GRID_DEFINITION = GridDefinition(
             query_field="currency", filter_operators=("equals",),
         ),
         GridColumnDefinition(
-            key="total_original", system_label="Total original", data_type="number",
+            key="subtotal_original", system_label="Monto neto", data_type="number",
+            query_field="subtotal_original",
+            filter_operators=("equals", "greaterThan", "lessThan", "inRange"),
+        ),
+        GridColumnDefinition(
+            key="tax_total_original", system_label="IVA (19%)", data_type="number",
+            query_field="tax_total_original",
+            filter_operators=("equals", "greaterThan", "lessThan", "inRange"),
+        ),
+        GridColumnDefinition(
+            key="total_original", system_label="Total con IVA", data_type="number",
             query_field="total_original",
             filter_operators=("equals", "greaterThan", "lessThan", "inRange"),
         ),
@@ -119,7 +129,8 @@ ORDER_GRID_DEFINITION = GridDefinition(
     ),
     official_export_columns=(
         "number", "supplier__legal_name", "order_date", "expected_date",
-        "state", "currency", "total_original", "total_clp", "cost_quality",
+        "state", "currency", "subtotal_original", "tax_total_original",
+        "total_original", "total_clp", "cost_quality",
         "responsible__username",
     ),
 )

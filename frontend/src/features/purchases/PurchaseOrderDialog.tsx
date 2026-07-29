@@ -21,6 +21,7 @@ import type { Supplier } from "../../services/purchasesService";
 import { colors } from "../../theme/colors";
 import {
   EMPTY_PURCHASE_LINE,
+  purchaseTaxRateForCountry,
   type PurchaseOrderForm,
 } from "./purchaseModels";
 
@@ -66,6 +67,23 @@ export function PurchaseOrderDialog({
       ),
     });
   };
+
+  const netAmount = form.lines.reduce(
+    (sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0),
+    0,
+  );
+  const selectedSupplier = suppliers.find(
+    (supplier) => supplier.id === Number(form.supplier),
+  );
+  const taxRate = purchaseTaxRateForCountry(selectedSupplier?.country);
+  const taxAmount = netAmount * (taxRate / 100);
+  const totalAmount = netAmount + taxAmount;
+  const formatMoney = (value: number) =>
+    new Intl.NumberFormat("es-CL", {
+      style: "currency",
+      currency: form.currency,
+      maximumFractionDigits: form.currency === "USD" ? 2 : 0,
+    }).format(value);
 
   return (
     <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="lg">
@@ -293,6 +311,14 @@ export function PurchaseOrderDialog({
             </Stack>
           </Box>
 
+          <Alert severity="info" variant="outlined">
+            {taxRate === 19
+              ? "IVA nacional calculado automáticamente al 19%. "
+              : "Proveedor extranjero: IVA de la orden en 0%; el IVA de importación se registra en seguimiento logístico. "}
+            Monto neto: <strong>{formatMoney(netAmount)}</strong>{" "}
+            · IVA: <strong>{formatMoney(taxAmount)}</strong> · Total con IVA:{" "}
+            <strong>{formatMoney(totalAmount)}</strong>
+          </Alert>
           <TextField
             label="Observaciones"
             value={form.notes}

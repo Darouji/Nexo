@@ -320,3 +320,33 @@ KARDEX_GRID_DEFINITION = GridDefinition(
 )
 
 register_grid_definition(KARDEX_GRID_DEFINITION)
+CATEGORY_MANAGER_GRID_KEY = "inventory.categories"
+CATEGORY_MANAGER_GRID_DEFINITION = GridDefinition(
+    key=CATEGORY_MANAGER_GRID_KEY, module="inventory", model_name="categoria", version=1,
+    default_page_size=25,
+    columns=(
+        GridColumnDefinition(key="name", system_label="Categoría", required=True),
+        GridColumnDefinition(key="description", system_label="Descripción"),
+        GridColumnDefinition(key="productos_count", system_label="Productos", data_type="number"),
+        GridColumnDefinition(key="status", system_label="Estado", data_type="choice"),
+        GridColumnDefinition(key="availability", system_label="Uso en productos", sortable=False),
+        GridColumnDefinition(key="has_historical_usage", system_label="Historial", data_type="choice"),
+        GridColumnDefinition(key="actions", system_label="Acciones", sortable=False, hideable=False, pinnable=False, required=True, exportable=False),
+    ),
+)
+register_grid_definition(CATEGORY_MANAGER_GRID_DEFINITION)
+
+CATEGORY_PRODUCTS_GRID_KEY = "inventory.category-products"
+CATEGORY_PRODUCTS_GRID_DEFINITION = GridDefinition(
+    key=CATEGORY_PRODUCTS_GRID_KEY, module="inventory", model_name="producto", version=1,
+    default_page_size=25,
+    columns=(
+        GridColumnDefinition(key="modelo", system_label="Modelo", required=True),
+        GridColumnDefinition(key="codigo_sap", system_label="Código SAP"),
+        GridColumnDefinition(key="stock_actual", system_label="Stock", data_type="number"),
+        GridColumnDefinition(key="por_recibir", system_label="Por recibir", data_type="number"),
+        GridColumnDefinition(key="estado_producto_display", system_label="Estado", data_type="choice"),
+        GridColumnDefinition(key="actions", system_label="Acciones", sortable=False, hideable=False, pinnable=False, required=True, exportable=False),
+    ),
+)
+register_grid_definition(CATEGORY_PRODUCTS_GRID_DEFINITION)

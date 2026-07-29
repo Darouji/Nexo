@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
@@ -17,11 +18,13 @@ from apps.accounts.permissions import (
     IsConsultaOrOperativoGlobal,
     user_has_role,
 )
+from apps.core.grid_registry import apply_grid_filters
 from apps.core.models import AlertSeverity, BaseStatus, RecordChangeLog
 from apps.core.serializers import RecordChangeLogSerializer
 from apps.inventory.models import MovimientoKardex
 from apps.inventory.serializers import MovimientoKardexSerializer
 
+from .grid_definitions import SALES_GRID_DEFINITION
 from .models import DetalleVenta, Venta, VentaAlert, VentaStatus
 from .serializers import (
     ActualizarLineasVentaSerializer,
@@ -35,6 +38,16 @@ from .services import (
     replace_sale_details_with_differential_kardex,
 )
 
+
+def _parse_grid_filters(value):
+    if value in (None, ""):
+        return []
+    if len(str(value)) > 10000:
+        raise DRFValidationError({"grid_filters": "La definición de filtros es demasiado extensa."})
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        raise DRFValidationError({"grid_filters": "Los filtros no contienen JSON válido."})
 
 def raise_drf_validation_error(error):
     if hasattr(error, "message_dict"):
@@ -324,21 +337,20 @@ class VentaViewSet(SalesPermissionMixin, viewsets.ModelViewSet):
                 alerts__severity__in=alert_severity_values,
             )
 
-        validation_summary = params.get("validation_summary")
-        if validation_summary:
-            allowed_summaries = {"OK", "CON_ALERTAS", "BLOQUEANTE"}
-            validate_choice_values(
-                [validation_summary],
-                allowed_summaries,
-                "validation_summary",
-            )
-
-            if validation_summary == "OK":
-                queryset = queryset.filter(has_active_alerts=False)
-            elif validation_summary == "CON_ALERTAS":
-                queryset = queryset.filter(has_active_alerts=True)
-            elif validation_summary == "BLOQUEANTE":
-                queryset = queryset.filter(has_blocking_alerts=True)
+        validation_summaries = validate_choice_values(
+            split_csv_param(params.get("validation_summary")),
+            {"OK", "CON_ALERTAS", "BLOQUEANTE"},
+            "validation_summary",
+        )
+        if validation_summaries:
+            validation_filter = Q()
+            if "OK" in validation_summaries:
+                validation_filter |= Q(has_active_alerts=False)
+            if "CON_ALERTAS" in validation_summaries:
+                validation_filter |= Q(has_active_alerts=True)
+            if "BLOQUEANTE" in validation_summaries:
+                validation_filter |= Q(has_blocking_alerts=True)
+            queryset = queryset.filter(validation_filter)
 
         has_factura = parse_bool_param(params.get("has_factura"), "has_factura")
         factura_filter = Q(factura_numero__gt="") | (
@@ -358,7 +370,11 @@ class VentaViewSet(SalesPermissionMixin, viewsets.ModelViewSet):
         elif has_guia is False:
             queryset = queryset.exclude(guia_filter)
 
-        return queryset
+        return apply_grid_filters(
+            queryset,
+            SALES_GRID_DEFINITION,
+            _parse_grid_filters(params.get("grid_filters")),
+        )
 
     def filter_queryset(self, queryset):
         queryset = super().filter_queryset(queryset)

@@ -19,6 +19,13 @@ const clp = new Intl.NumberFormat("es-CL", {
   maximumFractionDigits: 0,
 });
 
+function money(value: unknown, currency: string) {
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: currency === "USD" ? "USD" : "CLP",
+    maximumFractionDigits: currency === "USD" ? 2 : 0,
+  }).format(Number(value || 0));
+}
 function statusColor(status: PurchaseOrderStatus) {
   if (["RECIBIDA", "CERRADA"].includes(status)) return colors.status.success;
   if (["CANCELADA"].includes(status)) return colors.status.error;
@@ -49,6 +56,30 @@ export function buildOrderColumns(
       valueFormatter: (params) => String(params.value || "Sin fecha"),
     },
     { field: "currency", colId: "currency", headerName: "Moneda", width: 105 },
+    {
+      field: "supplier_amount",
+      colId: "subtotal_original",
+      headerName: "Monto neto",
+      width: 155,
+      cellStyle: { textAlign: "right", fontVariantNumeric: "tabular-nums" },
+      valueFormatter: (params) => money(params.value, params.data?.currency || "CLP"),
+    },
+    {
+      field: "tax_amount",
+      colId: "tax_total_original",
+      headerName: "IVA (19%)",
+      width: 145,
+      cellStyle: { textAlign: "right", fontVariantNumeric: "tabular-nums" },
+      valueFormatter: (params) => money(params.value, params.data?.currency || "CLP"),
+    },
+    {
+      field: "total_original",
+      colId: "total_original",
+      headerName: "Total con IVA",
+      width: 165,
+      cellStyle: { textAlign: "right", fontVariantNumeric: "tabular-nums" },
+      valueFormatter: (params) => money(params.value, params.data?.currency || "CLP"),
+    },
     {
       field: "total_clp",
       colId: "total_clp",
@@ -149,7 +180,8 @@ export function buildReceiptColumns({
     { field: "cancelled_units", colId: "cantidad_cancelada", headerName: "Cantidad cancelada", width: 155, cellStyle: { textAlign: "right" } },
     { field: "pending_units", colId: "cantidad_pendiente_orden", headerName: "Cantidad pendiente", width: 160, cellStyle: { textAlign: "right" } },
     { field: "status_display", colId: "estado", headerName: "Estado", width: 165 },
-    { field: "origin_display", colId: "origin", headerName: "Origen", width: 155 },    {
+    { field: "origin_display", colId: "origin", headerName: "Origen", width: 155 },
+    {
       colId: "actions",
       headerName: "Acciones",
       width: 325,

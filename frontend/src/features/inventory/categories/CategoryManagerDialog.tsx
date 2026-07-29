@@ -29,8 +29,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import type { GridColDef, GridPaginationModel } from "@mui/x-data-grid";
-import { SmartDataGrid } from "../../../components/SmartDataGrid";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { SerkanDataGrid, type SerkanGridPaginationModel } from "../../../components/SerkanDataGrid";
 import { getApiErrorMessage as getErrorMessage } from "../../../services/api";
 import {
   createCategory,
@@ -94,7 +94,7 @@ type CategoryProductsDialogState = {
   category: Category | null;
   products: Product[];
   rowCount: number;
-  paginationModel: GridPaginationModel;
+  paginationModel: SerkanGridPaginationModel;
   loading: boolean;
 };
 
@@ -129,7 +129,7 @@ const emptyCategoryActionMenu: CategoryActionMenuState = {
   category: null,
 };
 
-const defaultCategoryProductsPaginationModel: GridPaginationModel = {
+const defaultCategoryProductsPaginationModel: SerkanGridPaginationModel = {
   page: 0,
   pageSize: 10,
 };
@@ -197,6 +197,7 @@ export function CategoryManagerDialog({
   onOpenProductInCatalog,
 }: CategoryManagerDialogProps) {
   const [saving, setSaving] = useState(false);
+  const [categoryPagination, setCategoryPagination] = useState({ page: 0, pageSize: 25 });
   const [feedback, setFeedback] = useState<FeedbackState>(null);
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -281,7 +282,7 @@ export function CategoryManagerDialog({
   const loadCategoryProducts = useCallback(
     async (
       category: Category,
-      paginationModel: GridPaginationModel = defaultCategoryProductsPaginationModel,
+      paginationModel: SerkanGridPaginationModel = defaultCategoryProductsPaginationModel,
     ) => {
       setCategoryProductsDialog((current) => ({
         ...current,
@@ -323,7 +324,7 @@ export function CategoryManagerDialog({
   );
 
   const handleCategoryProductsPaginationModelChange = useCallback(
-    (nextPaginationModel: GridPaginationModel) => {
+    (nextPaginationModel: SerkanGridPaginationModel) => {
       const category = categoryProductsDialog.category;
 
       if (!category) {
@@ -613,214 +614,48 @@ export function CategoryManagerDialog({
     }
   };
 
-  const categoryProductColumns = useMemo<GridColDef[]>(
+  const categoryProductColumns = useMemo<ColDef<Product>[]>(
     () => [
-      {
-        field: "modelo",
-        headerName: "Modelo",
-        minWidth: 220,
-        flex: 1,
-        renderCell: (params) => (
-          <Typography sx={{ fontWeight: 850 }}>
-            {String(params.value || "Sin modelo")}
-          </Typography>
-        ),
-      },
-      {
-        field: "codigo_sap",
-        headerName: "Código SAP",
-        minWidth: 145,
-        flex: 0.6,
-        renderCell: (params) => params.value || "Sin código",
-      },
-      {
-        field: "stock_actual",
-        headerName: "Stock",
-        width: 110,
-        type: "number",
-      },
-      {
-        field: "por_recibir",
-        headerName: "Por recibir",
-        width: 125,
-        type: "number",
-      },
-      {
-        field: "estado_producto_display",
-        headerName: "Estado",
-        width: 155,
-        renderCell: (params) => (
-          <Chip
-            label={String(params.value || "Sin estado")}
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: 800 }}
-          />
-        ),
-      },
-      {
-        field: "actions",
-        headerName: "Acciones",
-        width: 170,
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => {
-          const product = params.row as Product;
-          const category = categoryProductsDialog.category;
-
-          return (
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<OpenInNewIcon />}
-              disabled={!category || !onOpenProductInCatalog}
-              onClick={() => {
-                if (!category || !onOpenProductInCatalog) {
-                  return;
-                }
-
-                closeCategoryProductsDialog();
-                onOpenProductInCatalog(product, category);
-              }}
-              sx={{
-                color: colors.text.primary,
-                borderColor: colors.border.medium,
-              }}
-            >
-              Ver en catálogo
-            </Button>
-          );
-        },
-      },
+      { field: "modelo", headerName: "Modelo", minWidth: 220, flex: 1, cellStyle: () => ({ fontWeight: 850 }) },
+      { field: "codigo_sap", headerName: "Código SAP", minWidth: 145, flex: 0.6, valueFormatter: (params) => String(params.value || "Sin código") },
+      { field: "stock_actual", headerName: "Stock", width: 110, cellStyle: () => ({ textAlign: "right" }) },
+      { field: "por_recibir", headerName: "Por recibir", width: 125, cellStyle: () => ({ textAlign: "right" }) },
+      { field: "estado_producto_display", headerName: "Estado", width: 155, cellRenderer: (params: ICellRendererParams<Product>) => <Chip label={String(params.value || "Sin estado")} size="small" variant="outlined" sx={{ fontWeight: 800 }} /> },
+      { colId: "actions", headerName: "Acciones", width: 170, sortable: false, filter: false, cellRenderer: (params: ICellRendererParams<Product>) => {
+        const product = params.data; const category = categoryProductsDialog.category;
+        if (!product) return null;
+        return <Button size="small" variant="outlined" startIcon={<OpenInNewIcon />} disabled={!category || !onOpenProductInCatalog} onClick={() => {
+          if (!category || !onOpenProductInCatalog) return;
+          closeCategoryProductsDialog(); onOpenProductInCatalog(product, category);
+        }} sx={{ color: colors.text.primary, borderColor: colors.border.medium }}>Ver en catálogo</Button>;
+      } },
     ],
-    [
-      categoryProductsDialog.category,
-      closeCategoryProductsDialog,
-      onOpenProductInCatalog,
-    ],
+    [categoryProductsDialog.category, closeCategoryProductsDialog, onOpenProductInCatalog],
   );
 
-  const categoryColumns = useMemo<GridColDef[]>(
+  const categoryColumns = useMemo<ColDef<Category>[]>(
     () => [
-      {
-        field: "name",
-        headerName: "Categoría",
-        minWidth: 220,
-        flex: 0.9,
-        renderCell: (params) => (
-          <Typography sx={{ fontWeight: 850 }}>
-            {String(params.value || "Sin nombre")}
-          </Typography>
-        ),
-      },
-      {
-        field: "description",
-        headerName: "Descripción",
-        minWidth: 280,
-        flex: 1.25,
-        renderCell: (params) =>
-          params.value ? String(params.value) : "Sin descripción",
-      },
-      {
-        field: "productos_count",
-        headerName: "Productos",
-        width: 125,
-        type: "number",
-        renderCell: (params) => (
-          <Chip
-            label={String(params.value ?? 0)}
-            size="small"
-            sx={{
-              color: colors.primary.main,
-              bgcolor: colors.primary.soft,
-              borderColor: colors.primary.border,
-              border: "1px solid",
-              fontWeight: 900,
-            }}
-          />
-        ),
-      },
-      {
-        field: "status",
-        headerName: "Estado",
-        width: 140,
-        renderCell: (params) => (
-          <Chip
-            label={getCategoryStatusLabel(String(params.value || ""))}
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: 800 }}
-          />
-        ),
-      },
-      {
-        field: "availability",
-        headerName: "Uso en productos",
-        width: 210,
-        sortable: false,
-        valueGetter: (_value, row) => getAvailabilityLabel(row as Category),
-        renderCell: (params) => {
-          const category = params.row as Category;
-          const color = getAvailabilityColor(category);
-
-          return (
-            <Chip
-              label={getAvailabilityLabel(category)}
-              size="small"
-              sx={{
-                color,
-                bgcolor: colors.surface.soft,
-                borderColor: color,
-                border: "1px solid",
-                fontWeight: 800,
-              }}
-            />
-          );
-        },
-      },
-      {
-        field: "has_historical_usage",
-        headerName: "Historial",
-        width: 145,
-        renderCell: (params) => (
-          <Chip
-            label={params.value ? "Con historial" : "Sin historial"}
-            size="small"
-            variant="outlined"
-            sx={{ fontWeight: 800 }}
-          />
-        ),
-      },
-      {
-        field: "actions",
-        headerName: "Acciones",
-        width: 165,
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => {
-          const category = params.row as Category;
-
-          return (
-            <Button
-              size="small"
-              variant="outlined"
-              endIcon={<KeyboardArrowDownIcon />}
-              disabled={saving}
-              onClick={(event) => openCategoryActionMenu(event, category)}
-              sx={{
-                color: colors.text.primary,
-                borderColor: colors.border.medium,
-              }}
-            >
-              Acciones
-            </Button>
-          );
-        },
-      },
+      { field: "name", headerName: "Categoría", minWidth: 220, flex: 0.9, cellStyle: () => ({ fontWeight: 850 }) },
+      { field: "description", headerName: "Descripción", minWidth: 280, flex: 1.25, valueFormatter: (params) => String(params.value || "Sin descripción") },
+      { field: "productos_count", headerName: "Productos", width: 125, cellRenderer: (params: ICellRendererParams<Category>) => <Chip label={String(params.value ?? 0)} size="small" sx={{ color: colors.primary.main, bgcolor: colors.primary.soft, borderColor: colors.primary.border, border: "1px solid", fontWeight: 900 }} /> },
+      { field: "status", headerName: "Estado", width: 140, cellRenderer: (params: ICellRendererParams<Category>) => <Chip label={getCategoryStatusLabel(String(params.value || ""))} size="small" variant="outlined" sx={{ fontWeight: 800 }} /> },
+      { colId: "availability", headerName: "Uso en productos", width: 210, sortable: false, valueGetter: (params) => params.data ? getAvailabilityLabel(params.data) : "", cellRenderer: (params: ICellRendererParams<Category>) => {
+        const category = params.data; if (!category) return null; const color = getAvailabilityColor(category);
+        return <Chip label={getAvailabilityLabel(category)} size="small" sx={{ color, bgcolor: colors.surface.soft, borderColor: color, border: "1px solid", fontWeight: 800 }} />;
+      } },
+      { field: "has_historical_usage", headerName: "Historial", width: 145, cellRenderer: (params: ICellRendererParams<Category>) => <Chip label={params.value ? "Con historial" : "Sin historial"} size="small" variant="outlined" sx={{ fontWeight: 800 }} /> },
+      { colId: "actions", headerName: "Acciones", width: 165, sortable: false, filter: false, cellRenderer: (params: ICellRendererParams<Category>) => {
+        const category = params.data; if (!category) return null;
+        return <Button size="small" variant="outlined" endIcon={<KeyboardArrowDownIcon />} disabled={saving} onClick={(event) => openCategoryActionMenu(event, category)} sx={{ color: colors.text.primary, borderColor: colors.border.medium }}>Acciones</Button>;
+      } },
     ],
     [saving, openCategoryActionMenu],
   );
 
+  const visibleCategories = categories.slice(
+    categoryPagination.page * categoryPagination.pageSize,
+    (categoryPagination.page + 1) * categoryPagination.pageSize,
+  );
   return (
     <>
       <Dialog open={open} onClose={handleCloseManager} fullWidth maxWidth="xl">
@@ -869,9 +704,14 @@ export function CategoryManagerDialog({
               </Alert>
             ) : null}
 
-            <SmartDataGrid
-              rows={categories}
+            <SerkanDataGrid
+              gridKey="inventory.categories"
+              ariaLabel="Gestión de categorías"
+              rows={visibleCategories}
               columns={categoryColumns}
+              paginationModel={categoryPagination}
+              onPaginationModelChange={setCategoryPagination}
+              rowCount={categories.length}
               height={500}
               minHeight={320}
             />
@@ -977,20 +817,16 @@ export function CategoryManagerDialog({
               producto en el inventario principal.
             </Alert>
 
-            <SmartDataGrid
+            <SerkanDataGrid
+              gridKey="inventory.category-products"
+              serverManaged
+              ariaLabel="Productos asociados a la categoría"
               rows={categoryProductsDialog.products}
               columns={categoryProductColumns}
               loading={categoryProductsDialog.loading}
-              paginationMode="server"
               paginationModel={categoryProductsDialog.paginationModel}
-              onPaginationModelChange={
-                handleCategoryProductsPaginationModelChange
-              }
+              onPaginationModelChange={handleCategoryProductsPaginationModelChange}
               rowCount={categoryProductsDialog.rowCount}
-              rowNumberOffset={
-                categoryProductsDialog.paginationModel.page *
-                categoryProductsDialog.paginationModel.pageSize
-              }
               height={420}
               minHeight={300}
             />

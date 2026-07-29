@@ -71,8 +71,12 @@ fórmulas. Las exportaciones se auditan y tienen un límite operativo de 5.000 f
 
 ## Criterios de extensión
 
-Ventas y Compras deben reutilizar este registro, los endpoints y el componente de
-grilla. Cada nueva grilla debe declarar su clave, versión, columnas permitidas,
+Inventario, Compras y Ventas reutilizan este registro, los endpoints y el
+componente de grilla. Además de los listados principales, se integraron las
+grillas flotantes de categorías, productos asociados, líneas de venta y alertas.
+Ventas usa la clave `sales.sales` con paginación, orden, filtros múltiples y
+filtros por columna aplicados en el servidor.
+Cada nueva grilla debe declarar su clave, versión, columnas permitidas,
 tipos, operadores, columnas protegidas y definición de exportación oficial. No se
 deben crear implementaciones paralelas de preferencias o etiquetas.
 

@@ -14,22 +14,23 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  InputAdornment,
   MenuItem,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import EditIcon from "@mui/icons-material/Edit";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import BadgeIcon from "@mui/icons-material/Badge";
 import LockIcon from "@mui/icons-material/Lock";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SearchIcon from "@mui/icons-material/Search";
-import type { GridColDef } from "@mui/x-data-grid";
-import { SmartDataGrid } from "../components/SmartDataGrid";
-import { createUser, fetchUsers } from "../services/userService";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
+import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
+import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
+import { createUser, fetchUsers, updateUser } from "../services/userService";
 import type { CreateUserPayload } from "../services/userService";
 import type { AuthUser } from "../types/auth";
 import { colors } from "../theme/colors";
@@ -50,6 +51,7 @@ type UserForm = {
   position: string;
   department: string;
   observations: string;
+  status: string;
 };
 
 type RoleOption = {
@@ -83,6 +85,7 @@ const emptyUserForm: UserForm = {
   position: "",
   department: "",
   observations: "",
+  status: "ACTIVO",
 };
 
 function getErrorMessage(error: unknown) {
@@ -247,10 +250,17 @@ export function UsersPage({ currentUser }: UsersPageProps) {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [selectedUser, setSelectedUser] = useState<AuthUser | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<AuthUser | null>(null);
+  const [formError, setFormError] = useState("");
   const [form, setForm] = useState<UserForm>(emptyUserForm);
   const [searchTerm, setSearchTerm] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
+  const [sortModel, setSortModel] = useState<SerkanGridSortModel>(null);
+  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -261,7 +271,7 @@ export function UsersPage({ currentUser }: UsersPageProps) {
 
   const availableRoles = roleOptions.filter((role) => {
     if (role.onlyAdmin) {
-      return canCreateAdmin;
+      return canCreateAdmin || editingUser?.role === role.value;
     }
 
     return true;
@@ -319,8 +329,8 @@ export function UsersPage({ currentUser }: UsersPageProps) {
           ].some((value) => normalizeSearch(value).includes(term))
         : true;
 
-      const matchesRole = roleFilter ? user.role === roleFilter : true;
-      const matchesStatus = statusFilter ? user.status === statusFilter : true;
+      const matchesRole = roleFilter.length ? roleFilter.includes(user.role) : true;
+      const matchesStatus = statusFilter.length ? statusFilter.includes(user.status) : true;
 
       return matchesSearch && matchesRole && matchesStatus;
     });
@@ -349,41 +359,97 @@ export function UsersPage({ currentUser }: UsersPageProps) {
     }));
   };
 
-  const handleCreateUser = useCallback(async () => {
+  const openUserForm = (user?: AuthUser) => {
+    setFormError("");
+    setErrorMessage("");
+    setSuccessMessage("");
+    setEditingUser(user ?? null);
+    setForm(
+      user
+        ? {
+            username: user.username,
+            email: user.email || "",
+            first_name: user.first_name || "",
+            last_name: user.last_name || "",
+            password: "",
+            password_confirm: "",
+            role: user.role,
+            phone: user.phone || "",
+            position: user.position || "",
+            department: user.department || "",
+            observations: user.observations || "",
+            status: user.status || "ACTIVO",
+          }
+        : emptyUserForm,
+    );
+    setCreateDialogOpen(true);
+  };
+
+  const closeUserForm = () => {
+    if (saving) return;
+    setCreateDialogOpen(false);
+    setEditingUser(null);
+    setForm(emptyUserForm);
+    setFormError("");
+  };
+
+  const handleSaveUser = useCallback(async () => {
     try {
       setSaving(true);
+      setFormError("");
       setErrorMessage("");
       setSuccessMessage("");
 
-      const payload: CreateUserPayload = {
-        username: form.username.trim(),
-        email: form.email.trim() || null,
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        password: form.password,
-        password_confirm: form.password_confirm,
-        role: form.role,
-        phone: form.phone.trim(),
-        position: form.position.trim(),
-        department: form.department.trim(),
-        observations: form.observations.trim(),
-      };
+      if (editingUser) {
+        const updatedUser = await updateUser(editingUser.id, {
+          email: form.email.trim() || null,
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          role:
+            canCreateAdmin || editingUser.role !== "ADMINISTRADOR"
+              ? form.role
+              : undefined,
+          status: form.status,
+          is_active: form.status === "ACTIVO",
+          phone: form.phone.trim(),
+          position: form.position.trim(),
+          department: form.department.trim(),
+          observations: form.observations.trim(),
+        });
+        setUsers((current) =>
+          current.map((user) => (user.id === updatedUser.id ? updatedUser : user)),
+        );
+        setSuccessMessage("Usuario actualizado correctamente.");
+      } else {
+        const payload: CreateUserPayload = {
+          username: form.username.trim(),
+          email: form.email.trim() || null,
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+          password: form.password,
+          password_confirm: form.password_confirm,
+          role: form.role,
+          phone: form.phone.trim(),
+          position: form.position.trim(),
+          department: form.department.trim(),
+          observations: form.observations.trim(),
+        };
+        const response = await createUser(payload);
+        setUsers((current) => [response.user, ...current]);
+        setSuccessMessage(response.detail || "Usuario creado correctamente.");
+      }
 
-      const response = await createUser(payload);
-
-      setUsers((current) => [response.user, ...current]);
       setForm(emptyUserForm);
+      setEditingUser(null);
       setCreateDialogOpen(false);
-      setSuccessMessage(response.detail || "Usuario creado correctamente.");
       await loadUsers("refresh");
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
+      setFormError(getErrorMessage(error));
     } finally {
       setSaving(false);
     }
-  }, [form, loadUsers]);
-
-  const columns = useMemo<GridColDef[]>(() => {
+  }, [canCreateAdmin, editingUser, form, loadUsers]);
+  const columns = useMemo<ColDef<AuthUser>[]>(() => {
     return [
       {
         field: "username",
@@ -396,8 +462,9 @@ export function UsersPage({ currentUser }: UsersPageProps) {
         headerName: "Nombre",
         minWidth: 220,
         flex: 1,
-        renderCell: (params) => {
-          const user = params.row as AuthUser;
+        cellRenderer: (params: ICellRendererParams<AuthUser>) => {
+          const user = params.data;
+          if (!user) return "-";
           return (
             user.full_name ||
             `${user.first_name} ${user.last_name}`.trim() ||
@@ -410,58 +477,69 @@ export function UsersPage({ currentUser }: UsersPageProps) {
         headerName: "Correo",
         minWidth: 220,
         flex: 1,
-        renderCell: (params) => String(params.value || "Sin correo"),
+        valueFormatter: (params) => String(params.value || "Sin correo"),
       },
       {
         field: "role",
         headerName: "Rol",
         minWidth: 180,
         flex: 0.7,
-        renderCell: (params) => <RoleChip user={params.row as AuthUser} />,
+        cellRenderer: (params: ICellRendererParams<AuthUser>) => params.data ? <RoleChip user={params.data} /> : null,
       },
       {
         field: "status",
         headerName: "Estado",
         width: 145,
-        renderCell: (params) => <StatusChip user={params.row as AuthUser} />,
+        cellRenderer: (params: ICellRendererParams<AuthUser>) => params.data ? <StatusChip user={params.data} /> : null,
       },
       {
         field: "position",
         headerName: "Cargo",
         minWidth: 180,
         flex: 0.7,
-        renderCell: (params) => String(params.value || "Sin cargo"),
+        valueFormatter: (params) => String(params.value || "Sin cargo"),
       },
       {
         field: "department",
         headerName: "Departamento",
         minWidth: 180,
         flex: 0.7,
-        renderCell: (params) => String(params.value || "Sin departamento"),
+        valueFormatter: (params) => String(params.value || "Sin departamento"),
       },
       {
         field: "last_login",
         headerName: "Último acceso",
         width: 175,
-        renderCell: (params) => formatDateTime(String(params.value || "")),
+        valueFormatter: (params) => formatDateTime(String(params.value || "")),
       },
       {
-        field: "actions",
+        colId: "actions",
         headerName: "Acciones",
-        width: 120,
+        width: 215,
         sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSelectedUser(params.row as AuthUser);
-            }}
-          >
-            Ver
-          </Button>
+        filter: false,
+        pinned: "right",
+        cellRenderer: (params: ICellRendererParams<AuthUser>) => (
+          <Stack direction="row" spacing={0.5}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => {
+                if (params.data) setSelectedUser(params.data);
+              }}
+            >
+              Ver
+            </Button>
+            <Button
+              size="small"
+              startIcon={<EditIcon />}
+              onClick={() => {
+                if (params.data) openUserForm(params.data);
+              }}
+            >
+              Editar
+            </Button>
+          </Stack>
         ),
       },
     ];
@@ -571,11 +649,7 @@ export function UsersPage({ currentUser }: UsersPageProps) {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => {
-                setErrorMessage("");
-                setSuccessMessage("");
-                setCreateDialogOpen(true);
-              }}
+              onClick={() => openUserForm()}
             >
               Nuevo usuario
             </Button>
@@ -649,81 +723,77 @@ export function UsersPage({ currentUser }: UsersPageProps) {
       >
         <CardContent>
           <Stack spacing={2.5}>
-            <Stack
-              direction={{ xs: "column", lg: "row" }}
-              spacing={2}
-              sx={{
-                alignItems: { xs: "stretch", lg: "center" },
-                justifyContent: "space-between",
+            <Box>
+              <Typography variant="h5" sx={{ color: colors.text.primary, fontWeight: 900 }}>
+                Cuentas registradas
+              </Typography>
+              <Typography variant="body2" sx={{ color: colors.text.muted }}>
+                Filtros compartidos, columnas configurables y vistas personales.
+              </Typography>
+            </Box>
+
+            <SerkanFilterToolbar
+              searchLabel="Buscar usuarios"
+              searchPlaceholder="Usuario, nombre, correo, cargo o departamento..."
+              searchValue={searchTerm}
+              onSearchValueChange={setSearchTerm}
+              onApply={() => setPagination((current) => ({ ...current, page: 0 }))}
+              onClear={() => {
+                setSearchTerm("");
+                setRoleFilter([]);
+                setStatusFilter([]);
+                setColumnFilters([]);
+                setPagination((current) => ({ ...current, page: 0 }));
+                setFilterResetKey((current) => current + 1);
               }}
+              loading={refreshing}
+              expanded={filtersExpanded}
+              onExpandedChange={setFiltersExpanded}
+              activeFiltersCount={roleFilter.length + statusFilter.length + columnFilters.length}
+              panelId="users-advanced-filters"
             >
-              <Box>
-                <Typography
-                  variant="h5"
-                  sx={{ color: colors.text.primary, fontWeight: 900 }}
-                >
-                  Cuentas registradas
-                </Typography>
+              <SerkanMultiSelectFilter
+                label="Rol"
+                options={roleOptions.map((role) => ({ value: role.value, label: role.label }))}
+                value={roleFilter}
+                onChange={setRoleFilter}
+              />
+              <SerkanMultiSelectFilter
+                label="Estado"
+                options={[
+                  { value: "ACTIVO", label: "Activo" },
+                  { value: "INACTIVO", label: "Inactivo" },
+                  { value: "ANULADO", label: "Anulado" },
+                  { value: "ARCHIVADO", label: "Archivado" },
+                ]}
+                value={statusFilter}
+                onChange={setStatusFilter}
+              />
+            </SerkanFilterToolbar>
 
-                <Typography variant="body2" sx={{ color: colors.text.muted }}>
-                  Busca por usuario, nombre, correo, rol, cargo o departamento.
-                </Typography>
-              </Box>
-
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                <TextField
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Buscar usuarios..."
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 280 } }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <TextField
-                  select
-                  label="Rol"
-                  value={roleFilter}
-                  onChange={(event) => setRoleFilter(event.target.value)}
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 190 } }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {roleOptions.map((role) => (
-                    <MenuItem key={role.value} value={role.value}>
-                      {role.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-
-                <TextField
-                  select
-                  label="Estado"
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 155 } }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="ACTIVO">Activos</MenuItem>
-                  <MenuItem value="INACTIVO">Inactivos</MenuItem>
-                  <MenuItem value="ARCHIVADO">Archivados</MenuItem>
-                </TextField>
-              </Stack>
-            </Stack>
-
-            <SmartDataGrid
+            <SerkanDataGrid
+              gridKey="accounts.users"
+              serverManaged
+              clientManaged
+              ariaLabel="Cuentas de usuario"
               rows={filteredUsers}
               columns={columns}
               loading={refreshing}
+              paginationModel={pagination}
+              onPaginationModelChange={setPagination}
+              rowCount={filteredUsers.length}
+              sortModel={sortModel}
+              onSortModelChange={setSortModel}
+              onFilterModelChange={(filters) => {
+                setColumnFilters(filters);
+                setPagination((current) => ({ ...current, page: 0 }));
+              }}
+              filterResetKey={filterResetKey}
+              namedViewFilters={{
+                search: searchTerm,
+                role: roleFilter.join(","),
+                status: statusFilter.join(","),
+              }}
             />
           </Stack>
         </CardContent>
@@ -731,21 +801,19 @@ export function UsersPage({ currentUser }: UsersPageProps) {
 
       <Dialog
         open={createDialogOpen}
-        onClose={() => {
-          if (!saving) {
-            setCreateDialogOpen(false);
-          }
-        }}
+        onClose={closeUserForm}
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Nuevo usuario interno</DialogTitle>
+        <DialogTitle>{editingUser ? "Editar usuario" : "Nuevo usuario interno"}</DialogTitle>
 
         <DialogContent>
           <Stack spacing={2.2} sx={{ mt: 1 }}>
+            {formError ? <Alert severity="error">{formError}</Alert> : null}
             <Alert severity="info" variant="outlined">
-              Este formulario crea una cuenta de acceso. No crea ficha de
-              colaborador ni contacto externo.
+              {editingUser
+                ? "Puedes actualizar los datos operativos, el rol y el estado de acceso. La contraseña se administra por separado."
+                : "Este formulario crea una cuenta de acceso. No crea ficha de colaborador ni contacto externo."}
             </Alert>
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
@@ -756,6 +824,8 @@ export function UsersPage({ currentUser }: UsersPageProps) {
                   updateFormField("username", event.target.value)
                 }
                 required
+                disabled={Boolean(editingUser)}
+                helperText={editingUser ? "El nombre de usuario no se modifica desde este formulario." : undefined}
                 fullWidth
                 autoComplete="username"
               />
@@ -794,37 +864,47 @@ export function UsersPage({ currentUser }: UsersPageProps) {
               />
             </Stack>
 
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                label="Contraseña temporal"
-                type="password"
-                value={form.password}
-                onChange={(event) =>
-                  updateFormField("password", event.target.value)
-                }
-                required
-                fullWidth
-                autoComplete="new-password"
-              />
+            {!editingUser ? (
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                <TextField
+                  label="Contraseña temporal"
+                  type="password"
+                  value={form.password}
+                  onChange={(event) =>
+                    updateFormField("password", event.target.value)
+                  }
+                  required
+                  fullWidth
+                  autoComplete="new-password"
+                />
 
-              <TextField
-                label="Confirmar contraseña"
-                type="password"
-                value={form.password_confirm}
-                onChange={(event) =>
-                  updateFormField("password_confirm", event.target.value)
-                }
-                required
-                fullWidth
-                autoComplete="new-password"
-              />
-            </Stack>
+                <TextField
+                  label="Confirmar contraseña"
+                  type="password"
+                  value={form.password_confirm}
+                  onChange={(event) =>
+                    updateFormField("password_confirm", event.target.value)
+                  }
+                  required
+                  fullWidth
+                  autoComplete="new-password"
+                />
+              </Stack>
+            ) : null}
 
             <TextField
               select
               label="Rol"
               value={form.role}
               onChange={(event) => updateFormField("role", event.target.value)}
+              disabled={Boolean(
+                editingUser?.role === "ADMINISTRADOR" && !canCreateAdmin,
+              )}
+              helperText={
+                editingUser?.role === "ADMINISTRADOR" && !canCreateAdmin
+                  ? "Solo un Administrador puede modificar este rol."
+                  : undefined
+              }
               fullWidth
               required
             >
@@ -834,6 +914,21 @@ export function UsersPage({ currentUser }: UsersPageProps) {
                 </MenuItem>
               ))}
             </TextField>
+
+            {editingUser ? (
+              <TextField
+                select
+                label="Estado de acceso"
+                value={form.status}
+                onChange={(event) => updateFormField("status", event.target.value)}
+                fullWidth
+              >
+                <MenuItem value="ACTIVO">Activo</MenuItem>
+                <MenuItem value="INACTIVO">Inactivo</MenuItem>
+                <MenuItem value="ANULADO">Anulado</MenuItem>
+                <MenuItem value="ARCHIVADO">Archivado</MenuItem>
+              </TextField>
+            ) : null}
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <TextField
@@ -879,21 +974,20 @@ export function UsersPage({ currentUser }: UsersPageProps) {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)} disabled={saving}>
+          <Button onClick={closeUserForm} disabled={saving}>
             Cancelar
           </Button>
 
           <Button
             variant="contained"
-            onClick={handleCreateUser}
+            onClick={handleSaveUser}
             disabled={
               saving ||
               !form.username.trim() ||
-              !form.password ||
-              !form.password_confirm
+              (!editingUser && (!form.password || !form.password_confirm))
             }
           >
-            {saving ? "Creando..." : "Crear usuario"}
+            {saving ? "Guardando..." : editingUser ? "Guardar cambios" : "Crear usuario"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1057,6 +1151,20 @@ export function UsersPage({ currentUser }: UsersPageProps) {
             </Stack>
           ) : null}
         </DialogContent>
+        <DialogActions>
+          {selectedUser ? (
+            <Button
+              startIcon={<EditIcon />}
+              onClick={() => {
+                openUserForm(selectedUser);
+                setSelectedUser(null);
+              }}
+            >
+              Editar usuario
+            </Button>
+          ) : null}
+          <Button onClick={() => setSelectedUser(null)}>Cerrar</Button>
+        </DialogActions>
       </Dialog>
     </Stack>
   );

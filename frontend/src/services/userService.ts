@@ -48,13 +48,6 @@ export type CreateUserResponse = {
   user: AuthUser;
 };
 
-function extractResults<T>(data: ListResponse<T>) {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  return data.results ?? [];
-}
 
 function normalizeParams(params: ListUsersParams = {}) {
   return {
@@ -65,11 +58,19 @@ function normalizeParams(params: ListUsersParams = {}) {
 }
 
 export async function fetchUsers(params: ListUsersParams = {}) {
-  const response = await api.get<ListResponse<AuthUser>>("/auth/users/", {
-    params: normalizeParams(params),
+  const firstResponse = await api.get<ListResponse<AuthUser>>("/auth/users/", {
+    params: { ...normalizeParams(params), page_size: 100 },
   });
+  if (Array.isArray(firstResponse.data)) return firstResponse.data;
 
-  return extractResults(response.data);
+  const users = [...firstResponse.data.results];
+  let nextUrl = firstResponse.data.next;
+  while (nextUrl) {
+    const response = await api.get<PaginatedResponse<AuthUser>>(nextUrl);
+    users.push(...response.data.results);
+    nextUrl = response.data.next;
+  }
+  return users;
 }
 
 export async function createUser(payload: CreateUserPayload) {

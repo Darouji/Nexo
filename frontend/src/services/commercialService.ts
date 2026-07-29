@@ -161,13 +161,6 @@ export type CreateCiudadPayload = {
   status?: string;
 };
 
-function extractResults<T>(data: ListResponse<T>) {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  return data.results ?? [];
-}
 
 function normalizeParams(params: ListParams = {}) {
   return {
@@ -177,11 +170,19 @@ function normalizeParams(params: ListParams = {}) {
 }
 
 async function getList<T>(url: string, params: ListParams = {}) {
-  const response = await api.get<ListResponse<T>>(url, {
-    params: normalizeParams(params),
+  const firstResponse = await api.get<ListResponse<T>>(url, {
+    params: { ...normalizeParams(params), page_size: 100 },
   });
+  if (Array.isArray(firstResponse.data)) return firstResponse.data;
 
-  return extractResults(response.data);
+  const results = [...firstResponse.data.results];
+  let nextUrl = firstResponse.data.next;
+  while (nextUrl) {
+    const response = await api.get<PaginatedResponse<T>>(nextUrl);
+    results.push(...response.data.results);
+    nextUrl = response.data.next;
+  }
+  return results;
 }
 
 export async function fetchCiudades(params: ListParams = {}) {

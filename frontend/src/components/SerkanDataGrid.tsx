@@ -92,6 +92,7 @@ type ColumnLayoutEvent<TRow extends IdentifiableRow> = {
 type SerkanDataGridProps<TRow extends IdentifiableRow> = {
   gridKey: string;
   serverManaged?: boolean;
+  clientManaged?: boolean;
   ariaLabel: string;
   rows: TRow[];
   columns: ColDef<TRow>[];
@@ -208,6 +209,7 @@ function toInitialLayoutColumn<TRow>(column: ColDef<TRow>): ColDef<TRow> {
 export function SerkanDataGrid<TRow extends IdentifiableRow>({
   gridKey,
   serverManaged = false,
+  clientManaged = false,
   ariaLabel,
   rows,
   columns,
@@ -494,11 +496,16 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       pageSize: paginationModel.pageSize,
     };
 
+    if (clientManaged && gridApiRef.current) {
+      gridApiRef.current.setGridOption("paginationPageSize", paginationModel.pageSize);
+      gridApiRef.current.paginationGoToPage(paginationModel.page);
+    }
+
     gridApiRef.current?.refreshCells({
       columns: ["__row_number__"],
       force: true,
     });
-  }, [paginationModel.page, paginationModel.pageSize]);
+  }, [clientManaged, paginationModel.page, paginationModel.pageSize]);
 
   useEffect(() => {
     if (filterResetKey > 0) {
@@ -908,6 +915,22 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           animateRows={false}
           ensureDomOrder
           enableCellTextSelection
+          pagination={clientManaged}
+          paginationPageSize={clientManaged ? paginationModel.pageSize : undefined}
+          suppressPaginationPanel={clientManaged}
+          onPaginationChanged={
+            clientManaged
+              ? (event) => {
+                  const nextPage = event.api.paginationGetCurrentPage();
+                  if (nextPage !== paginationModelRef.current.page) {
+                    onPaginationModelChange({
+                      page: nextPage,
+                      pageSize: paginationModelRef.current.pageSize,
+                    });
+                  }
+                }
+              : undefined
+          }
           rowHeight={SERKAN_GRID_ROW_HEIGHT}
           headerHeight={SERKAN_GRID_HEADER_HEIGHT}
           sortingOrder={["asc", "desc", null]}

@@ -7,6 +7,7 @@ class AccountsConfig(AppConfig):
     label = "accounts"
 
     def ready(self):
+        from . import grid_definitions  # noqa: F401
         # Importa extensiones OpenAPI para que drf-spectacular detecte
         # correctamente la autenticación por token expirable.
         from . import schema  # noqa: F401

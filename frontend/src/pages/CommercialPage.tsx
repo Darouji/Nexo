@@ -13,7 +13,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  InputAdornment,
   MenuItem,
   Stack,
   Tab,
@@ -29,9 +28,9 @@ import GroupsIcon from "@mui/icons-material/Groups";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import EditIcon from "@mui/icons-material/Edit";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SearchIcon from "@mui/icons-material/Search";
-import type { GridColDef, GridValidRowModel } from "@mui/x-data-grid";
-import { SmartDataGrid } from "../components/SmartDataGrid";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
+import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
 import {
   createArea,
   createContacto,
@@ -265,7 +264,7 @@ function normalizeSearch(value: unknown) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
-function filterRows<T extends GridValidRowModel>(
+function filterRows<T extends { id: number | string }>(
   rows: T[],
   searchTerm: string,
 ) {
@@ -465,6 +464,11 @@ function ContactAvailabilityCalendar({ contact }: { contact: Contacto }) {
 export function CommercialPage() {
   const [activeTab, setActiveTab] = useState<CommercialTab>("mineras");
   const [searchTerm, setSearchTerm] = useState("");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
+  const [sortModel, setSortModel] = useState<SerkanGridSortModel>(null);
+  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -594,18 +598,18 @@ export function CommercialPage() {
     return filterRows(contactos, searchTerm);
   }, [activeTab, areas, contactos, holdings, mineras, searchTerm, subareas]);
 
-  const columns = useMemo<GridColDef[]>(() => {
-    const editColumn: GridColDef = {
-      field: "edit",
+  const columns = useMemo<ColDef<CommercialRecord>[]>(() => {
+    const editColumn: ColDef<CommercialRecord> = {
+      colId: "edit",
       headerName: "Editar",
       width: 110,
       sortable: false,
-      filterable: false,
-      renderCell: (params) => (
+      filter: false,
+      cellRenderer: (params: ICellRendererParams<CommercialRecord>) => (
         <Button
           size="small"
           startIcon={<EditIcon />}
-          onClick={() => openEditDialog(activeTab, params.row as CommercialRecord)}
+          onClick={() => params.data && openEditDialog(activeTab, params.data)}
         >
           Editar
         </Button>
@@ -620,13 +624,13 @@ export function CommercialPage() {
           headerName: "Descripción",
           minWidth: 260,
           flex: 1.2,
-          renderCell: (params) => params.value || "Sin descripción",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin descripción",
         },
         {
           field: "status",
           headerName: "Estado",
           width: 140,
-          renderCell: (params) => (
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => (
             <StatusChip status={String(params.value || "")} />
           ),
         },
@@ -634,7 +638,7 @@ export function CommercialPage() {
           field: "updated_at",
           headerName: "Última actualización",
           width: 180,
-          renderCell: (params) => formatDateTime(String(params.value || "")),
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => formatDateTime(String(params.value || "")),
         },
         editColumn,
       ];
@@ -647,39 +651,39 @@ export function CommercialPage() {
           field: "rut",
           headerName: "RUT",
           width: 135,
-          renderCell: (params) => params.value || "Sin RUT",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin RUT",
         },
         {
           field: "holding_name",
           headerName: "Holding",
           minWidth: 180,
           flex: 0.8,
-          renderCell: (params) => params.value || "Sin holding",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin holding",
         },
         {
           field: "city_name",
           headerName: "Ciudad",
           width: 150,
-          renderCell: (params) => params.value || "Sin ciudad",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin ciudad",
         },
         {
           field: "email",
           headerName: "Correo",
           minWidth: 190,
           flex: 0.8,
-          renderCell: (params) => params.value || "Sin correo",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin correo",
         },
         {
           field: "phone",
           headerName: "Teléfono",
           width: 150,
-          renderCell: (params) => params.value || "Sin teléfono",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin teléfono",
         },
         {
           field: "status",
           headerName: "Estado",
           width: 140,
-          renderCell: (params) => (
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => (
             <StatusChip status={String(params.value || "")} />
           ),
         },
@@ -701,20 +705,20 @@ export function CommercialPage() {
           headerName: "Holding",
           minWidth: 180,
           flex: 0.8,
-          renderCell: (params) => params.value || "Sin holding",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin holding",
         },
         {
           field: "location",
           headerName: "Ubicación",
           minWidth: 180,
           flex: 0.7,
-          renderCell: (params) => params.value || "Sin ubicación",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin ubicación",
         },
         {
           field: "status",
           headerName: "Estado",
           width: 140,
-          renderCell: (params) => (
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => (
             <StatusChip status={String(params.value || "")} />
           ),
         },
@@ -742,20 +746,20 @@ export function CommercialPage() {
           headerName: "Holding",
           minWidth: 180,
           flex: 0.8,
-          renderCell: (params) => params.value || "Sin holding",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin holding",
         },
         {
           field: "description",
           headerName: "Descripción",
           minWidth: 240,
           flex: 1,
-          renderCell: (params) => params.value || "Sin descripción",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin descripción",
         },
         {
           field: "status",
           headerName: "Estado",
           width: 140,
-          renderCell: (params) => (
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => (
             <StatusChip status={String(params.value || "")} />
           ),
         },
@@ -775,7 +779,7 @@ export function CommercialPage() {
         headerName: "Cargo",
         minWidth: 180,
         flex: 0.8,
-        renderCell: (params) => params.value || "Sin cargo",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin cargo",
       },
       {
         field: "minera_name",
@@ -800,49 +804,49 @@ export function CommercialPage() {
         headerName: "Correo",
         minWidth: 210,
         flex: 1,
-        renderCell: (params) => params.value || "Sin correo",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin correo",
       },
       {
         field: "phone",
         headerName: "Teléfono",
         width: 150,
-        renderCell: (params) => params.value || "Sin teléfono",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin teléfono",
       },
       {
         field: "shift_mode_display",
         headerName: "Modalidad",
         width: 135,
-        renderCell: (params) => params.value || "Sin definir",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin definir",
       },
 
       {
-        field: "cycle",
+        colId: "cycle",
         headerName: "Ciclo laboral",
         minWidth: 200,
         flex: 0.8,
         sortable: false,
-        filterable: false,
-        renderCell: (params) => formatContactCycle(params.row as Contacto),
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => formatContactCycle(params.data as Contacto),
       },
       {
         field: "status",
         headerName: "Estado",
         width: 140,
-        renderCell: (params) => (
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => (
           <StatusChip status={String(params.value || "")} />
         ),
       },
       {
-        field: "availability",
+        colId: "availability",
         headerName: "Disponibilidad",
         width: 175,
         sortable: false,
-        filterable: false,
-        renderCell: (params) => (
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => (
           <Button
             size="small"
             startIcon={<CalendarMonthIcon />}
-            onClick={() => setAvailabilityContact(params.row as Contacto)}
+            onClick={() => setAvailabilityContact(params.data as Contacto)}
           >
             Ver calendario
           </Button>
@@ -1581,7 +1585,12 @@ export function CommercialPage() {
         <Stack spacing={2}>
           <Tabs
             value={activeTab}
-            onChange={(_event, value: CommercialTab) => setActiveTab(value)}
+            onChange={(_event, value: CommercialTab) => {
+              setActiveTab(value);
+              setPagination((current) => ({ ...current, page: 0 }));
+              setColumnFilters([]);
+              setFilterResetKey((current) => current + 1);
+            }}
             variant="scrollable"
             scrollButtons="auto"
           >
@@ -1594,33 +1603,26 @@ export function CommercialPage() {
 
           <Divider />
 
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-            <TextField
-              label={`Buscar en ${tabLabels[activeTab].toLowerCase()}`}
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              fullWidth
-              placeholder="Nombre, RUT, correo, teléfono, minera, área o subárea"
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ color: colors.text.muted }} />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <Button
-              variant="outlined"
-              onClick={() => setSearchTerm("")}
-              disabled={!searchTerm}
-              sx={{ minWidth: { xs: "100%", md: 120 } }}
-            >
-              Limpiar
-            </Button>
-          </Stack>
+          <SerkanFilterToolbar
+            searchLabel={`Buscar en ${tabLabels[activeTab].toLowerCase()}`}
+            searchPlaceholder="Nombre, RUT, correo, teléfono, minera, área o subárea..."
+            searchValue={searchTerm}
+            onSearchValueChange={setSearchTerm}
+            onApply={() => setPagination((current) => ({ ...current, page: 0 }))}
+            onClear={() => {
+              setSearchTerm("");
+              setColumnFilters([]);
+              setPagination((current) => ({ ...current, page: 0 }));
+              setFilterResetKey((current) => current + 1);
+            }}
+            loading={loading}
+            expanded={filtersExpanded}
+            onExpandedChange={setFiltersExpanded}
+            activeFiltersCount={columnFilters.length}
+            panelId="commercial-advanced-filters"
+          >
+            <Box />
+          </SerkanFilterToolbar>
         </Stack>
       </Card>
 
@@ -1642,10 +1644,26 @@ export function CommercialPage() {
         </Alert>
       ) : null}
 
-      <SmartDataGrid
-        rows={activeRows as GridValidRowModel[]}
+      <SerkanDataGrid
+        key={activeTab}
+        gridKey={`commercial.${activeTab}`}
+        serverManaged
+        clientManaged
+        ariaLabel={tabLabels[activeTab]}
+        rows={activeRows}
         columns={columns}
         loading={loading}
+        paginationModel={pagination}
+        onPaginationModelChange={setPagination}
+        rowCount={activeRows.length}
+        sortModel={sortModel}
+        onSortModelChange={setSortModel}
+        onFilterModelChange={(filters) => {
+          setColumnFilters(filters);
+          setPagination((current) => ({ ...current, page: 0 }));
+        }}
+        filterResetKey={filterResetKey}
+        namedViewFilters={{ search: searchTerm }}
       />
 
       <Dialog

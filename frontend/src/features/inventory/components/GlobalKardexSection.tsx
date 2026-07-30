@@ -90,6 +90,7 @@ export function GlobalKardexSection({
     <SectionCard
       title="Movimientos de Kardex"
       subtitle="Un único historial para recepciones, ventas, ajustes, importaciones y reversas."
+      tone={colors.modules.inventory}
       actions={
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
           <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportView} disabled={exporting || loading}>

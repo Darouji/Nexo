@@ -1,3 +1,9 @@
+/**
+ * Página orquestadora de ubicaciones y custodia de Inventario.
+ *
+ * Mantiene únicamente el resumen global y la retroalimentación de la pantalla;
+ * la gestión de ubicaciones, saldos y traslados se delega a su sección de dominio.
+ */
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import { Alert, Box, Stack } from "@mui/material";
 import { useCallback, useEffect, useState } from "react";
@@ -20,6 +26,8 @@ export function InventoryLocationsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  // Las operaciones de la sección reutilizan esta recarga para que el resumen
+  // represente el estado confirmado por el backend después de cada cambio.
   const loadSummary = useCallback(async () => {
     try {
       setSummary(await fetchInventorySummary());
@@ -53,6 +61,8 @@ export function InventoryLocationsPage() {
         }
       });
 
+    // Evita actualizar estado cuando el usuario abandona la pantalla antes de que
+    // finalice la solicitud inicial.
     return () => {
       active = false;
     };

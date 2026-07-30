@@ -1,3 +1,10 @@
+/**
+ * Resumen ejecutivo del estado global de Inventario.
+ *
+ * Presenta indicadores calculados por el backend y no deriva cifras parciales desde
+ * las filas visibles de una grilla, evitando confundir filtros de pantalla con el
+ * estado total de existencias y recepciones.
+ */
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
@@ -10,6 +17,8 @@ import { colors } from "../../../theme/colors";
 
 const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
 
+// La ausencia o invalidez de una métrica se representa como dato no disponible,
+// en vez de convertirla silenciosamente en cero.
 function formatNumber(value: number | null | undefined) {
   const numericValue = Number(value);
 

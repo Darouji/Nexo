@@ -1556,7 +1556,9 @@ export function CommercialPage() {
                     ? `${option.name} — ${option.region}`
                     : option.name
               }
-              isOptionEqualToValue={(option, value) => option.id === value.id}
+              isOptionEqualToValue={(option, value) =>
+                typeof value !== "string" && option.id === value.id
+              }
               noOptionsText="La ciudad se creará al guardar el contacto."
               sx={{ flex: 1, minWidth: { xs: 0, md: 320 } }}
               renderInput={(params) => (

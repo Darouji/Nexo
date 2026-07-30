@@ -69,6 +69,10 @@ export const appTheme = createTheme({
         body: {
           background: colors.gradients.page,
         },
+        "[data-grid-key]": {
+          border: `1px solid ${colors.border.light} !important`,
+          boxShadow: `${colors.shadow.none} !important`,
+        },
         "[data-serkan-section='inventario'] .MuiCard-root:has([data-grid-key^='inventory.'])":
           moduleBlockStyle(
             colors.modules.inventory.border,

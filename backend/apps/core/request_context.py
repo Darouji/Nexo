@@ -1,3 +1,5 @@
+# Contexto de ejecución para propagar el identificador de una solicitud sin
+# acoplar cada servicio o logger al objeto HTTP de Django.
 from contextvars import ContextVar
 
 _request_id_var = ContextVar("request_id", default="")
@@ -27,5 +29,7 @@ def reset_request_id(token):
     Restaura el contexto anterior.
     """
 
+    # Restaurar el token evita que el identificador de una solicitud se filtre a
+    # otra ejecución atendida posteriormente por el mismo proceso.
     if token is not None:
         _request_id_var.reset(token)

@@ -1,3 +1,10 @@
+/**
+ * Contratos y operaciones del centro de importación actualmente implementado.
+ *
+ * Cada archivo crea un lote con hash, filas originales, datos normalizados,
+ * mensajes y procedencia. Prevalidar no escribe registros de destino; procesar
+ * actúa sólo después de que el lote fue revisado según las reglas del backend.
+ */
 import { api } from "./api";
 
 type PaginatedResponse<T> = {
@@ -14,6 +21,8 @@ export type ListParams = {
   ordering?: string;
 };
 
+// El contrato admite nuevos destinos, aunque la implementación actual expone
+// importación de productos.
 export type ImportTarget = "PRODUCTOS" | string;
 
 export type ImportBatchStatus =
@@ -33,6 +42,10 @@ export type ImportRowStatus =
   | "IMPORTADO"
   | string;
 
+/**
+ * Conserva evidencia por fila: entrada original, interpretación normalizada,
+ * mensajes y objeto creado cuando el procesamiento fue exitoso.
+ */
 export interface ImportRow {
   id: number;
   batch: number;
@@ -54,6 +67,7 @@ export interface ImportRow {
   updated_at: string;
 }
 
+/** Resumen del archivo, su integridad y el resultado agregado de todas sus filas. */
 export interface ImportBatch {
   id: number;
   target: ImportTarget;
@@ -103,6 +117,7 @@ function normalizeParams(params: ListParams = {}) {
   };
 }
 
+/** Adapta listados directos y respuestas paginadas al contrato de las pantallas. */
 async function getList<T>(url: string, params: ListParams = {}) {
   const response = await api.get<ListResponse<T>>(url, {
     params: normalizeParams(params),
@@ -125,6 +140,7 @@ export async function fetchImportRows(params: ListParams = {}) {
   });
 }
 
+/** Carga el archivo sin asumir todavía que sus filas son válidas o importables. */
 export async function createImportBatch(payload: CreateImportBatchPayload) {
   const formData = new FormData();
   formData.append("target", payload.target);
@@ -138,6 +154,7 @@ export async function createImportBatch(payload: CreateImportBatchPayload) {
   return response.data;
 }
 
+/** Analiza y clasifica las filas sin ejecutar la importación definitiva. */
 export async function prevalidateImportBatch(batchId: number) {
   const response = await api.post<ImportBatch>(
     `/imports/batches/${batchId}/prevalidate/`,
@@ -147,6 +164,7 @@ export async function prevalidateImportBatch(batchId: number) {
   return response.data;
 }
 
+/** Solicita al backend procesar el lote ya prevalidado y registrar procedencia. */
 export async function processImportBatch(batchId: number) {
   const response = await api.post<ImportBatch>(
     `/imports/batches/${batchId}/process/`,

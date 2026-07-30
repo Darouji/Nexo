@@ -1,3 +1,10 @@
+/**
+ * Sección de consulta del Kardex global de Inventario.
+ *
+ * Presenta filtros, paginación y exportaciones sobre el historial confirmado por
+ * el backend. No crea ni modifica movimientos: el Kardex se trata aquí como una
+ * fuente histórica de lectura y trazabilidad.
+ */
 import DownloadIcon from "@mui/icons-material/Download";
 import HistoryIcon from "@mui/icons-material/History";
 import {
@@ -93,9 +100,11 @@ export function GlobalKardexSection({
       tone={colors.modules.inventory}
       actions={
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          {/* La exportación de vista respeta el conjunto filtrado y las columnas visibles. */}
           <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportView} disabled={exporting || loading}>
             {exporting ? "Exportando..." : "Exportar resultados filtrados"}
           </Button>
+          {/* La exportación oficial usa el contrato fijo definido por el backend y requiere permiso explícito. */}
           {canExportOfficial ? (
             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={onExportOfficial} disabled={exporting || loading}>
               Exportación oficial
@@ -107,6 +116,7 @@ export function GlobalKardexSection({
         </Stack>
       }
     >
+      {/* El historial se carga bajo demanda porque puede crecer continuamente; diferir la consulta mejora el acceso inicial sin alterar los registros. */}
       {!hasLoaded ? (
         <Stack
           spacing={2}
@@ -179,6 +189,7 @@ export function GlobalKardexSection({
             />
           </SerkanFilterToolbar>
 
+          {/* La grilla delega paginación, orden y filtros al servidor para no reconstruir un historial parcial en el navegador. */}
           <SerkanDataGrid
             gridKey="inventory.global-kardex"
             ariaLabel="Kardex global de inventario"

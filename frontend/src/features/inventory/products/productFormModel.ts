@@ -1,3 +1,9 @@
+/**
+ * Modelo de presentación del formulario de productos. Mantiene los valores como
+ * texto mientras el usuario edita y concentra las normalizaciones usadas para
+ * detectar categorías, modelos y códigos SAP equivalentes antes de enviar datos.
+ * Las restricciones definitivas de unicidad e integridad permanecen en backend.
+ */
 import {
   normalizeCategoryNameForComparison,
   type Category,
@@ -45,6 +51,10 @@ export function getProductOriginLabel(origin: ProductOrigin) {
   return productOriginLabels[origin];
 }
 
+/**
+ * Reutiliza la normalización canónica del backend cuando está disponible y
+ * conserva compatibilidad con categorías antiguas que aún no exponen ese campo.
+ */
 export function findCategoryByInputName(categories: Category[], name: string) {
   const normalizedName = normalizeCategoryNameForComparison(name);
 
@@ -65,6 +75,10 @@ export function findCategoryByInputName(categories: Category[], name: string) {
   });
 }
 
+/**
+ * Produce una representación tolerante a mayúsculas, tildes, puntuación y
+ * espacios para comparar nombres; nunca reemplaza el valor visible ingresado.
+ */
 export function normalizeProductComparisonValue(value: string) {
   return value
     .trim()
@@ -76,6 +90,7 @@ export function normalizeProductComparisonValue(value: string) {
     .trim();
 }
 
+/** Normaliza un código SAP únicamente para detección de equivalencias. */
 export function normalizeSapComparisonValue(value: string) {
   return value
     .trim()
@@ -85,6 +100,8 @@ export function normalizeSapComparisonValue(value: string) {
     .replace(/[^a-z0-9]/g, "");
 }
 
+// Estos marcadores suelen representar ausencia de código, no identificadores
+// SAP válidos. Se detectan antes de enviar para entregar feedback inmediato.
 const forbiddenSapCodeValues = new Set([
   "n",
   "na",

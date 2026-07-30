@@ -1,3 +1,10 @@
+/**
+ * Contratos y operaciones de la jerarquía comercial de SERKAN.
+ *
+ * Las relaciones siguen Holding → Minera → Área → Subárea → Contacto. El
+ * backend valida coherencia, normalización y duplicados; el frontend usa estas
+ * estructuras para seleccionar entidades relacionadas sin recrear esas reglas.
+ */
 import { api } from "./api";
 
 type PaginatedResponse<T> = {
@@ -14,6 +21,7 @@ export type ListParams = {
   ordering?: string;
 };
 
+/** Campos transversales presentes en las entidades comerciales persistidas. */
 export interface BaseCommercialRecord {
   [key: string]: unknown;
   id: number;
@@ -74,6 +82,10 @@ export interface Subarea extends BaseCommercialRecord {
   description: string;
 }
 
+/**
+ * Persona externa asociada a la estructura comercial. No representa una cuenta
+ * de acceso ni un colaborador interno de SERKAN.
+ */
 export interface Contacto extends BaseCommercialRecord {
   first_name: string;
   last_name: string;
@@ -169,6 +181,11 @@ function normalizeParams(params: ListParams = {}) {
   };
 }
 
+/**
+ * Admite endpoints paginados o listas directas y recorre todas las páginas. Las
+ * pantallas comerciales usan estos resultados completos para construir
+ * selectores jerárquicos y validar relaciones visibles.
+ */
 async function getList<T>(url: string, params: ListParams = {}) {
   const firstResponse = await api.get<ListResponse<T>>(url, {
     params: { ...normalizeParams(params), page_size: 100 },
@@ -291,6 +308,8 @@ export type AreaCliente = Area;
 export type SubAreaCliente = Subarea;
 export type ContactoCliente = Contacto;
 
+// Estos alias conservan compatibilidad de compilación durante la migración de
+// nombres; no crean endpoints ni entidades de dominio adicionales.
 export const getCiudades = fetchCiudades;
 export const getGruposEmpresariales = fetchHoldings;
 export const getMineras = fetchMineras;

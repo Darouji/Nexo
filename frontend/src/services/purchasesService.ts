@@ -1,3 +1,11 @@
+/**
+ * Contratos y operaciones del flujo de Compras y Abastecimiento implementado.
+ *
+ * El servicio adapta los nombres de la API a modelos de presentación estables y
+ * envía las transiciones de estado, recepciones y cancelaciones al backend. Las
+ * reglas de aprobación, moneda, cantidades e inventario permanecen en servicios
+ * transaccionales del servidor.
+ */
 import type { SerkanGridFilter } from "../components/SerkanDataGrid";
 import { api } from "./api";
 
@@ -18,6 +26,10 @@ export type Supplier = {
   active: boolean;
 };
 
+/**
+ * Línea de orden. `inventory_managed` indica si su recepción participa en
+ * pendientes y stock; no todas las compras representan inventario comercial.
+ */
 export type PurchaseOrderLine = {
   id?: number;
   description: string;
@@ -50,6 +62,10 @@ export type PurchaseOrder = {
   lines: PurchaseOrderLine[];
 };
 
+/**
+ * Compromiso de recepción física proveniente de una orden o de un pendiente
+ * manual. Mantiene cantidades comprometidas, recibidas, canceladas y restantes.
+ */
 export type PurchaseReceipt = {
   id: number;
   pending_receipt_id: number;
@@ -73,6 +89,7 @@ export type PurchaseReceipt = {
   created_at: string;
 };
 
+/** Foto de una operación histórica sobre un compromiso de recepción. */
 export type PurchaseReceiptHistory = {
   id: number;
   operation_type: "RECEIVE" | "CANCEL";
@@ -120,6 +137,8 @@ export type PurchaseOrderPayload = {
 
 export type SupplierPayload = Omit<Supplier, "id">;
 
+// Contratos de transporte de la API. Se mantienen separados de los modelos de
+// pantalla para no filtrar nombres internos de serializers a todos los componentes.
 type ApiSupplier = {
   id: number; legal_name: string; trade_name: string; tax_id: string; country: string;
   contact_name: string; email: string; phone: string; status: string;
@@ -146,11 +165,13 @@ type ApiCommitment = {
   state: string; state_display: string; referencia: string; motivo: string; created_at: string;
 };
 
+/** Unifica listas directas y páginas DRF sin perder metadatos de paginación. */
 function normalizePage<T>(data: PaginatedResponse<T> | T[]): PaginatedResponse<T> {
   return Array.isArray(data)
     ? { count: data.length, next: null, previous: null, results: data }
     : data;
 }
+
 function mapSupplier(value: ApiSupplier): Supplier {
   return {
     id: value.id, tax_id: value.tax_id, name: value.legal_name,
@@ -158,6 +179,11 @@ function mapSupplier(value: ApiSupplier): Supplier {
     email: value.email, phone: value.phone, active: value.status === "ACTIVO",
   };
 }
+
+/**
+ * Convierte montos decimales serializados a números para presentación y deriva
+ * el pendiente visible desde los compromisos informados por el backend.
+ */
 function mapOrder(value: ApiOrder): PurchaseOrder {
   return {
     id: value.id, number: value.number, supplier: value.supplier,
@@ -176,6 +202,7 @@ function mapOrder(value: ApiOrder): PurchaseOrder {
     })),
   };
 }
+
 function mapCommitment(value: ApiCommitment): PurchaseReceipt {
   return {
     id: value.id, pending_receipt_id: value.pending_receipt_id,
@@ -199,6 +226,7 @@ export async function fetchPurchaseOrders(params: PurchaseListParams, signal?: A
   const page = normalizePage(response.data);
   return { ...page, results: page.results.map(mapOrder) };
 }
+
 export async function fetchSuppliers(params: PurchaseListParams, signal?: AbortSignal) {
   const response = await api.get<PaginatedResponse<ApiSupplier> | ApiSupplier[]>(
     "/purchases/proveedores/", { params, signal },
@@ -206,6 +234,7 @@ export async function fetchSuppliers(params: PurchaseListParams, signal?: AbortS
   const page = normalizePage(response.data);
   return { ...page, results: page.results.map(mapSupplier) };
 }
+
 export async function fetchPurchaseReceipts(params: PurchaseListParams, signal?: AbortSignal) {
   const response = await api.get<PaginatedResponse<ApiCommitment> | ApiCommitment[]>(
     "/purchases/recepciones-fisicas/",
@@ -214,6 +243,7 @@ export async function fetchPurchaseReceipts(params: PurchaseListParams, signal?:
   const page = normalizePage(response.data);
   return { ...page, results: page.results.map(mapCommitment) };
 }
+
 export async function createSupplier(payload: SupplierPayload) {
   const response = await api.post<ApiSupplier>("/purchases/proveedores/", {
     legal_name: payload.name, trade_name: payload.trade_name, tax_id: payload.tax_id,
@@ -222,6 +252,11 @@ export async function createSupplier(payload: SupplierPayload) {
   });
   return mapSupplier(response.data);
 }
+
+/**
+ * Traduce la forma del formulario al contrato del backend y congela la fuente y
+ * fecha del tipo de cambio informado para órdenes en USD.
+ */
 function purchaseOrderApiPayload(payload: PurchaseOrderPayload) {
   return {
     number: payload.number,
@@ -244,6 +279,7 @@ function purchaseOrderApiPayload(payload: PurchaseOrderPayload) {
   };
 }
 
+/** La clave idempotente protege la creación frente a reintentos del cliente. */
 export async function createPurchaseOrder(payload: PurchaseOrderPayload, idempotencyKey: string) {
   const response = await api.post<ApiOrder>(
     "/purchases/ordenes/", purchaseOrderApiPayload(payload),
@@ -251,15 +287,28 @@ export async function createPurchaseOrder(payload: PurchaseOrderPayload, idempot
   );
   return mapOrder(response.data);
 }
+
+/**
+ * Después de actualizar se recupera la representación completa para incluir
+ * líneas, snapshots y compromisos recalculados por el backend.
+ */
 export async function updatePurchaseOrder(orderId: number, payload: PurchaseOrderPayload) {
   await api.put(`/purchases/ordenes/${orderId}/`, purchaseOrderApiPayload(payload));
   const response = await api.get<ApiOrder>(`/purchases/ordenes/${orderId}/`);
   return mapOrder(response.data);
 }
+
+// Mapa explícito de transiciones permitidas por la interfaz; la máquina de
+// estados y sus permisos se validan nuevamente en el backend.
 const actions = {
   "submit-review": "enviar-a-revision", approve: "aprobar", issue: "emitir",
   cancel: "cancelar-remanentes", close: "cerrar",
 } as const;
+
+/**
+ * Ejecuta una transición con motivo e idempotencia, sin modificar localmente el
+ * estado antes de recibir la orden confirmada por el servidor.
+ */
 export async function transitionPurchaseOrder(
   orderId: number,
   action: keyof typeof actions,
@@ -273,6 +322,11 @@ export async function transitionPurchaseOrder(
   );
   return mapOrder(response.data);
 }
+
+/**
+ * Solicita la recepción de una cantidad. El backend coordina compromiso,
+ * pendiente, ubicación y movimiento Kardex dentro de su regla transaccional.
+ */
 export async function receivePhysicalReceipt(
   receiptId: number,
   quantity: number,
@@ -287,6 +341,7 @@ export async function receivePhysicalReceipt(
   return response.data;
 }
 
+/** Cancela sólo unidades pendientes y conserva las recepciones ya registradas. */
 export async function cancelPhysicalReceipt(
   receiptId: number,
   quantity: number,
@@ -307,6 +362,11 @@ export async function fetchPhysicalReceiptHistory(receiptId: number) {
   );
   return response.data;
 }
+
+/**
+ * Exporta desde backend para aplicar los mismos filtros, permisos, etiquetas y
+ * columnas que rigen la vista u oficio seleccionado.
+ */
 export async function exportPurchases(
   resource: "orders" | "suppliers" | "receipts",
   params: PurchaseListParams & { columns?: string; scope?: "view" | "official" },
@@ -318,6 +378,8 @@ export async function exportPurchases(
   });
   return response.data;
 }
+
+/** Serializa filtros remotos únicamente cuando existe al menos uno. */
 export function serializeGridFilters(filters: SerkanGridFilter[]) {
   return filters.length ? JSON.stringify(filters) : undefined;
 }

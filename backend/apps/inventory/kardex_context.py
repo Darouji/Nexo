@@ -1,3 +1,6 @@
+# Impide que se creen movimientos Kardex aislados de la operación de stock que
+# les da origen. Los servicios de dominio habilitan este contexto durante el
+# tramo transaccional autorizado y los modelos rechazan escrituras externas.
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -26,4 +29,6 @@ def allow_kardex_write():
     try:
         yield
     finally:
+        # ContextVar conserva el aislamiento entre ejecuciones; restaurar el token
+        # impide que una autorización sobreviva fuera del bloque de servicio.
         _kardex_write_authorized.reset(token)

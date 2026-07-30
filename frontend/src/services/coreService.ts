@@ -1,3 +1,9 @@
+/**
+ * Contrato de indicadores agregados para Inicio y Estadísticas.
+ *
+ * El frontend presenta los valores calculados por el backend y no debe
+ * reconstruir totales de negocio a partir de las filas visibles de una grilla.
+ */
 import { api } from "./api";
 
 export type DashboardStatistics = {
@@ -50,6 +56,10 @@ export type DashboardStatistics = {
   };
 };
 
+/**
+ * Solicita el periodo analítico al backend. `generated_at` permite informar la
+ * vigencia de la fotografía cuando la pantalla lo necesite.
+ */
 export async function fetchDashboardStatistics(months = 6) {
   const response = await api.get<DashboardStatistics>("/stats/", { params: { months } });
   return response.data;

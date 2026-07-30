@@ -1,3 +1,10 @@
+/**
+ * Contratos de estado compartidos por la página orquestadora de Inventario.
+ *
+ * Centralizar estas formas evita que cada diálogo o sección interprete de manera
+ * diferente la misma operación. Este archivo sólo describe estado de interfaz;
+ * las reglas de negocio y la autorización permanecen en el backend.
+ */
 import type {
   SerkanGridPaginationModel,
   SerkanGridFilter,
@@ -16,6 +23,8 @@ import type {
   ProductStockStatus,
 } from "../../../services/inventoryService";
 
+// Los estados de diálogo conservan en una sola unidad la operación, su registro
+// objetivo y los datos ingresados, facilitando un reinicio completo al cerrar.
 export type MovementDialogState = {
   open: boolean;
   mode: "ENTRADA_MANUAL" | "AJUSTE_INVENTARIO";
@@ -84,6 +93,9 @@ export type ProductActionMenuState = {
   product: Product | null;
 };
 
+// Los overrides permiten reutilizar una carga con cambios parciales sin mutar
+// antes el estado visible. Esto es útil al aplicar vistas, limpiar filtros o
+// volver a la primera página dentro de una misma solicitud.
 export type ProductFilterOverrides = {
   search?: string;
   category?: string[];
@@ -118,6 +130,8 @@ export type KardexFilterOverrides = {
   pageSize?: number;
 };
 
+// AG Grid utiliza índices de página basados en cero; la conversión al contrato
+// paginado de Django se realiza al construir los parámetros de consulta.
 export const defaultProductPaginationModel: SerkanGridPaginationModel = {
   page: 0,
   pageSize: 25,
@@ -138,6 +152,8 @@ export const defaultPendingReceiptPaginationModel: SerkanGridPaginationModel = {
   pageSize: 10,
 };
 
+// Estos valores representan estados de carga iniciales, no datos de negocio
+// confirmados. Son sustituidos por la respuesta real del backend.
 export const emptyInventorySummary: InventorySummary = {
   productos_activos: 0,
   stock_fisico_total: 0,

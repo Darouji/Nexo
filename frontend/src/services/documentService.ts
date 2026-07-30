@@ -1,3 +1,10 @@
+/**
+ * Contratos y operaciones del repositorio documental de SERKAN.
+ *
+ * El documento lógico conserva su identidad y propietario; cada archivo cargado
+ * crea una versión. Reemplazar no sobrescribe silenciosamente el historial, sino
+ * que incorpora una nueva versión con motivo y responsable en el backend.
+ */
 import { api } from "./api";
 
 type PaginatedResponse<T> = {
@@ -28,6 +35,7 @@ export type DocumentType =
   | "OTRO"
   | string;
 
+/** Versión inmutable de archivo asociada a un documento lógico. */
 export interface DocumentVersion {
   id: number;
   document: number;
@@ -52,6 +60,10 @@ export interface DocumentVersion {
   updated_at: string;
 }
 
+/**
+ * Documento lógico vinculado mediante ContentType a una entidad de negocio. La
+ * versión activa facilita la operación, mientras `versions` preserva historial.
+ */
 export interface DocumentFile {
   id: number;
   title: string;
@@ -79,6 +91,7 @@ function extractResults<T>(data: ListResponse<T>) {
   return data.results ?? [];
 }
 
+/** Omite filtros vacíos para no restringir la consulta involuntariamente. */
 function normalizeParams(params: ListParams = {}) {
   return {
     search: params.search?.trim() || undefined,
@@ -89,6 +102,7 @@ function normalizeParams(params: ListParams = {}) {
   };
 }
 
+/** Adapta endpoints que pueden responder como lista directa o página DRF. */
 async function getList<T>(url: string, params: ListParams = {}) {
   const response = await api.get<ListResponse<T>>(url, {
     params: normalizeParams(params),
@@ -111,6 +125,7 @@ export async function fetchDocumentVersions(params: ListParams = {}) {
   });
 }
 
+/** Tipo de entidad que puede ser propietaria de un documento. */
 export type DocumentOwnerType = { id: number; app_label: string; model: string; label: string };
 
 export type CreateDocumentPayload = {
@@ -129,6 +144,7 @@ export async function fetchDocumentOwnerTypes() {
 
 export type DocumentOwnerOption = { id: number; label: string };
 
+/** Recupera sólo registros válidos para el tipo de propietario seleccionado. */
 export async function fetchDocumentOwnerOptions(ownerContentType: number) {
   const response = await api.get<DocumentOwnerOption[]>("/documents/files/owner-options/", {
     params: { owner_content_type: ownerContentType },
@@ -136,6 +152,10 @@ export async function fetchDocumentOwnerOptions(ownerContentType: number) {
   return response.data;
 }
 
+/**
+ * Envía metadatos y archivo en una única solicitud multipart para que el backend
+ * pueda validar propiedad, tipo, tamaño, contenido y hash como una sola operación.
+ */
 export async function createDocumentFile(payload: CreateDocumentPayload) {
   const formData = new FormData();
   formData.append("title", payload.title.trim());
@@ -148,6 +168,10 @@ export async function createDocumentFile(payload: CreateDocumentPayload) {
   return response.data;
 }
 
+/**
+ * Incorpora una nueva versión y exige un motivo de reemplazo; la versión previa
+ * permanece disponible para trazabilidad.
+ */
 export async function replaceDocumentVersion(
   documentId: number,
   file: File,

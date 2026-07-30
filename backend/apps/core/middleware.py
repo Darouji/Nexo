@@ -1,3 +1,6 @@
+# Middleware transversal de trazabilidad para solicitudes de escritura.
+# Asigna un Request ID y deja una huella global de la operación, mientras que los
+# servicios de dominio conservan la auditoría detallada dentro de sus transacciones.
 import logging
 import uuid
 
@@ -14,6 +17,9 @@ from apps.core.request_context import reset_request_id, set_request_id
 logger = logging.getLogger(__name__)
 
 
+# X-Forwarded-For se interpreta como una cadena de proxies y se conserva la
+# primera dirección informada. La infraestructura debe controlar qué proxies son
+# confiables antes de usar este valor como evidencia de seguridad.
 def get_client_ip(request):
     forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
 
@@ -23,6 +29,8 @@ def get_client_ip(request):
     return request.META.get("REMOTE_ADDR")
 
 
+# Deriva una etiqueta funcional simple a partir de la ruta para facilitar filtros
+# de auditoría sin acoplar el middleware a cada aplicación Django.
 def get_module_from_path(path):
     parts = [part for part in path.split("/") if part]
 
@@ -35,6 +43,8 @@ def get_module_from_path(path):
     return ""
 
 
+# Login y logout poseen semántica de seguridad propia y se excluyen de esta
+# auditoría genérica para evitar registros duplicados o poco explicativos.
 AUDIT_MIDDLEWARE_EXCLUDED_PATHS = {
     "/api/auth/login/",
     "/api/auth/logout/",
@@ -60,6 +70,8 @@ def get_or_create_request_id(request):
     if not request_id:
         request_id = str(uuid.uuid4())
 
+    # El límite evita que un encabezado controlado por el cliente infle logs,
+    # metadatos o respuestas sin aportar valor de correlación.
     return request_id[:100]
 
 
@@ -75,16 +87,22 @@ def get_action_from_method(method):
     if method == "DELETE":
         return AuditAction.ELIMINAR
 
+    # Esta función sólo se usa para operaciones auditables de escritura; EDITAR
+    # es el valor seguro cuando una vista utiliza un método no reconocido.
     return AuditAction.EDITAR
 
 
 def get_audit_target_data(request):
+    # Los servicios pueden asociar explícitamente la instancia afectada. Cuando
+    # no lo hacen, se intenta resolverla desde la vista y sus argumentos.
     instance = getattr(request, "audit_instance", None)
 
     if instance is None or not getattr(instance, "pk", None):
         instance = resolve_request_audit_instance(request)
 
     if instance is None or not getattr(instance, "pk", None):
+        # Algunas operaciones actúan sobre colecciones o comandos sin una única
+        # instancia; la ruta queda como objetivo explicativo mínimo.
         return {
             "content_type": None,
             "object_id": "",
@@ -127,6 +145,8 @@ class ActivityLogMiddleware(MiddlewareMixin):
         if not request_id:
             request_id = get_or_create_request_id(request)
 
+        # El mismo identificador vuelve al cliente para correlacionar un mensaje
+        # visible con logs y auditoría del backend.
         response[REQUEST_ID_HEADER] = request_id
 
         should_audit = (
@@ -161,6 +181,8 @@ class ActivityLogMiddleware(MiddlewareMixin):
                 "request_id": request_id,
             }
 
+            # Una vista o servicio puede enriquecer el evento sin que el
+            # middleware conozca reglas particulares del dominio.
             custom_metadata = getattr(request, "audit_metadata", {})
             if isinstance(custom_metadata, dict):
                 metadata.update(custom_metadata)
@@ -190,6 +212,8 @@ class ActivityLogMiddleware(MiddlewareMixin):
                 metadata=metadata,
             )
         except Exception:
+            # Un fallo de la auditoría global se registra, pero no reemplaza ni
+            # corrompe la respuesta ya producida por el caso de uso.
             logger.exception(
                 "No se pudo registrar la auditoría global de la solicitud.",
                 extra={

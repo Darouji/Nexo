@@ -1,3 +1,5 @@
+# Extensión de documentación OpenAPI para que clientes y herramientas externas
+# conozcan el formato de autenticación realmente aceptado por la API.
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 
@@ -17,6 +19,8 @@ class ExpiringTokenAuthenticationScheme(OpenApiAuthenticationExtension):
     name = "TokenAuth"
 
     def get_security_definition(self, auto_schema):
+        # apiKey representa correctamente el encabezado completo `Authorization`
+        # exigido por TokenAuthentication.
         return {
             "type": "apiKey",
             "in": "header",

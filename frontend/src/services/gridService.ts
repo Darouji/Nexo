@@ -1,3 +1,10 @@
+/**
+ * Contratos y operaciones de la arquitectura transversal de grillas.
+ *
+ * La definición del backend determina campos técnicos, etiquetas, filtros,
+ * exportación y permisos. El frontend conserva preferencias visuales por
+ * `grid_key` sin modificar esos identificadores estables.
+ */
 import type { ColumnState } from "ag-grid-community";
 import { api } from "./api";
 
@@ -26,6 +33,7 @@ export type GridDefinition = {
   };
 };
 
+/** Estado visual estable de una columna, separado de filtros y ordenamiento. */
 export type StoredGridColumn = {
   field_key: string;
   width?: number;
@@ -33,6 +41,7 @@ export type StoredGridColumn = {
   pinned: "left" | "right" | null;
 };
 
+/** Preferencia automática asociada al usuario y a una definición de grilla. */
 export type GridPreference = {
   grid_key: string;
   definition_version: number;
@@ -43,6 +52,10 @@ export type GridPreference = {
   };
 };
 
+/**
+ * Una vista nombrada sí puede conservar una consulta completa porque el usuario
+ * la crea expresamente: diseño, orden, búsqueda y filtros.
+ */
 export type SavedGridViewConfig = GridPreference["config"] & {
   definition_version: number;
   sort: {
@@ -69,6 +82,7 @@ export type SavedGridView = {
   updated_at: string;
 };
 
+/** Recupera el contrato oficial que una pantalla debe respetar. */
 export async function fetchGridDefinition(gridKey: string) {
   const response = await api.get<GridDefinition>(
     `/grid/definitions/${encodeURIComponent(gridKey)}/`,
@@ -76,6 +90,7 @@ export async function fetchGridDefinition(gridKey: string) {
   return response.data;
 }
 
+/** Recupera el diseño visual persistido para el usuario autenticado. */
 export async function fetchGridPreference(gridKey: string) {
   const response = await api.get<GridPreference>(
     `/grid/preferences/${encodeURIComponent(gridKey)}/`,
@@ -83,6 +98,10 @@ export async function fetchGridPreference(gridKey: string) {
   return response.data;
 }
 
+/**
+ * Traduce el estado de AG Grid al contrato estable del backend. La revisión
+ * permite detectar actualizaciones concurrentes de la misma preferencia.
+ */
 export async function saveGridPreference(
   preference: GridPreference,
   columnState: ColumnState[],
@@ -115,6 +134,7 @@ export async function saveGridPreference(
   return response.data;
 }
 
+/** Elimina la personalización para volver a la definición oficial vigente. */
 export async function resetGridPreference(gridKey: string) {
   await api.delete(`/grid/preferences/${encodeURIComponent(gridKey)}/`);
 }
@@ -126,6 +146,7 @@ export async function fetchSavedGridViews(gridKey: string) {
   return response.data;
 }
 
+/** Crea una vista personal explícita sin alterar la definición organizacional. */
 export async function createSavedGridView(
   gridKey: string,
   payload: {
@@ -147,6 +168,11 @@ export async function deleteSavedGridView(gridKey: string, viewId: number) {
   );
 }
 
+/**
+ * Cambia únicamente la etiqueta visible de una columna para toda la organización.
+ * `field_key` permanece intacto para no romper API, filtros, exportaciones ni
+ * preferencias existentes; el motivo respalda la trazabilidad del cambio.
+ */
 export async function renameGlobalGridColumn(
   gridKey: string,
   fieldKey: string,

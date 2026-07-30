@@ -1,3 +1,7 @@
+/**
+ * Utilidades de presentación y conversión usadas por las secciones de Inventario.
+ * Mantienen formatos consistentes sin incorporar reglas de negocio en los componentes.
+ */
 const chileanNumberFormatter = new Intl.NumberFormat("es-CL");
 
 const chileanDateTimeFormatter = new Intl.DateTimeFormat("es-CL", {
@@ -16,6 +20,8 @@ export function formatDateTime(value: string) {
 
   const date = new Date(value);
 
+  // Conserva el valor original cuando la API entrega una fecha no interpretable,
+  // evitando ocultar información con una fecha inválida generada por el navegador.
   if (Number.isNaN(date.getTime())) {
     return value;
   }
@@ -33,6 +39,10 @@ export function parseInteger(value: string, fallback = 0) {
   return parsed;
 }
 
+/**
+ * Traduce el filtro de tres estados de la interfaz al contrato de la API.
+ * `undefined` significa que no debe enviarse el filtro, no que el valor sea falso.
+ */
 export function parseOptionalBoolean(value: string) {
   if (value === "true") {
     return true;

@@ -1,3 +1,10 @@
+/**
+ * Controlador de ubicaciones físicas, saldos distribuidos y transferencias.
+ *
+ * Coordina la experiencia de la pantalla y sus formularios. La integridad del
+ * movimiento —origen, destino, cantidad, bloqueo e idempotencia— debe seguir
+ * siendo validada transaccionalmente por el backend.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -111,6 +118,8 @@ export function useInventoryLocationsController({
   const [archiveState, setArchiveState] =
     useState<ArchiveLocationState>(emptyArchiveLocation);
 
+  // Estas capacidades solo gobiernan la visibilidad de acciones. Los endpoints
+  // vuelven a autorizar cada creación, edición, archivo o transferencia.
   const access = getStoredAccess();
   const canManageLocations = Boolean(
     access?.capabilities?.["inventory.manage_locations"],
@@ -148,6 +157,8 @@ export function useInventoryLocationsController({
     }
   }, [balancePage, balancePageSize, onError]);
 
+  // La carga inicial obtiene en paralelo la estructura física, los saldos positivos
+  // y el historial de transferencias para formar una vista operativa coherente.
   useEffect(() => {
     let active = true;
 
@@ -219,6 +230,8 @@ export function useInventoryLocationsController({
     }
   };
 
+  // Solo los saldos positivos del producto pueden actuar como origen de un traslado.
+  // Esta preselección orienta al usuario, pero el backend comprueba nuevamente stock.
   const originBalances = useMemo(() => {
     const productId = Number(transferForm.product);
     return transferBalances.filter(
@@ -270,6 +283,8 @@ export function useInventoryLocationsController({
       const payload = {
         name: locationForm.name,
         location_type: locationForm.locationType,
+        // El custodio solo corresponde a domicilios bajo custodia; para otros tipos
+        // se envía null para evitar relaciones residuales al cambiar la clasificación.
         custodian:
           locationForm.locationType === "DOMICILIO_CUSTODIA" &&
           locationForm.custodian
@@ -299,6 +314,8 @@ export function useInventoryLocationsController({
     setArchiveState({ location, reason: "" });
   };
 
+  // Archivar conserva el registro y su trazabilidad; no representa una eliminación
+  // física ni debe desvincular saldos o movimientos históricos existentes.
   const archiveLocation = async () => {
     if (!archiveState.location) {
       return;
@@ -332,6 +349,8 @@ export function useInventoryLocationsController({
       open: true,
       product: productId ? String(productId) : "",
       originLocation: "",
+      // La clave permanece estable durante este intento para que un reenvío del mismo
+      // formulario no genere dos transferencias por doble clic o recuperación de red.
       idempotencyKey: createIdempotencyKey("inventory-transfer"),
     });
     void fetchProductLocationBalances({
@@ -365,6 +384,11 @@ export function useInventoryLocationsController({
     });
   };
 
+  /**
+   * Una transferencia redistribuye el saldo entre ubicaciones y no modifica el
+   * stock total del producto. El backend debe registrar ambos lados del movimiento
+   * dentro de una única operación auditable.
+   */
   const saveTransfer = async () => {
     try {
       setSaving(true);

@@ -1,3 +1,10 @@
+/**
+ * Contenedor visual reutilizable para agrupar una responsabilidad concreta dentro
+ * de una página: grilla, formulario, resumen o panel operativo.
+ *
+ * El tono sólo comunica contexto visual mediante tokens; no representa estados
+ * de negocio ni sustituye mensajes accesibles de éxito, advertencia o error.
+ */
 import type { ReactNode } from "react";
 import { Card, CardContent, Divider, Stack, Typography } from "@mui/material";
 import { colors } from "../theme/colors";

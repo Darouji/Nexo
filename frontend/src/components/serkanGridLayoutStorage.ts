@@ -1,8 +1,20 @@
+/**
+ * Persistencia local del diseño estable de una grilla SERKAN.
+ *
+ * Guarda únicamente orden, ancho, visibilidad, fijación y flexibilidad de las
+ * columnas. Búsquedas, filtros y ordenamiento de datos no forman parte de esta
+ * preferencia automática porque representan una consulta, no el diseño visual.
+ */
 import type { ColumnState, GridApi } from "ag-grid-community";
 
 const STORAGE_PREFIX = "serkan:grid-layout";
+
+// La versión forma parte de la clave para no interpretar estructuras antiguas
+// con un contrato incompatible.
 const STORAGE_SCHEMA_VERSION = 3;
 
+// Las columnas técnicas generadas por el adaptador no deben convertirse en una
+// preferencia de negocio ni reaplicarse a otras definiciones.
 const INTERNAL_COLUMN_IDS = new Set(["__row_number__"]);
 
 type PersistedColumnState = Pick<
@@ -28,6 +40,11 @@ function isPinnedValue(value: unknown): value is ColumnState["pinned"] {
   return value === "left" || value === "right" || value === null;
 }
 
+/**
+ * Valida cada propiedad recuperada antes de entregarla a AG Grid. El contenido
+ * de localStorage se considera entrada no confiable y puede pertenecer a una
+ * versión anterior, estar incompleto o haber sido manipulado.
+ */
 function parseColumnState(value: unknown): PersistedColumnState | null {
   if (!isRecord(value)) {
     return null;
@@ -71,6 +88,7 @@ function parseColumnState(value: unknown): PersistedColumnState | null {
   return columnState;
 }
 
+/** Recupera una preferencia sólo cuando todo su contrato sigue siendo válido. */
 function readStoredGridLayout(gridKey: string): PersistedGridLayout | null {
   if (typeof window === "undefined") {
     return null;
@@ -136,6 +154,10 @@ function readStoredGridLayout(gridKey: string): PersistedGridLayout | null {
   }
 }
 
+/**
+ * Reaplica sólo columnas que todavía existen. Así una pantalla puede agregar o
+ * retirar columnas sin invalidar por completo el diseño personal conocido.
+ */
 export function restoreSerkanGridLayout<TRow>(
   api: GridApi<TRow>,
   gridKey: string,
@@ -162,6 +184,7 @@ export function restoreSerkanGridLayout<TRow>(
   });
 }
 
+/** Guarda el estado visual actual sin incluir columnas internas del adaptador. */
 export function persistSerkanGridLayout<TRow>(
   api: GridApi<TRow>,
   gridKey: string,
@@ -196,6 +219,7 @@ export function persistSerkanGridLayout<TRow>(
 
     return true;
   } catch {
+    // Una preferencia visual no debe impedir consultar o modificar datos.
     return false;
   }
 }

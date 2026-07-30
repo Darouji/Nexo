@@ -1,3 +1,6 @@
+# Autenticación actualmente utilizada por la API de SERKAN.
+# La expiración se valida en backend para que una credencial antigua no recupere
+# acceso aunque todavía permanezca almacenada en el cliente.
 from datetime import timedelta
 
 from django.conf import settings
@@ -27,6 +30,8 @@ class ExpiringTokenAuthentication(TokenAuthentication):
             expires_at = token.created + timedelta(hours=expire_hours)
 
             if timezone.now() >= expires_at:
+                # Eliminar el token impide que vuelva a intentarse con la misma
+                # credencial después de que el cliente reciba el rechazo.
                 token.delete()
 
                 raise exceptions.AuthenticationFailed(

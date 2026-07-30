@@ -1,3 +1,10 @@
+/**
+ * Servicio de autenticación de la interfaz.
+ *
+ * Traduce los contratos de login, restauración y cierre de sesión del backend a
+ * un estado local coherente. La respuesta del servidor sigue siendo la fuente
+ * de verdad para identidad, capacidades y vigencia de la sesión.
+ */
 import { api } from "./api";
 import {
   clearStoredAuth,
@@ -14,6 +21,7 @@ import type {
   LoginResponse,
 } from "../types/auth";
 
+/** Normaliza los metadatos de sesión incluidos en la respuesta de acceso. */
 function buildSessionFromLoginResponse(data: LoginResponse): AuthSessionStatus {
   return {
     authenticated: true,
@@ -24,6 +32,10 @@ function buildSessionFromLoginResponse(data: LoginResponse): AuthSessionStatus {
   };
 }
 
+/**
+ * Inicia sesión y persiste en una sola operación el token, la identidad y los
+ * permisos efectivos devueltos por el backend.
+ */
 export async function login(credentials: LoginCredentials) {
   const response = await api.post<LoginResponse>("/auth/login/", credentials);
   const session = buildSessionFromLoginResponse(response.data);
@@ -38,6 +50,10 @@ export async function login(credentials: LoginCredentials) {
   return response.data;
 }
 
+/**
+ * Revalida una sesión existente al arrancar la aplicación y reemplaza los datos
+ * locales por la versión actual del servidor.
+ */
 export async function fetchAuthSession() {
   const response = await api.get<AuthSessionResponse>("/auth/session/");
 
@@ -50,6 +66,10 @@ export async function fetchAuthSession() {
   return response.data;
 }
 
+/**
+ * Intenta invalidar la sesión en el backend y limpia siempre el estado local,
+ * incluso cuando la solicitud de cierre no puede completarse.
+ */
 export async function logout() {
   try {
     if (getStoredToken()) {
@@ -60,6 +80,7 @@ export async function logout() {
   }
 }
 
+/** Indica únicamente si existe credencial local; AppRoutes confirma su validez. */
 export function isAuthenticated() {
   return Boolean(getStoredToken());
 }

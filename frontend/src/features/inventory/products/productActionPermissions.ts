@@ -1,3 +1,9 @@
+/**
+ * Deriva la disponibilidad visual de acciones del catálogo a partir del estado
+ * operativo del producto. Estas reglas evitan ofrecer flujos incompatibles —por
+ * ejemplo, ingresar stock a un producto descontinuado—, pero no sustituyen las
+ * validaciones ni los permisos aplicados por el backend.
+ */
 import type { Product } from "../../../services/inventoryService";
 
 type ProductActionMenuPermissionsOptions = {
@@ -15,6 +21,12 @@ export type ProductActionMenuPermissions = {
   moreCanInactivate: boolean;
 };
 
+/**
+ * Mantiene separadas las reglas del menú de inventario y del menú de ciclo de
+ * vida. Un producto descontinuado aún puede requerir ajustes de regularización,
+ * mientras que una nueva entrada o recepción ampliaría existencias que ya no se
+ * pretende seguir abasteciendo.
+ */
 export function getProductActionMenuPermissions({
   inventoryProduct,
   moreProduct,
@@ -47,6 +59,8 @@ export function getProductActionMenuPermissions({
     moreProduct && moreProduct.status === "ACTIVO",
   );
 
+  // La inactivación se ofrece solo cuando no quedan existencias ni compromisos
+  // de recepción que deban resolverse previamente.
   const moreCanInactivate = Boolean(
     moreProduct &&
     moreIsOperationallyActive &&

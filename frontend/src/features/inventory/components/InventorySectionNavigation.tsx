@@ -1,3 +1,9 @@
+/**
+ * Navegación compartida entre las pantallas operativas de Inventario.
+ *
+ * Mantiene rutas canónicas para que catálogo y ubicaciones conserven el mismo
+ * contexto visual sin duplicar decisiones de navegación en cada página.
+ */
 import { Tab, Tabs } from "@mui/material";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -23,6 +29,9 @@ export function InventorySectionNavigation({
 }: InventorySectionNavigationProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Una ruta no reconocida conserva Catálogo como selección segura; la autorización
+  // y resolución definitiva de la pantalla siguen perteneciendo al enrutador.
   const selectedPath =
     inventorySections.find((section) => section.path === location.pathname)
       ?.path ?? inventorySections[0].path;

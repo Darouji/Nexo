@@ -1,3 +1,6 @@
+# Normalizadores compartidos para búsqueda y detección de equivalencias.
+# Devuelven claves comparables; nunca deben reemplazar los valores visibles ni
+# utilizarse para corregir silenciosamente la información ingresada por el usuario.
 import re
 import unicodedata
 
@@ -35,6 +38,8 @@ def normalize_text(value) -> str:
     value = re.sub(r"[^a-z0-9\s]", " ", value)
     value = re.sub(r"\s+", " ", value).strip()
 
+    # Las formas societarias se omiten para comparar nombres comerciales que
+    # representan a la misma entidad, sin alterar su denominación oficial.
     words = [
         word
         for word in value.split()
@@ -48,6 +53,7 @@ def normalize_rut(value) -> str:
     if not value:
         return ""
 
+    # Se conserva el dígito verificador y sólo se eliminan separadores de formato.
     value = str(value).strip().upper()
     value = value.replace(".", "").replace("-", "").replace(" ", "")
 
@@ -68,6 +74,7 @@ def normalize_phone(value) -> str:
     value = str(value).strip()
     value = re.sub(r"[^\d+]", "", value)
 
+    # Un único signo más sólo es válido como prefijo internacional.
     if value.count("+") > 1:
         value = value.replace("+", "")
 

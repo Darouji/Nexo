@@ -1,3 +1,9 @@
+/**
+ * Traduce el estado visual de las grillas de Inventario al contrato de consulta
+ * del backend. Centralizar esta conversión mantiene consistentes la búsqueda,
+ * paginación, orden y filtros remotos entre cargas iniciales, vistas nombradas y
+ * cambios interactivos del usuario.
+ */
 import type {
   SerkanGridFilter,
   SerkanGridPaginationModel,
@@ -45,6 +51,11 @@ type PendingReceiptQueryState = {
   columnFilters: SerkanGridFilter[];
 };
 
+/**
+ * Combina el estado persistente de la pantalla con cambios puntuales. Los
+ * overrides permiten solicitar, por ejemplo, la primera página con un filtro
+ * recién aplicado sin esperar a que React confirme todos los estados locales.
+ */
 export function buildProductPageParams(
   searchOrFilters: string | ProductFilterOverrides,
   state: ProductQueryState,
@@ -82,11 +93,13 @@ export function buildProductPageParams(
       resolvedColumnFilters.length > 0
         ? JSON.stringify(resolvedColumnFilters)
         : undefined,
+    // AG Grid numera desde cero; la API paginada de Django comienza en uno.
     page: resolvedPage + 1,
     page_size: resolvedPageSize,
   };
 }
 
+/** Construye la consulta paginada del libro global e inmutable de movimientos. */
 export function buildKardexMovementPageParams(
   filters: KardexFilterOverrides,
   state: KardexQueryState,
@@ -117,6 +130,10 @@ export function buildKardexMovementPageParams(
   };
 }
 
+/**
+ * Conserva como opcionales los filtros vacíos para que el backend distinga una
+ * consulta sin restricción de una fecha o estado efectivamente seleccionado.
+ */
 export function buildPendingReceiptPageParams(
   filters: PendingReceiptFilterOverrides,
   state: PendingReceiptQueryState,

@@ -1,3 +1,6 @@
+# Construcción de exportaciones de Inventario desde definiciones de grilla
+# autorizadas. La vista puede respetar columnas visibles, mientras que el modo
+# oficial mantiene un contrato estable y auditable definido por el backend.
 import csv
 from io import BytesIO, StringIO
 
@@ -16,6 +19,8 @@ from .grid_definitions import (
 
 
 def neutralize_spreadsheet_formula(value):
+    # Evita que texto controlado por usuarios sea interpretado como fórmula al
+    # abrir CSV o XLSX en aplicaciones de hojas de cálculo.
     if value is None:
         return ""
 
@@ -26,6 +31,8 @@ def neutralize_spreadsheet_formula(value):
 
 
 def product_export_value(product, field_key):
+    # Las claves técnicas de filtros pueden apuntar a relaciones o propiedades;
+    # la exportación devuelve sus valores visibles y no las formas normalizadas.
     if field_key == "categoria__name":
         return product.categoria.name
     if field_key == "por_recibir_total":
@@ -48,6 +55,8 @@ def resolve_export_columns(
 ):
     column_map = definition.column_map
 
+    # El modo oficial ignora preferencias personales para producir siempre el
+    # mismo conjunto de datos; el modo de vista respeta columnas solicitadas.
     if mode == "official":
         field_keys = list(definition.official_export_columns)
     else:
@@ -55,6 +64,8 @@ def resolve_export_columns(
             column.key for column in definition.columns if column.exportable
         ]
 
+    # El backend valida cada clave para impedir exportar campos no declarados o
+    # columnas operativas como acciones de interfaz.
     invalid = [
         field_key
         for field_key in field_keys
@@ -72,6 +83,8 @@ def resolve_export_columns(
 
 def build_product_export_response(*, queryset, mode, export_format, columns):
     definition = PRODUCT_GRID_DEFINITION
+    # Sólo la exportación de vista adopta etiquetas personalizadas; la oficial
+    # conserva las etiquetas de sistema del contrato de la grilla.
     labels = get_effective_column_labels(definition) if mode == "view" else {}
 
     headers = [
@@ -96,10 +109,13 @@ def build_product_export_response(*, queryset, mode, export_format, columns):
         writer.writerow(headers)
         writer.writerows(rows)
         response = HttpResponse(
+            # La marca UTF-8 favorece la apertura correcta de tildes y caracteres
+            # chilenos en aplicaciones que no detectan automáticamente el encoding.
             "\ufeff" + output.getvalue(),
             content_type="text/csv; charset=utf-8",
         )
     else:
+        # write_only limita el consumo de memoria al generar planillas con muchas filas.
         workbook = Workbook(write_only=True)
         worksheet = workbook.create_sheet("Catálogo")
         worksheet.append(headers)
@@ -120,6 +136,8 @@ def build_product_export_response(*, queryset, mode, export_format, columns):
 
 
 def pending_receipt_export_value(pending_receipt, field_key):
+    # Los nombres normalizados sirven para consultar y ordenar; el archivo debe
+    # conservar los valores legibles registrados para producto, categoría y ubicación.
     if field_key == "producto__modelo_normalized":
         return pending_receipt.producto.modelo
     if field_key == "producto__categoria__name_normalized":
@@ -213,6 +231,8 @@ def record_grid_export(
     model_name,
     object_repr,
 ):
+    # Exportar información constituye una acción auditable. Se registra el
+    # contrato utilizado y la cantidad de filas, no el contenido completo del archivo.
     AuditLog.objects.create(
         actor=request.user,
         action=AuditAction.EXPORTAR,
@@ -249,6 +269,8 @@ def record_product_export(*, request, mode, export_format, columns, row_count):
 def kardex_export_value(movement, field_key):
     if field_key == "created_at":
         return timezone.localtime(movement.created_at).strftime("%d-%m-%Y %H:%M:%S")
+    # Los snapshots conservan la información histórica aunque el producto,
+    # categoría o ubicación cambien de nombre posteriormente.
     if field_key == "producto_modelo_orden":
         return movement.producto_modelo_snapshot or movement.producto.modelo
     if field_key == "producto_codigo_sap_orden":

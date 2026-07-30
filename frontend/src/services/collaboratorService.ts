@@ -1,3 +1,10 @@
+/**
+ * Contratos y operaciones del dominio Colaboradores.
+ *
+ * Un colaborador representa a una persona interna y puede existir con o sin una
+ * cuenta de acceso vinculada. Este servicio no debe confundir datos laborales
+ * con identidad, sesión o permisos de Usuario.
+ */
 import { api } from "./api";
 
 type PaginatedResponse<T> = {
@@ -19,6 +26,7 @@ export type ListCollaboratorParams = {
   linked_user?: "true" | "false";
 };
 
+/** Resumen de la cuenta asociada, cuando la persona también accede al sistema. */
 export interface CollaboratorUser {
   id: number;
   username: string;
@@ -79,6 +87,7 @@ export type CreateCollaboratorPayload = {
   observations?: string;
 };
 
+/** Omite valores vacíos para que el backend distinga ausencia de filtro. */
 function normalizeParams(params: ListCollaboratorParams = {}) {
   return {
     search: params.search?.trim() || undefined,
@@ -89,6 +98,10 @@ function normalizeParams(params: ListCollaboratorParams = {}) {
   };
 }
 
+/**
+ * Recorre todas las páginas porque varias pantallas necesitan el catálogo
+ * completo para selectores y relaciones, no sólo la primera página visible.
+ */
 export async function fetchCollaborators(params: ListCollaboratorParams = {}) {
   const firstResponse = await api.get<ListResponse<Collaborator>>(
     "/collaborators/", { params: { ...normalizeParams(params), page_size: 100 } },
@@ -121,6 +134,10 @@ export async function updateCollaborator(
   return response.data;
 }
 
+/**
+ * La eliminación HTTP representa inactivación funcional. El historial y las
+ * referencias del colaborador permanecen bajo control del backend.
+ */
 export async function inactivateCollaborator(collaboratorId: number) {
   const response = await api.delete<{ detail: string }>(
     `/collaborators/${collaboratorId}/`,

@@ -1,3 +1,6 @@
+# Registro central de los contratos de grilla de Inventario. Estas definiciones
+# delimitan qué columnas pueden mostrarse, filtrarse, ordenarse y exportarse;
+# tanto frontend como backend deben referirse a las mismas claves estables.
 from apps.core.grid_registry import (
     GridColumnDefinition,
     GridDefinition,
@@ -9,6 +12,8 @@ PRODUCT_GRID_KEY = "inventory.products"
 PENDING_RECEIPT_GRID_KEY = "inventory.pending-receipts"
 KARDEX_GRID_KEY = "inventory.global-kardex"
 
+# Contrato del catálogo operativo. Las claves permanecen estables aunque una
+# etiqueta visible cambie, para conservar preferencias y vistas guardadas.
 PRODUCT_GRID_DEFINITION = GridDefinition(
     key=PRODUCT_GRID_KEY,
     module="inventory",
@@ -70,6 +75,8 @@ PRODUCT_GRID_DEFINITION = GridDefinition(
             query_field="origen",
             filter_operators=("equals",),
         ),
+        # Estos estados son propiedades calculadas para presentación; no se
+        # anuncian como ordenables ni filtrables hasta contar con expresión backend.
         GridColumnDefinition(
             key="stock_status",
             system_label="Estado de stock",
@@ -91,6 +98,7 @@ PRODUCT_GRID_DEFINITION = GridDefinition(
             sortable=False,
             filter_operators=("contains", "equals", "startsWith"),
         ),
+        # Las acciones son controles de interfaz y nunca forman parte de una exportación.
         GridColumnDefinition(
             key="actions",
             system_label="Acciones",
@@ -101,6 +109,7 @@ PRODUCT_GRID_DEFINITION = GridDefinition(
             exportable=False,
         ),
     ),
+    # La exportación oficial usa un conjunto fijo independiente de la vista personal.
     official_export_columns=(
         "modelo",
         "categoria__name",
@@ -116,6 +125,8 @@ PRODUCT_GRID_DEFINITION = GridDefinition(
 register_grid_definition(PRODUCT_GRID_DEFINITION)
 
 
+# Contrato de recepciones físicas pendientes. Mantiene separadas cantidad
+# original, recibida, cancelada y pendiente para no ocultar el historial del flujo.
 PENDING_RECEIPT_GRID_DEFINITION = GridDefinition(
     key=PENDING_RECEIPT_GRID_KEY,
     module="inventory",
@@ -245,6 +256,8 @@ PENDING_RECEIPT_GRID_DEFINITION = GridDefinition(
 register_grid_definition(PENDING_RECEIPT_GRID_DEFINITION)
 
 
+# El Kardex expone un historial global de sólo lectura. Sus claves de producto y
+# ubicación apuntan a campos de consulta preparados para preservar datos históricos.
 KARDEX_GRID_DEFINITION = GridDefinition(
     key=KARDEX_GRID_KEY,
     module="inventory",
@@ -320,6 +333,9 @@ KARDEX_GRID_DEFINITION = GridDefinition(
 )
 
 register_grid_definition(KARDEX_GRID_DEFINITION)
+
+# Grilla administrativa de categorías. Las acciones permanecen fijas para que
+# las operaciones de renombrado, fusión y archivo no desaparezcan por preferencias.
 CATEGORY_MANAGER_GRID_KEY = "inventory.categories"
 CATEGORY_MANAGER_GRID_DEFINITION = GridDefinition(
     key=CATEGORY_MANAGER_GRID_KEY, module="inventory", model_name="categoria", version=1,
@@ -336,6 +352,8 @@ CATEGORY_MANAGER_GRID_DEFINITION = GridDefinition(
 )
 register_grid_definition(CATEGORY_MANAGER_GRID_DEFINITION)
 
+# Vista acotada de productos pertenecientes a una categoría, reutilizada para
+# revisar impacto antes de operaciones administrativas sobre esa categoría.
 CATEGORY_PRODUCTS_GRID_KEY = "inventory.category-products"
 CATEGORY_PRODUCTS_GRID_DEFINITION = GridDefinition(
     key=CATEGORY_PRODUCTS_GRID_KEY, module="inventory", model_name="producto", version=1,

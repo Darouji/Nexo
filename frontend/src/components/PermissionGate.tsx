@@ -1,3 +1,10 @@
+/**
+ * Control visual de acceso por módulo.
+ *
+ * Usa los permisos efectivos entregados por el backend para decidir qué parte de
+ * la interfaz renderizar. Ocultar contenido aquí mejora la experiencia, pero no
+ * reemplaza la autorización del endpoint ni del servicio de dominio.
+ */
 import type { ReactNode } from "react";
 import { getStoredAccess } from "../services/authService";
 import type { AuthUser, ModulePermission } from "../types/auth";
@@ -16,6 +23,11 @@ type PermissionGateProps = {
   children: ReactNode;
 };
 
+/**
+ * Prefiere el mapa de permisos del servidor. Los roles de respaldo se limitan a
+ * visualización para conservar compatibilidad cuando una sesión antigua todavía
+ * no incluye el mapa completo; nunca habilitan escrituras por inferencia.
+ */
 function canUseModule({
   user,
   moduleKey,

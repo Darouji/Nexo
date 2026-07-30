@@ -1,3 +1,11 @@
+/**
+ * Orquesta el arranque de la aplicación y el ciclo de autenticación.
+ *
+ * Esta capa decide si debe mostrarse la validación inicial, el acceso público o
+ * el espacio de trabajo autenticado. También centraliza la invalidación de la
+ * sesión para que cualquier respuesta 401 de la API cierre el acceso de forma
+ * coherente en toda la plataforma.
+ */
 import { useEffect, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { DashboardPage } from "../pages/DashboardPage";
@@ -41,12 +49,16 @@ export function AppRoutes() {
   useEffect(() => {
     let isMounted = true;
 
+    // La capa HTTP emite este evento cuando el backend invalida la sesión. Así
+    // se evita que cada pantalla tenga que implementar su propio cierre forzado.
     const handleUnauthorized = () => {
       clearStoredAuth();
       setUser(null);
       setBootstrapping(false);
     };
 
+    // El usuario almacenado permite pintar la interfaz con rapidez, pero el
+    // backend sigue siendo la fuente de verdad antes de habilitar la sesión.
     const restoreSession = async () => {
       if (!getStoredToken()) {
         setBootstrapping(false);

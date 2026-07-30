@@ -1,3 +1,6 @@
+# Contrato transversal de errores de la API. Centralizar esta forma evita que
+# cada vista invente estructuras distintas y permite correlacionar el mensaje
+# mostrado al usuario con la solicitud registrada en los logs.
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -32,6 +35,8 @@ def get_error_message(exc, response):
         if detail:
             return str(detail)
 
+        # Los detalles de campos permanecen disponibles en error.details; este
+        # mensaje sólo entrega un resumen uniforme para la interfaz.
         if response.status_code == 400:
             return "Hay errores de validación."
 
@@ -66,11 +71,15 @@ def custom_exception_handler(exc, context):
     if request is not None:
         request_id = getattr(request, "request_id", "")
 
+    # DRF devuelve None para excepciones que no sabe convertir. Se conserva ese
+    # comportamiento para que Django procese el error interno normalmente.
     if response is None:
         return response
 
     original_data = response.data
 
+    # No se descartan los datos originales: formularios y consumidores de la API
+    # todavía necesitan los errores de campo específicos.
     response.data = {
         "success": False,
         "error": {

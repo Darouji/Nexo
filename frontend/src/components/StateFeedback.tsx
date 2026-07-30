@@ -1,3 +1,9 @@
+/**
+ * Estados transversales de carga, vacío, restricción y feedback recuperable.
+ *
+ * Centralizarlos mantiene mensajes, jerarquía visual y acciones consistentes
+ * entre módulos, y evita que una página confunda ausencia de datos con error.
+ */
 import type { ReactNode } from "react";
 import {
   Alert,
@@ -21,6 +27,7 @@ type StateFeedbackProps = {
   minHeight?: number | string;
 };
 
+/** Renderiza un estado comprensible con una acción opcional de recuperación. */
 export function StateFeedback({
   title,
   description,
@@ -91,6 +98,7 @@ export function StateFeedback({
   );
 }
 
+/** Indica que la vista espera una respuesta y aún no puede presentar resultados. */
 export function LoadingState({
   message = "Cargando información...",
 }: {
@@ -115,6 +123,10 @@ export function LoadingState({
   );
 }
 
+/**
+ * Representa una consulta válida sin registros, normalmente después de aplicar
+ * filtros; no debe usarse para ocultar un fallo de carga.
+ */
 export function EmptyState({
   title = "Sin información disponible",
   description = "No hay registros para mostrar con los filtros actuales.",
@@ -132,6 +144,10 @@ export function EmptyState({
   );
 }
 
+/**
+ * Explica una restricción visual de acceso. La mención del backend recuerda que
+ * la decisión efectiva de autorización no depende de este componente.
+ */
 export function PermissionDeniedState({
   moduleLabel = "este módulo",
   onBack,

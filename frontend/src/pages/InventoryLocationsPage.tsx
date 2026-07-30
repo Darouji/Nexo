@@ -86,12 +86,6 @@ export function InventoryLocationsPage() {
                 p: 0,
                 "&:last-child": { pb: 0 },
               },
-              "& > .MuiCard-root > .MuiCardContent-root > .MuiStack-root:first-of-type > .MuiStack-root:first-of-type": {
-                display: "none",
-              },
-              "& > .MuiCard-root > .MuiCardContent-root > .MuiDivider-root": {
-                mt: 0,
-              },
             }}
           >
             <InventoryLocationsSection

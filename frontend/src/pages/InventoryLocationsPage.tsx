@@ -25,7 +25,10 @@ export function InventoryLocationsPage() {
       setSummary(await fetchInventorySummary());
     } catch (error: unknown) {
       setErrorMessage(
-        getApiErrorMessage(error, "No se pudo actualizar el resumen de inventario."),
+        getApiErrorMessage(
+          error,
+          "No se pudo actualizar el resumen de inventario.",
+        ),
       );
     }
   }, []);
@@ -45,18 +48,30 @@ export function InventoryLocationsPage() {
       <InventorySummaryCards summary={summary} />
 
       {successMessage ? (
-        <Alert severity="success" variant="outlined" onClose={() => setSuccessMessage("")}>
+        <Alert
+          severity="success"
+          variant="outlined"
+          onClose={() => setSuccessMessage("")}
+        >
           {successMessage}
         </Alert>
       ) : null}
 
       {errorMessage ? (
-        <Alert severity="error" variant="outlined" onClose={() => setErrorMessage("")}>
+        <Alert
+          severity="error"
+          variant="outlined"
+          onClose={() => setErrorMessage("")}
+        >
           {errorMessage}
         </Alert>
       ) : null}
 
-      <SectionCard tone={colors.modules.inventory}>
+      <SectionCard
+        title="Ubicaciones y custodia"
+        subtitle="Distribución física del stock, responsables de custodia y traslados inmutables entre ubicaciones."
+        tone={colors.modules.inventory}
+      >
         <Stack spacing={2}>
           <InventorySectionNavigation embedded />
 
@@ -70,6 +85,12 @@ export function InventoryLocationsPage() {
               "& > .MuiCard-root > .MuiCardContent-root": {
                 p: 0,
                 "&:last-child": { pb: 0 },
+              },
+              "& > .MuiCard-root > .MuiCardContent-root > .MuiStack-root:first-of-type > .MuiStack-root:first-of-type": {
+                display: "none",
+              },
+              "& > .MuiCard-root > .MuiCardContent-root > .MuiDivider-root": {
+                mt: 0,
               },
             }}
           >

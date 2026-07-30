@@ -34,8 +34,29 @@ export function InventoryLocationsPage() {
   }, []);
 
   useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+    let active = true;
+
+    void fetchInventorySummary()
+      .then((nextSummary) => {
+        if (active) {
+          setSummary(nextSummary);
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMessage(
+            getApiErrorMessage(
+              error,
+              "No se pudo actualizar el resumen de inventario.",
+            ),
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <PageShell

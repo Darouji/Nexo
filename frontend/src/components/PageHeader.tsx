@@ -1,3 +1,10 @@
+/**
+ * Encabezado transversal de las pantallas principales.
+ *
+ * Reúne identidad visual, contexto y acciones globales de la página. Las acciones
+ * específicas de una fila o de una grilla deben permanecer en sus componentes
+ * correspondientes para evitar controles duplicados.
+ */
 import type { ReactNode } from "react";
 import { Box, Chip, Stack, Typography } from "@mui/material";
 import { colors } from "../theme/colors";

@@ -198,6 +198,7 @@ export function InventoryCatalogSection({
       <SectionCard
         title="Catálogo de productos"
         subtitle="Stock actual, stock mínimo, unidades por recibir, Kardex y acciones operativas."
+        tone={colors.modules.inventory}
         actions={
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
             <Button

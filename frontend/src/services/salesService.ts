@@ -1,3 +1,10 @@
+/**
+ * Contratos y operaciones del dominio Ventas.
+ *
+ * Una venta se registra primero como INGRESADA. Concretar o anular son casos de
+ * uso explícitos del backend porque pueden generar descuentos, reversas Kardex,
+ * validaciones y auditoría. El cliente no modifica stock por su cuenta.
+ */
 import { api } from "./api";
 import type { KardexMovement } from "./inventoryService";
 
@@ -9,6 +16,10 @@ export type SaleValidationSummary =
   | "BLOQUEANTE"
   | string;
 
+/**
+ * Línea comercial con snapshots del producto y de su política de stock. Los
+ * snapshots permiten explicar la venta aunque el catálogo cambie después.
+ */
 export type SaleDetail = {
   [key: string]: unknown;
   id: number;
@@ -28,6 +39,7 @@ export type SaleDetail = {
   updated_at: string;
 };
 
+/** Advertencia explicable asociada a la consistencia comercial de la venta. */
 export type SaleAlert = {
   [key: string]: unknown;
   id: number;
@@ -82,6 +94,7 @@ export type Sale = {
   updated_at: string;
 };
 
+/** Totales y alertas agregados con los mismos filtros que la lista de ventas. */
 export type SalesSummary = {
   ventas: {
     total: number;
@@ -125,6 +138,10 @@ export type SaleTraceChange = {
   created_at: string;
 };
 
+/**
+ * Reúne la venta, sus cambios de campos y movimientos Kardex relacionados para
+ * presentar una explicación única del ciclo comercial y de stock.
+ */
 export type SaleTraceability = {
   venta: Sale;
   cambios: SaleTraceChange[];
@@ -194,6 +211,7 @@ export type CreateSalePayload = {
   lineas: CreateSaleLinePayload[];
 };
 
+/** Metadatos editables sin reemplazar las líneas ni recalcular stock. */
 export type UpdateSaleMetadataPayload = Partial<
   Pick<
     CreateSalePayload,
@@ -211,6 +229,7 @@ export type UpdateSaleMetadataPayload = Partial<
   >
 >;
 
+/** Cambiar líneas exige motivo porque puede afectar inventario y auditoría. */
 export type UpdateSaleLinesPayload = {
   motivo: string;
   lineas: CreateSaleLinePayload[];
@@ -224,6 +243,7 @@ function extractResults<T>(data: T[] | PaginatedResponse<T>) {
   return data.results ?? [];
 }
 
+/** Convierte selecciones múltiples al formato CSV aceptado por los filtros API. */
 function toCsv<T extends string | number>(value?: CsvParam<T>) {
   if (value === undefined || value === null) {
     return undefined;
@@ -238,6 +258,7 @@ function toCsv<T extends string | number>(value?: CsvParam<T>) {
   return value;
 }
 
+/** Preserva la diferencia entre false y ausencia de filtro. */
 function toBooleanParam(value?: boolean) {
   if (value === undefined) {
     return undefined;
@@ -246,6 +267,7 @@ function toBooleanParam(value?: boolean) {
   return value ? "true" : "false";
 }
 
+/** Normaliza todos los filtros de lista antes de enviarlos al backend. */
 function buildSaleListParams(params: SaleListParams = {}) {
   return {
     search: params.search?.trim() || undefined,
@@ -277,6 +299,7 @@ function buildSaleListParams(params: SaleListParams = {}) {
   };
 }
 
+/** Recupera una página conservando conteo y enlaces de navegación remota. */
 export async function fetchSalesPage(params: SaleListParams = {}) {
   const response = await api.get<SaleListResponse>("/sales/ventas/", {
     params: buildSaleListParams(params),
@@ -293,6 +316,8 @@ export async function fetchSalesPage(params: SaleListParams = {}) {
 
   return response.data;
 }
+
+/** Recupera sólo las filas cuando el consumidor no necesita metadatos de página. */
 export async function fetchSales(params: SaleListParams = {}) {
   const response = await api.get<SaleListResponse>("/sales/ventas/", {
     params: buildSaleListParams(params),
@@ -301,6 +326,7 @@ export async function fetchSales(params: SaleListParams = {}) {
   return extractResults(response.data);
 }
 
+/** Solicita indicadores calculados sobre exactamente la misma consulta. */
 export async function fetchSalesSummary(params: SaleListParams = {}) {
   const response = await api.get<SalesSummary>("/sales/ventas/resumen/", {
     params: buildSaleListParams(params),
@@ -314,11 +340,13 @@ export async function fetchSale(saleId: number) {
   return response.data;
 }
 
+/** Registra una venta ingresada; crearla no implica descontar existencias. */
 export async function createSale(payload: CreateSalePayload) {
   const response = await api.post<Sale>("/sales/ventas/", payload);
   return response.data;
 }
 
+/** Actualiza cabecera y relaciones mediante validación del backend. */
 export async function updateSaleMetadata(
   saleId: number,
   payload: UpdateSaleMetadataPayload,
@@ -327,6 +355,10 @@ export async function updateSaleMetadata(
   return response.data;
 }
 
+/**
+ * Delega el cambio diferencial de líneas al caso de uso específico. No elimina y
+ * recrea líneas desde el cliente porque el servidor debe analizar sus efectos.
+ */
 export async function updateSaleLines(
   saleId: number,
   payload: UpdateSaleLinesPayload,
@@ -342,11 +374,19 @@ export async function updateSaleLines(
   return response.data;
 }
 
+/**
+ * Solicita la concreción. El backend valida relaciones, alertas y stock y genera
+ * los movimientos Kardex correspondientes dentro del caso de uso.
+ */
 export async function concretarSale(saleId: number) {
   const response = await api.post<Sale>(`/sales/ventas/${saleId}/concretar/`);
   return response.data;
 }
 
+/**
+ * Anula conservando la venta y exige motivo. Cuando existió descuento, la
+ * reversa de inventario pertenece al backend y no a la pantalla.
+ */
 export async function annulSale(saleId: number, motivo: string) {
   const response = await api.post<Sale>(`/sales/ventas/${saleId}/anular/`, {
     motivo: motivo.trim(),
@@ -355,6 +395,7 @@ export async function annulSale(saleId: number, motivo: string) {
   return response.data;
 }
 
+/** Recupera en conjunto cambios y movimientos que explican la operación. */
 export async function fetchSaleTraceability(saleId: number) {
   const response = await api.get<SaleTraceability>(
     `/sales/ventas/${saleId}/trazabilidad/`,

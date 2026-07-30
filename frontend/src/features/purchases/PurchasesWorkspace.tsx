@@ -30,6 +30,7 @@ import {
   fetchSuppliers,
   receivePhysicalReceipt,
   transitionPurchaseOrder,
+  updatePurchaseOrder,
   type PurchaseOrder,
   type PurchaseReceipt,
   type PurchaseReceiptHistory,
@@ -106,6 +107,7 @@ export function PurchasesWorkspace() {
   const [filterResetKey, setFilterResetKey] = useState(0);
   const request = useRef<AbortController | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [form, setForm] = useState<PurchaseOrderForm>(createEmptyPurchaseOrderForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [dialogError, setDialogError] = useState("");
@@ -200,7 +202,8 @@ export function PurchasesWorkspace() {
     changeSection("shipments");
   };
 
-  const openOrderDialog = async () => {
+  const openOrderDialog = async (order?: PurchaseOrder) => {
+    setEditingOrder(order ?? null);
     setForm(createEmptyPurchaseOrderForm());
     creationKey.current = createIdempotencyKey("purchase-order");
     setFieldErrors({});
@@ -217,6 +220,18 @@ export function PurchasesWorkspace() {
       setSuppliers(supplierPage.results.filter((supplier) => supplier.active));
       setProducts(productRows);
       setLocations(locationRows);
+      if (order) {
+        setForm({
+          number: order.number, supplier: String(order.supplier), currency: order.currency,
+          exchangeRate: order.currency === "USD" ? String(order.exchange_rate ?? "") : "",
+          issueDate: order.issue_date, expectedDate: order.expected_date || "", notes: order.notes || "",
+          lines: order.lines.map((line) => ({
+            description: line.description, product: line.product ? String(line.product) : "",
+            destinationLocation: line.destination_location ? String(line.destination_location) : "",
+            inventoryManaged: line.inventory_managed, quantity: String(line.quantity), unitPrice: String(line.unit_price),
+          })),
+        });
+      }
     } catch {
       setOptionsError(
         "No se pudieron cargar proveedores, productos o ubicaciones. Cierra el formulario y vuelve a intentarlo.",
@@ -235,12 +250,12 @@ export function PurchasesWorkspace() {
     try {
       const selectedSupplier = suppliers.find((supplier) => supplier.id === Number(form.supplier));
       const taxRate = purchaseTaxRateForCountry(selectedSupplier?.country);
-      await createPurchaseOrder(
-        toPurchaseOrderPayload(form, taxRate),
-        creationKey.current,
-      );
+      const payload = toPurchaseOrderPayload(form, taxRate);
+      if (editingOrder) await updatePurchaseOrder(editingOrder.id, payload);
+      else await createPurchaseOrder(payload, creationKey.current);
       setDialogOpen(false);
-      setSuccess("La orden quedó guardada como borrador.");
+      setSuccess(editingOrder ? "Orden en borrador actualizada correctamente." : "La orden quedó guardada como borrador.");
+      setEditingOrder(null);
       await load("orders", query);
     } catch (reason: unknown) {
       setFieldErrors(getApiFieldErrors(reason));
@@ -570,8 +585,9 @@ export function PurchasesWorkspace() {
         optionsError={optionsError}
         optionsLoading={loadingOrderOptions}
         loading={saving}
+        editing={Boolean(editingOrder)}
         onChange={setForm}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => { setDialogOpen(false); setEditingOrder(null); }}
         onSave={() => void saveOrder()}
       />
       <SupplierDialog
@@ -590,6 +606,7 @@ export function PurchasesWorkspace() {
         onClose={() => setSelectedOrder(null)}
         onTransition={openTransition}
         onRegisterShipment={registerShipmentForOrder}
+        onEdit={(order) => { setSelectedOrder(null); void openOrderDialog(order); }}
       />
       <TransitionReasonDialog
         open={Boolean(transition)}

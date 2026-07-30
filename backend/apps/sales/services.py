@@ -235,6 +235,7 @@ def summarize_existing_sale_details(details):
                 "valor_total": str(detail.valor_total),
                 "codigo_sap": detail.codigo_sap,
                 "controla_stock": detail.controla_stock_snapshot,
+                "ubicacion_salida_id": detail.ubicacion_salida_id,
             }
         )
 
@@ -259,6 +260,7 @@ def summarize_sale_details_payload(details_data):
                 "valor_total": str(valor_total),
                 "codigo_sap": detail_data.get("codigo_sap", "") or producto.codigo_sap,
                 "controla_stock": producto.controla_stock,
+                "ubicacion_salida_id": getattr(detail_data.get("ubicacion_salida"), "pk", None),
             }
         )
 
@@ -273,8 +275,9 @@ def aggregate_stock_quantities_from_existing_details(details):
         if not detail.controla_stock_snapshot:
             continue
 
-        quantities[detail.producto_id] += detail.cantidad
-        labels[detail.producto_id] = str(detail.producto)
+        key = (detail.producto_id, detail.ubicacion_salida_id)
+        quantities[key] += detail.cantidad
+        labels[key] = str(detail.producto)
 
     return quantities, labels
 
@@ -289,16 +292,20 @@ def aggregate_stock_quantities_from_payload(details_data):
         if not producto.controla_stock:
             continue
 
-        quantities[producto.pk] += int(detail_data["cantidad"])
-        labels[producto.pk] = str(producto)
+        location = detail_data.get("ubicacion_salida")
+        key = (producto.pk, getattr(location, "pk", None))
+        quantities[key] += int(detail_data["cantidad"])
+        labels[key] = str(producto)
 
     return quantities, labels
 
 
 def validate_sale_stock_difference(*, old_quantities, new_quantities, product_labels):
-    affected_product_ids = sorted(
-        set(old_quantities.keys()) | set(new_quantities.keys())
+    affected_keys = sorted(
+        set(old_quantities.keys()) | set(new_quantities.keys()),
+        key=lambda value: (value[0], value[1] or 0),
     )
+    affected_product_ids = sorted({key[0] for key in affected_keys})
 
     if not affected_product_ids:
         return {}, {}
@@ -314,9 +321,10 @@ def validate_sale_stock_difference(*, old_quantities, new_quantities, product_la
 
     stock_differences = {}
 
-    for product_id in affected_product_ids:
-        old_quantity = old_quantities.get(product_id, 0)
-        new_quantity = new_quantities.get(product_id, 0)
+    for stock_key in affected_keys:
+        product_id, _location_id = stock_key
+        old_quantity = old_quantities.get(stock_key, 0)
+        new_quantity = new_quantities.get(stock_key, 0)
         difference = new_quantity - old_quantity
 
         if difference == 0:
@@ -340,13 +348,13 @@ def validate_sale_stock_difference(*, old_quantities, new_quantities, product_la
                     "code": VentaAlertCode.STOCK_INSUFICIENTE,
                     "message": "Stock insuficiente para editar la venta",
                     "producto_id": product.pk,
-                    "producto": product_labels.get(product_id, str(product)),
+                    "producto": product_labels.get(stock_key, str(product)),
                     "cantidad_solicitada": difference,
                     "stock_disponible": product.stock_actual,
                 }
             )
 
-        stock_differences[product_id] = difference
+        stock_differences[stock_key] = difference
 
     return products_by_id, stock_differences
 
@@ -400,6 +408,7 @@ def create_sale_with_details(*, sale_data, details_data, user=None):
                 cantidad=detail_data["cantidad"],
                 valor_unitario=detail_data["valor_unitario"],
                 codigo_sap=detail_data.get("codigo_sap", ""),
+                ubicacion_salida=detail_data.get("ubicacion_salida"),
                 created_by=operator,
                 updated_by=operator,
             )
@@ -419,6 +428,7 @@ def create_sale_with_details(*, sale_data, details_data, user=None):
                 motivo=f"Salida por venta #{venta.pk}",
                 user=operator,
                 reference=venta,
+                location=detail.ubicacion_salida,
             )
 
             stock_was_discounted = True
@@ -523,6 +533,7 @@ def replace_sale_details_with_differential_kardex(
             DetalleVenta.objects.select_related(
                 "producto",
                 "producto__categoria",
+                "ubicacion_salida",
             )
             .filter(
                 venta=locked_sale,
@@ -572,16 +583,29 @@ def replace_sale_details_with_differential_kardex(
                 cantidad=detail_data["cantidad"],
                 valor_unitario=detail_data["valor_unitario"],
                 codigo_sap=detail_data.get("codigo_sap", ""),
+                ubicacion_salida=detail_data.get("ubicacion_salida"),
                 created_by=operator,
                 updated_by=operator,
             )
             new_details.append(detail)
 
-        for product_id, difference in stock_differences.items():
+        for (product_id, location_id), difference in stock_differences.items():
             if difference == 0:
                 continue
 
             product = products_by_id[product_id]
+            location = next(
+                (item.get("ubicacion_salida") for item in details_data
+                 if item["producto"].pk == product_id
+                 and getattr(item.get("ubicacion_salida"), "pk", None) == location_id),
+                None,
+            )
+            if location is None and location_id is not None:
+                location = next(
+                    (item.ubicacion_salida for item in active_details
+                     if item.producto_id == product_id and item.ubicacion_salida_id == location_id),
+                    None,
+                )
 
             if difference > 0:
                 register_sale_difference_adjustment(
@@ -593,6 +617,7 @@ def replace_sale_details_with_differential_kardex(
                     ),
                     user=operator,
                     reference=locked_sale,
+                    location=location,
                 )
             else:
                 register_sale_difference_adjustment(
@@ -604,6 +629,7 @@ def replace_sale_details_with_differential_kardex(
                     ),
                     user=operator,
                     reference=locked_sale,
+                    location=location,
                 )
 
         calculate_sale_totals(locked_sale)
@@ -722,6 +748,7 @@ def annul_sale(*, venta, reason, user=None):
                     motivo=f"Reversa por anulación de venta #{locked_sale.pk}: {clean_reason}",
                     user=operator,
                     reference=locked_sale,
+                    location=detail.ubicacion_salida,
                 )
 
         locked_sale.sale_status = VentaStatus.ANULADA

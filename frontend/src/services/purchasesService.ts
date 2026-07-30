@@ -125,7 +125,7 @@ type ApiSupplier = {
   contact_name: string; email: string; phone: string; status: string;
 };
 type ApiLine = {
-  id: number; product_id: number | null; product_model_snapshot: string;
+  id: number; product_id: number | null; controls_inventory_snapshot: boolean; product_model_snapshot: string;
   description: string; quantity: number; unit_price_original: number | string;
   destination_location_id: number | null;
 };
@@ -171,7 +171,7 @@ function mapOrder(value: ApiOrder): PurchaseOrder {
       id: line.id, description: line.description || line.product_model_snapshot,
       product: line.product_id, product_label: line.product_model_snapshot,
       destination_location: line.destination_location_id,
-      inventory_managed: Boolean(line.product_id), quantity: line.quantity,
+      inventory_managed: line.controls_inventory_snapshot, quantity: line.quantity,
       unit_price: Number(line.unit_price_original),
     })),
   };
@@ -222,8 +222,8 @@ export async function createSupplier(payload: SupplierPayload) {
   });
   return mapSupplier(response.data);
 }
-export async function createPurchaseOrder(payload: PurchaseOrderPayload, idempotencyKey: string) {
-  const response = await api.post<ApiOrder>("/purchases/ordenes/", {
+function purchaseOrderApiPayload(payload: PurchaseOrderPayload) {
+  return {
     number: payload.number,
     supplier: payload.supplier,
     order_date: payload.issue_date,
@@ -241,7 +241,19 @@ export async function createPurchaseOrder(payload: PurchaseOrderPayload, idempot
       tax_rate: payload.tax_rate,
       destination_location: line.destination_location,
     })),
-  }, { headers: { "Idempotency-Key": idempotencyKey } });
+  };
+}
+
+export async function createPurchaseOrder(payload: PurchaseOrderPayload, idempotencyKey: string) {
+  const response = await api.post<ApiOrder>(
+    "/purchases/ordenes/", purchaseOrderApiPayload(payload),
+    { headers: { "Idempotency-Key": idempotencyKey } },
+  );
+  return mapOrder(response.data);
+}
+export async function updatePurchaseOrder(orderId: number, payload: PurchaseOrderPayload) {
+  await api.put(`/purchases/ordenes/${orderId}/`, purchaseOrderApiPayload(payload));
+  const response = await api.get<ApiOrder>(`/purchases/ordenes/${orderId}/`);
   return mapOrder(response.data);
 }
 const actions = {

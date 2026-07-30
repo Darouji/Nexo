@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import axios from "axios";
 import {
   Alert,
   Box,
@@ -14,7 +13,6 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  InputAdornment,
   MenuItem,
   Stack,
   TextField,
@@ -26,12 +24,16 @@ import BusinessCenterIcon from "@mui/icons-material/BusinessCenter";
 import GroupsIcon from "@mui/icons-material/Groups";
 import LinkIcon from "@mui/icons-material/Link";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SearchIcon from "@mui/icons-material/Search";
-import type { GridColDef } from "@mui/x-data-grid";
-import { SmartDataGrid } from "../components/SmartDataGrid";
+import EditIcon from "@mui/icons-material/Edit";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { SerkanDataGrid } from "../components/SerkanDataGrid";
+import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
+import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
+import { getApiErrorMessage as getErrorMessage, getApiFieldErrors } from "../services/api";
 import {
   createCollaborator,
   fetchCollaborators,
+  updateCollaborator,
 } from "../services/collaboratorService";
 import type { Collaborator } from "../services/collaboratorService";
 import { colors } from "../theme/colors";
@@ -67,36 +69,6 @@ const emptyCollaboratorForm: CollaboratorForm = {
   status: "ACTIVO",
   observations: "",
 };
-
-function getErrorMessage(error: unknown) {
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as
-      | { detail?: string; [key: string]: unknown }
-      | undefined;
-
-    if (data?.detail) {
-      return data.detail;
-    }
-
-    if (data && typeof data === "object") {
-      return Object.entries(data)
-        .map(([field, value]) => {
-          if (Array.isArray(value)) {
-            return `${field}: ${value.join(", ")}`;
-          }
-
-          return `${field}: ${String(value)}`;
-        })
-        .join(" | ");
-    }
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "No se pudo completar la operación.";
-}
 
 function normalizeSearch(value: unknown) {
   return String(value ?? "")
@@ -244,14 +216,20 @@ export function CollaboratorsPage() {
     useState<Collaborator | null>(null);
   const [form, setForm] = useState<CollaboratorForm>(emptyCollaboratorForm);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editingCollaborator, setEditingCollaborator] = useState<Collaborator | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [linkedFilter, setLinkedFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [linkedFilter, setLinkedFilter] = useState<string[]>([]);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
+  const [filterResetKey, setFilterResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [dialogError, setDialogError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const loadCollaborators = useCallback(
     async (mode: "initial" | "refresh") => {
@@ -264,16 +242,7 @@ export function CollaboratorsPage() {
 
         setErrorMessage("");
 
-        const data = await fetchCollaborators({
-          search: searchTerm,
-          status: statusFilter || undefined,
-          linked_user:
-            linkedFilter === "linked"
-              ? "true"
-              : linkedFilter === "unlinked"
-                ? "false"
-                : undefined,
-        });
+        const data = await fetchCollaborators();
 
         setCollaborators(data);
       } catch (error: unknown) {
@@ -286,7 +255,7 @@ export function CollaboratorsPage() {
         }
       }
     },
-    [linkedFilter, searchTerm, statusFilter],
+    [],
   );
 
   useEffect(() => {
@@ -300,12 +269,8 @@ export function CollaboratorsPage() {
   const filteredCollaborators = useMemo(() => {
     const term = normalizeSearch(searchTerm.trim());
 
-    if (!term) {
-      return collaborators;
-    }
-
-    return collaborators.filter((collaborator) =>
-      [
+    return collaborators.filter((collaborator) => {
+      const matchesSearch = !term || [
         collaborator.full_name,
         collaborator.rut,
         collaborator.email,
@@ -317,9 +282,13 @@ export function CollaboratorsPage() {
         collaborator.user_email,
         collaborator.status,
         collaborator.status_display,
-      ].some((value) => normalizeSearch(value).includes(term)),
-    );
-  }, [collaborators, searchTerm]);
+      ].some((value) => normalizeSearch(value).includes(term));
+      const matchesStatus = !statusFilter.length || statusFilter.includes(collaborator.status);
+      const linkedValue = collaborator.user ? "linked" : "unlinked";
+      const matchesLinked = !linkedFilter.length || linkedFilter.includes(linkedValue);
+      return matchesSearch && matchesStatus && matchesLinked;
+    });
+  }, [collaborators, linkedFilter, searchTerm, statusFilter]);
 
   const departments = useMemo(() => {
     return Array.from(
@@ -348,125 +317,58 @@ export function CollaboratorsPage() {
     };
   }, [collaborators, departments.length]);
 
-  const handleCreateCollaborator = useCallback(async () => {
+  const openCollaboratorForm = (collaborator?: Collaborator) => {
+    setEditingCollaborator(collaborator ?? null);
+    setDialogError(""); setFieldErrors({}); setSuccessMessage("");
+    setForm(collaborator ? {
+      user: collaborator.user ? String(collaborator.user) : "", rut: collaborator.rut || "",
+      first_name: collaborator.first_name, last_name: collaborator.last_name,
+      email: collaborator.email, phone: collaborator.phone, position: collaborator.position,
+      department: collaborator.department, shift: collaborator.shift,
+      start_date: collaborator.start_date || "", end_date: collaborator.end_date || "",
+      status: collaborator.status, observations: collaborator.observations,
+    } : { ...emptyCollaboratorForm });
+    setCreateDialogOpen(true);
+  };
+
+  const handleSaveCollaborator = useCallback(async () => {
     try {
-      setSaving(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-
-      const created = await createCollaborator({
-        user: form.user.trim() ? Number(form.user) : null,
-        rut: form.rut.trim() || null,
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        position: form.position.trim(),
-        department: form.department.trim(),
-        shift: form.shift.trim(),
-        start_date: form.start_date || null,
-        end_date: form.end_date || null,
-        status: form.status,
-        observations: form.observations.trim(),
-      });
-
-      setCollaborators((current) => [created, ...current]);
-      setForm(emptyCollaboratorForm);
-      setCreateDialogOpen(false);
-      setSuccessMessage("Colaborador creado correctamente.");
+      setSaving(true); setDialogError(""); setFieldErrors({}); setSuccessMessage("");
+      const payload = {
+        user: form.user.trim() ? Number(form.user) : null, rut: form.rut.trim() || null,
+        first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+        email: form.email.trim(), phone: form.phone.trim(), position: form.position.trim(),
+        department: form.department.trim(), shift: form.shift.trim(),
+        start_date: form.start_date || null, end_date: form.end_date || null,
+        status: form.status, observations: form.observations.trim(),
+      };
+      if (editingCollaborator) await updateCollaborator(editingCollaborator.id, payload);
+      else await createCollaborator(payload);
+      setForm({ ...emptyCollaboratorForm }); setCreateDialogOpen(false); setEditingCollaborator(null);
+      setSuccessMessage(editingCollaborator ? "Colaborador actualizado correctamente." : "Colaborador creado correctamente.");
       await loadCollaborators("refresh");
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  }, [form, loadCollaborators]);
+      setFieldErrors(getApiFieldErrors(error)); setDialogError(getErrorMessage(error));
+    } finally { setSaving(false); }
+  }, [editingCollaborator, form, loadCollaborators]);
 
-  const columns = useMemo<GridColDef[]>(() => {
-    return [
-      {
-        field: "full_name",
-        headerName: "Colaborador",
-        minWidth: 230,
-        flex: 1,
-        renderCell: (params) => params.value || "Sin nombre",
-      },
-      {
-        field: "rut",
-        headerName: "RUT",
-        width: 140,
-        renderCell: (params) => params.value || "Sin RUT",
-      },
-      {
-        field: "email",
-        headerName: "Correo",
-        minWidth: 210,
-        flex: 0.8,
-        renderCell: (params) => params.value || "Sin correo",
-      },
-      {
-        field: "phone",
-        headerName: "Teléfono",
-        width: 145,
-        renderCell: (params) => params.value || "Sin teléfono",
-      },
-      {
-        field: "position",
-        headerName: "Cargo",
-        minWidth: 190,
-        flex: 0.8,
-        renderCell: (params) => params.value || "Sin cargo",
-      },
-      {
-        field: "department",
-        headerName: "Departamento",
-        minWidth: 170,
-        flex: 0.7,
-        renderCell: (params) => params.value || "Sin departamento",
-      },
-      {
-        field: "user_username",
-        headerName: "Usuario vinculado",
-        width: 170,
-        renderCell: (params) => (
-          <LinkedUserChip collaborator={params.row as Collaborator} />
-        ),
-      },
-      {
-        field: "start_date",
-        headerName: "Ingreso",
-        width: 145,
-        renderCell: (params) => formatDate(String(params.value || "")),
-      },
-      {
-        field: "status",
-        headerName: "Estado",
-        width: 135,
-        renderCell: (params) => (
-          <StatusChip status={String(params.value || "")} />
-        ),
-      },
-      {
-        field: "actions",
-        headerName: "Acciones",
-        width: 120,
-        sortable: false,
-        filterable: false,
-        renderCell: (params) => (
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={(event) => {
-              event.stopPropagation();
-              setSelectedCollaborator(params.row as Collaborator);
-            }}
-          >
-            Ver
-          </Button>
-        ),
-      },
-    ];
-  }, []);
+  const columns = useMemo<ColDef<Collaborator>[]>(() => [
+    { field: "full_name", headerName: "Colaborador", minWidth: 230, flex: 1, valueFormatter: (p) => String(p.value || "Sin nombre") },
+    { field: "rut", headerName: "RUT", width: 145, valueFormatter: (p) => String(p.value || "Sin RUT") },
+    { field: "email", headerName: "Correo", minWidth: 210, flex: 0.8, valueFormatter: (p) => String(p.value || "Sin correo") },
+    { field: "phone", headerName: "Teléfono", width: 150, valueFormatter: (p) => String(p.value || "Sin teléfono") },
+    { field: "position", headerName: "Cargo", minWidth: 185, flex: 0.7, valueFormatter: (p) => String(p.value || "Sin cargo") },
+    { field: "department", headerName: "Departamento", minWidth: 175, flex: 0.7, valueFormatter: (p) => String(p.value || "Sin departamento") },
+    { field: "shift", headerName: "Turno", minWidth: 160, valueFormatter: (p) => String(p.value || "Sin turno") },
+    { field: "user_username", headerName: "Usuario vinculado", width: 175, cellRenderer: (p: ICellRendererParams<Collaborator>) => p.data ? <LinkedUserChip collaborator={p.data} /> : null },
+    { field: "start_date", headerName: "Ingreso", width: 145, valueFormatter: (p) => formatDate(String(p.value || "")) },
+    { field: "status", headerName: "Estado", width: 135, cellRenderer: (p: ICellRendererParams<Collaborator>) => <StatusChip status={String(p.value || "")} /> },
+    { colId: "actions", headerName: "Acciones", width: 210, pinned: "right", sortable: false, filter: false,
+      cellRenderer: (p: ICellRendererParams<Collaborator>) => p.data ? <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", height: "100%" }}>
+        <Button size="small" variant="outlined" onClick={() => setSelectedCollaborator(p.data!)}>Ver</Button>
+        <Button size="small" startIcon={<EditIcon />} onClick={() => openCollaboratorForm(p.data!)}>Editar</Button>
+      </Stack> : null },
+  ], []);
 
   if (loading) {
     return (
@@ -548,8 +450,7 @@ export function CollaboratorsPage() {
                 fontWeight: 500,
               }}
             >
-              Registro de personas internas de SERKAN. Un colaborador puede
-              vincularse a un usuario, pero no hereda permisos por esa relación.
+              Los colaboradores son personas que trabajan o han trabajado para SERKAN, con o sin acceso a la plataforma. Sirve para registrar personal temporal, de apoyo o permanente; solo quienes necesiten usar el sistema requieren además una cuenta de usuario.
             </Typography>
           </Box>
 
@@ -573,9 +474,7 @@ export function CollaboratorsPage() {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => {
-                setErrorMessage("");
-                setSuccessMessage("");
-                setCreateDialogOpen(true);
+                openCollaboratorForm();
               }}
             >
               Nuevo colaborador
@@ -597,8 +496,7 @@ export function CollaboratorsPage() {
       ) : null}
 
       <Alert severity="info" variant="outlined">
-        Crear un colaborador no crea usuario interno ni contacto externo. La
-        vinculación a usuario es opcional y sirve solo para trazabilidad.
+        Registrar un colaborador no crea acceso a la plataforma. Puedes usar esta ficha para personal temporal o permanente; vincula una cuenta de usuario solo cuando esa persona necesite ingresar al sistema.
       </Alert>
 
       <Box
@@ -650,79 +548,48 @@ export function CollaboratorsPage() {
       >
         <CardContent>
           <Stack spacing={2.5}>
-            <Stack
-              direction={{ xs: "column", lg: "row" }}
-              spacing={2}
-              sx={{
-                alignItems: { xs: "stretch", lg: "center" },
-                justifyContent: "space-between",
+            <Box>
+              <Typography variant="h5" sx={{ color: colors.text.primary, fontWeight: 900 }}>
+                Nómina interna
+              </Typography>
+              <Typography variant="body2" sx={{ color: colors.text.muted }}>
+                Búsqueda, filtros múltiples, vistas personales y columnas configurables.
+              </Typography>
+            </Box>
+
+            <SerkanFilterToolbar
+              searchLabel="Buscar colaboradores"
+              searchPlaceholder="Nombre, RUT, correo, cargo, departamento, teléfono o usuario..."
+              searchValue={searchTerm}
+              onSearchValueChange={(value) => { setSearchTerm(value); setPagination((current) => ({ ...current, page: 0 })); }}
+              onApply={() => setPagination((current) => ({ ...current, page: 0 }))}
+              onClear={() => {
+                setSearchTerm(""); setStatusFilter([]); setLinkedFilter([]);
+                setPagination((current) => ({ ...current, page: 0 }));
+                setFilterResetKey((current) => current + 1);
               }}
-            >
-              <Box>
-                <Typography
-                  variant="h5"
-                  sx={{ color: colors.text.primary, fontWeight: 900 }}
-                >
-                  Nómina interna
-                </Typography>
-
-                <Typography variant="body2" sx={{ color: colors.text.muted }}>
-                  Busca por nombre, RUT, correo, cargo, departamento, teléfono o
-                  usuario vinculado.
-                </Typography>
-              </Box>
-
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                <TextField
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Buscar colaboradores..."
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 280 } }}
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <TextField
-                  select
-                  label="Estado"
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 150 } }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="ACTIVO">Activos</MenuItem>
-                  <MenuItem value="INACTIVO">Inactivos</MenuItem>
-                  <MenuItem value="ARCHIVADO">Archivados</MenuItem>
-                </TextField>
-
-                <TextField
-                  select
-                  label="Usuario"
-                  value={linkedFilter}
-                  onChange={(event) => setLinkedFilter(event.target.value)}
-                  size="small"
-                  sx={{ minWidth: { xs: "100%", md: 170 } }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="linked">Vinculados</MenuItem>
-                  <MenuItem value="unlinked">Sin usuario</MenuItem>
-                </TextField>
-              </Stack>
-            </Stack>
-
-            <SmartDataGrid
-              rows={filteredCollaborators}
-              columns={columns}
               loading={refreshing}
+              expanded={filtersExpanded}
+              onExpandedChange={setFiltersExpanded}
+              activeFiltersCount={statusFilter.length + linkedFilter.length}
+              panelId="collaborators-advanced-filters"
+            >
+              <SerkanMultiSelectFilter label="Estado" options={[
+                { value: "ACTIVO", label: "Activo" }, { value: "INACTIVO", label: "Inactivo" },
+                { value: "ARCHIVADO", label: "Archivado" },
+              ]} value={statusFilter} onChange={(value) => { setStatusFilter(value); setPagination((current) => ({ ...current, page: 0 })); }} />
+              <SerkanMultiSelectFilter label="Usuario vinculado" options={[
+                { value: "linked", label: "Vinculado" }, { value: "unlinked", label: "Sin usuario" },
+              ]} value={linkedFilter} onChange={(value) => { setLinkedFilter(value); setPagination((current) => ({ ...current, page: 0 })); }} />
+            </SerkanFilterToolbar>
+
+            <SerkanDataGrid
+              gridKey="collaborators.collaborators" serverManaged clientManaged
+              ariaLabel="Nómina interna de colaboradores"
+              rows={filteredCollaborators} columns={columns} loading={refreshing}
+              paginationModel={pagination} onPaginationModelChange={setPagination}
+              rowCount={filteredCollaborators.length} filterResetKey={filterResetKey}
+              namedViewFilters={{ search: searchTerm, status: statusFilter.join(","), linked_user: linkedFilter.join(",") }}
             />
           </Stack>
         </CardContent>
@@ -733,15 +600,19 @@ export function CollaboratorsPage() {
         onClose={() => {
           if (!saving) {
             setCreateDialogOpen(false);
+            setEditingCollaborator(null);
+            setDialogError("");
+            setFieldErrors({});
           }
         }}
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Nuevo colaborador</DialogTitle>
+        <DialogTitle>{editingCollaborator ? "Editar colaborador" : "Nuevo colaborador"}</DialogTitle>
 
         <DialogContent>
           <Stack spacing={2.2} sx={{ mt: 1 }}>
+            {dialogError ? <Alert severity="error" variant="outlined">{dialogError}</Alert> : null}
             <Alert severity="info" variant="outlined">
               Este formulario solo crea la ficha del colaborador. No crea una
               cuenta de acceso ni modifica permisos.
@@ -758,6 +629,8 @@ export function CollaboratorsPage() {
                   }))
                 }
                 required
+                error={Boolean(fieldErrors.first_name)}
+                helperText={fieldErrors.first_name}
                 fullWidth
               />
 
@@ -796,7 +669,8 @@ export function CollaboratorsPage() {
                     user: event.target.value,
                   }))
                 }
-                helperText="Solo si ya existe una cuenta de usuario interna."
+                error={Boolean(fieldErrors.user)}
+                helperText={fieldErrors.user || "Solo si ya existe una cuenta de usuario interna."}
                 fullWidth
               />
             </Stack>
@@ -928,16 +802,16 @@ export function CollaboratorsPage() {
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)} disabled={saving}>
+          <Button onClick={() => { setCreateDialogOpen(false); setEditingCollaborator(null); }} disabled={saving}>
             Cancelar
           </Button>
 
           <Button
             variant="contained"
-            onClick={handleCreateCollaborator}
+            onClick={() => void handleSaveCollaborator()}
             disabled={saving || !form.first_name.trim()}
           >
-            {saving ? "Guardando..." : "Guardar"}
+            {saving ? "Guardando..." : editingCollaborator ? "Guardar cambios" : "Guardar"}
           </Button>
         </DialogActions>
       </Dialog>

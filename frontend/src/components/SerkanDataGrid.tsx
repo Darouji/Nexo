@@ -309,13 +309,13 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         headerName: metadata.visible_name,
         sortable: metadata.sortable && Boolean(onSortModelChange),
         filter:
-          metadata.filter_operators.length > 0 && onFilterModelChange
+          metadata.filter_operators.length > 0 && (onFilterModelChange || clientManaged)
             ? metadata.data_type === "number"
               ? "agNumberColumnFilter"
               : "agTextColumnFilter"
             : false,
         filterParams:
-          metadata.filter_operators.length > 0 && onFilterModelChange
+          metadata.filter_operators.length > 0 && (onFilterModelChange || clientManaged)
             ? {
                 filterOptions: metadata.filter_operators,
                 maxNumConditions: 1,
@@ -329,7 +329,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     });
 
     return [rowNumberColumn, ...configuredColumns];
-  }, [columns, definition, onFilterModelChange, onSortModelChange]);
+  }, [clientManaged, columns, definition, onFilterModelChange, onSortModelChange]);
 
   const releaseLayoutMutationLock = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -592,11 +592,11 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     () => ({
       sortable: Boolean(onSortModelChange),
       resizable: true,
-      filter: Boolean(onFilterModelChange),
+      filter: Boolean(onFilterModelChange || clientManaged),
       minWidth: 110,
       unSortIcon: true,
     }),
-    [onFilterModelChange, onSortModelChange],
+    [clientManaged, onFilterModelChange, onSortModelChange],
   );
 
   const handleSortChanged = (event: SortChangedEvent<TRow>) => {

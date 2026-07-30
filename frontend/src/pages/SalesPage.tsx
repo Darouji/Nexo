@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  MenuItem,
   Stack,
   TextField,
   Typography,
@@ -19,6 +20,7 @@ import AddIcon from "@mui/icons-material/Add";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
 import InfoIcon from "@mui/icons-material/Info";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
@@ -28,7 +30,7 @@ import { MetricCard } from "../components/MetricCard";
 import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
 import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
 import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
-import { getApiErrorMessage as getErrorMessage } from "../services/api";
+import { getApiErrorMessage as getErrorMessage, getApiFieldErrors } from "../services/api";
 import {
   fetchAreas,
   fetchContactos,
@@ -39,13 +41,18 @@ import {
   type Minera,
   type Subarea,
 } from "../services/commercialService";
-import { fetchProducts, type Product } from "../services/inventoryService";
+import {
+  fetchProductLocationBalances, fetchProducts,
+  type Product, type ProductLocationBalance,
+} from "../services/inventoryService";
 import {
   annulSale,
   concretarSale,
   createSale,
   fetchSalesPage,
   fetchSalesSummary,
+  updateSaleLines,
+  updateSaleMetadata,
 } from "../services/salesService";
 import type {
   CreateSaleLinePayload,
@@ -90,6 +97,7 @@ type SaleLineFormState = {
   cantidad: string;
   valor_unitario: string;
   codigo_sap: string;
+  ubicacion_salida: string;
 };
 
 const emptyDetailDialog: DetailDialogState = {
@@ -133,6 +141,7 @@ function createEmptyLine(): SaleLineFormState {
     cantidad: "1",
     valor_unitario: "0",
     codigo_sap: "",
+    ubicacion_salida: "",
   };
 }
 
@@ -225,6 +234,7 @@ export function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [summary, setSummary] = useState<SalesSummary | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [locationBalances, setLocationBalances] = useState<ProductLocationBalance[]>([]);
   const [mineras, setMineras] = useState<Minera[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [subareas, setSubareas] = useState<Subarea[]>([]);
@@ -249,6 +259,10 @@ export function SalesPage() {
   const [successMessage, setSuccessMessage] = useState("");
 
   const [saleDialogOpen, setSaleDialogOpen] = useState(false);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [saleEditReason, setSaleEditReason] = useState("");
+  const [saleDialogError, setSaleDialogError] = useState("");
+  const [saleFieldErrors, setSaleFieldErrors] = useState<Record<string, string>>({});
   const [saleForm, setSaleForm] = useState<SaleFormState>(createEmptySaleForm);
   const [saleLines, setSaleLines] = useState<SaleLineFormState[]>([
     createEmptyLine(),
@@ -304,6 +318,7 @@ export function SalesPage() {
         search: "",
         ordering: "categoria__name,modelo",
       }),
+      fetchProductLocationBalances({ positiveOnly: true }),
       fetchMineras({ ordering: "name" }),
       fetchAreas({ ordering: "minera__name,name" }),
       fetchSubareas({ ordering: "area__minera__name,area__name,name" }),
@@ -314,6 +329,7 @@ export function SalesPage() {
           salesData,
           summaryData,
           productsData,
+          balancesData,
           minerasData,
           areasData,
           subareasData,
@@ -325,6 +341,7 @@ export function SalesPage() {
           setSalesCount(salesData.count);
           setSummary(summaryData);
           setProducts(productsData);
+          setLocationBalances(balancesData);
           setMineras(minerasData);
           setAreas(areasData);
           setSubareas(subareasData);
@@ -411,6 +428,10 @@ export function SalesPage() {
   }, [saleLines]);
 
   const handleOpenCreateSale = () => {
+    setEditingSale(null);
+    setSaleEditReason("");
+    setSaleDialogError("");
+    setSaleFieldErrors({});
     setSaleForm(createEmptySaleForm());
     setSaleLines([createEmptyLine()]);
     setSaleDialogOpen(true);
@@ -424,7 +445,58 @@ export function SalesPage() {
     }
 
     setSaleDialogOpen(false);
+    setEditingSale(null);
+    setSaleEditReason("");
+    setSaleDialogError("");
   };
+
+  const handleOpenEditSale = (sale: Sale) => {
+    setEditingSale(sale);
+    setSaleEditReason("");
+    setSaleDialogError("");
+    setSaleFieldErrors({});
+    setSaleForm({
+      fecha_venta: sale.fecha_venta || getTodayInputValue(),
+      fecha_factura: sale.fecha_factura || "",
+      factura_numero: sale.factura_numero || "",
+      orden_compra: sale.orden_compra || "",
+      minera: mineras.find((item) => item.id === sale.minera) ?? null,
+      area: areas.find((item) => item.id === sale.area) ?? null,
+      subarea: subareas.find((item) => item.id === sale.subarea) ?? null,
+      contacto: contactos.find((item) => item.id === sale.contacto) ?? null,
+      tipo_documento:
+        sale.tipo_documento === "HES" || sale.tipo_documento === "OTRO"
+          ? sale.tipo_documento
+          : "GUIA_DESPACHO",
+      numero_guia_hes: sale.numero_guia_hes || "",
+      observations: sale.observations || "",
+    });
+    setSaleLines(
+      sale.detalles.map((detail) => ({
+        localId: crypto.randomUUID(),
+        producto:
+          products.find((product) => product.id === detail.producto) ?? null,
+        cantidad: String(detail.cantidad),
+        valor_unitario: String(detail.valor_unitario),
+        codigo_sap: detail.codigo_sap || "",
+        ubicacion_salida: detail.ubicacion_salida ? String(detail.ubicacion_salida) : "",
+      })),
+    );
+    setSaleDialogOpen(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+  };
+
+  const saleLinesFingerprint = (lines: CreateSaleLinePayload[]) =>
+    JSON.stringify(
+      lines.map((line) => ({
+        producto: line.producto,
+        cantidad: line.cantidad,
+        valor_unitario: Number(line.valor_unitario),
+        codigo_sap: line.codigo_sap?.trim() || "",
+        ubicacion_salida: line.ubicacion_salida ? Number(line.ubicacion_salida) : null,
+      })),
+    );
 
   const updateLine = (
     localId: string,
@@ -460,6 +532,9 @@ export function SalesPage() {
       if (!line.producto) {
         throw new Error(`La línea ${index + 1} debe tener producto.`);
       }
+      if (line.producto.controla_stock && !line.ubicacion_salida) {
+        throw new Error(`Seleccione la ubicación de salida de la línea ${index + 1}.`);
+      }
 
       const cantidad = parsePositiveInteger(line.cantidad);
       const valorUnitario = parseMoney(line.valor_unitario);
@@ -478,6 +553,7 @@ export function SalesPage() {
 
       return {
         producto: line.producto.id,
+        ubicacion_salida: line.ubicacion_salida ? Number(line.ubicacion_salida) : null,
         cantidad,
         valor_unitario: String(valorUnitario),
         codigo_sap: line.codigo_sap.trim() || line.producto.codigo_sap || "",
@@ -503,22 +579,51 @@ export function SalesPage() {
   const handleCreateSale = async () => {
     try {
       setSavingSale(true);
-      setErrorMessage("");
+      setSaleDialogError("");
       setSuccessMessage("");
 
       const payload = buildSalePayload();
-      const createdSale = await createSale(payload);
+      if (editingSale) {
+        const { lineas, ...metadata } = payload;
+        const originalLines: CreateSaleLinePayload[] = editingSale.detalles.map(
+          (detail) => ({
+            producto: detail.producto,
+            ubicacion_salida: detail.ubicacion_salida,
+            cantidad: detail.cantidad,
+            valor_unitario: String(detail.valor_unitario),
+            codigo_sap: detail.codigo_sap || "",
+          }),
+        );
+        const linesChanged =
+          saleLinesFingerprint(lineas) !== saleLinesFingerprint(originalLines);
 
-      setSuccessMessage(
-        `Venta #${createdSale.id} ingresada correctamente. Stock y alertas fueron procesados por el backend.`,
-      );
+        if (linesChanged && !saleEditReason.trim()) {
+          throw new Error(
+            "Indique el motivo de la corrección de productos, cantidades o valores.",
+          );
+        }
+
+        await updateSaleMetadata(editingSale.id, metadata);
+        if (linesChanged) {
+          await updateSaleLines(editingSale.id, { motivo: saleEditReason, lineas });
+        }
+        setSuccessMessage(`Venta #${editingSale.id} actualizada correctamente.`);
+      } else {
+        const createdSale = await createSale(payload);
+        setSuccessMessage(
+          `Venta #${createdSale.id} ingresada correctamente. Stock y alertas fueron procesados por el backend.`,
+        );
+      }
       setSaleDialogOpen(false);
+      setEditingSale(null);
+      setSaleEditReason("");
       await loadSales({ search: "", page: 0 });
       setSearchTerm("");
       setAppliedSearch("");
       setPagination((current) => ({ ...current, page: 0 }));
     } catch (error: unknown) {
-      setErrorMessage(getErrorMessage(error));
+      setSaleFieldErrors(getApiFieldErrors(error));
+      setSaleDialogError(getErrorMessage(error));
     } finally {
       setSavingSale(false);
     }
@@ -594,10 +699,11 @@ export function SalesPage() {
       const discounted = Boolean(p.value);
       return <Chip label={discounted ? "Descontado" : "No"} size="small" sx={{ color: discounted ? colors.status.success : colors.text.muted, bgcolor: colors.surface.soft, borderColor: discounted ? colors.status.success : colors.border.medium, border: "1px solid", fontWeight: 800 }} />;
     } },
-    { colId: "actions", headerName: "Acciones", width: 350, sortable: false, filter: false, pinned: "right", cellRenderer: (p: ICellRendererParams<Sale>) => {
+    { colId: "actions", headerName: "Acciones", width: 455, sortable: false, filter: false, pinned: "right", cellRenderer: (p: ICellRendererParams<Sale>) => {
       const sale = p.data; if (!sale) return null; const isUpdating = updatingSaleId === sale.id;
       return <Stack direction="row" spacing={1} sx={{ alignItems: "center", height: "100%" }}>
         <Button size="small" variant="outlined" startIcon={<InfoIcon />} onClick={() => { setDetailPagination({ page: 0, pageSize: 25 }); setAlertPagination({ page: 0, pageSize: 25 }); setDetailDialog({ open: true, sale }); }}>Detalle</Button>
+        <Button size="small" variant="outlined" startIcon={<EditIcon />} disabled={sale.sale_status === "ANULADA" || isUpdating} onClick={() => handleOpenEditSale(sale)}>Editar</Button>
         <Button size="small" variant="outlined" startIcon={<CheckCircleIcon />} disabled={sale.sale_status !== "INGRESADA" || isUpdating} onClick={() => void handleConcretarSale(sale)}>Concretar</Button>
         <Button size="small" variant="outlined" startIcon={<BlockIcon />} disabled={sale.sale_status === "ANULADA" || isUpdating} onClick={() => handleOpenAnnulDialog(sale)}>Anular</Button>
       </Stack>;
@@ -701,14 +807,15 @@ export function SalesPage() {
         fullWidth
         maxWidth="lg"
       >
-        <DialogTitle>Nueva venta / ingreso</DialogTitle>
+        <DialogTitle>{editingSale ? `Editar venta #${editingSale.id}` : "Nueva venta / ingreso"}</DialogTitle>
 
         <DialogContent>
           <Stack spacing={2.4} sx={{ mt: 1 }}>
+            {saleDialogError ? <Alert severity="error" variant="outlined">{saleDialogError}</Alert> : null}
             <Alert severity="info" variant="outlined">
-              Al guardar, el backend crea la venta como{" "}
-              <strong>INGRESADA</strong>, calcula neto/IVA/total, descuenta
-              stock si corresponde y genera alertas comerciales.
+              {editingSale
+                ? "Los cambios de productos o cantidades ajustan el Kardex por diferencia y quedan registrados en auditoría."
+                : <>Al guardar, el backend crea la venta como <strong>INGRESADA</strong>, calcula neto/IVA/total, descuenta stock si corresponde y genera alertas comerciales.</>}
             </Alert>
 
             <Box
@@ -959,7 +1066,7 @@ export function SalesPage() {
                     <Stack
                       direction={{ xs: "column", md: "row" }}
                       spacing={1.5}
-                      sx={{ alignItems: { xs: "stretch", md: "center" } }}
+                      sx={{ alignItems: { xs: "stretch", md: "flex-start" } }}
                     >
                       <Typography sx={{ fontWeight: 900, minWidth: 90 }}>
                         Línea {index + 1}
@@ -973,6 +1080,10 @@ export function SalesPage() {
                             ...current,
                             producto: value,
                             codigo_sap: value?.codigo_sap || "",
+                            ubicacion_salida: (() => {
+                              const balances = locationBalances.filter((item) => item.product === value?.id && item.quantity > 0);
+                              return balances.length === 1 ? String(balances[0].location) : "";
+                            })(),
                           }))
                         }
                         getOptionLabel={(option) =>
@@ -992,6 +1103,21 @@ export function SalesPage() {
                       />
 
                       <TextField
+                        select
+                        label="Ubicación de salida"
+                        value={line.ubicacion_salida}
+                        disabled={!line.producto?.controla_stock}
+                        onChange={(event) => updateLine(line.localId, (current) => ({ ...current, ubicacion_salida: event.target.value }))}
+                        error={Boolean(saleFieldErrors[`lineas.${index}.ubicacion_salida`] || saleFieldErrors.ubicacion)}
+                        helperText={saleFieldErrors[`lineas.${index}.ubicacion_salida`] || (line.producto?.controla_stock ? "Bodega desde la que se descontará el stock." : "No aplica: el producto no controla stock.")}
+                        sx={{ minWidth: 210 }}
+                      >
+                        {locationBalances.filter((item) => item.product === line.producto?.id && item.quantity > 0).map((item) => (
+                          <MenuItem key={item.id} value={String(item.location)}>{item.location_name} · Stock {item.quantity}</MenuItem>
+                        ))}
+                      </TextField>
+
+                      <TextField
                         label="Cantidad"
                         type="number"
                         value={line.cantidad}
@@ -1006,7 +1132,7 @@ export function SalesPage() {
                       />
 
                       <TextField
-                        label="Valor unitario neto"
+                        label="Valor unitario neto (CLP)"
                         type="number"
                         value={line.valor_unitario}
                         onChange={(event) =>
@@ -1063,10 +1189,19 @@ export function SalesPage() {
             </Stack>
 
             <Alert severity="success" variant="outlined">
-              Monto neto: <strong>{formatCLP(salePreview.neto)}</strong> — IVA
+              Moneda: <strong>CLP</strong> — Monto neto: <strong>{formatCLP(salePreview.neto)}</strong> — IVA
               (19%): <strong>{formatCLP(salePreview.iva)}</strong> — Total con
               IVA: <strong>{formatCLP(salePreview.total)}</strong>
             </Alert>
+            {editingSale ? (
+              <TextField
+                label="Motivo de la corrección de líneas"
+                value={saleEditReason}
+                onChange={(event) => setSaleEditReason(event.target.value)}
+                helperText="Obligatorio solamente si cambia productos, cantidades, valores o códigos SAP."
+                fullWidth multiline minRows={2}
+              />
+            ) : null}
           </Stack>
         </DialogContent>
 
@@ -1080,7 +1215,7 @@ export function SalesPage() {
             onClick={() => void handleCreateSale()}
             disabled={savingSale}
           >
-            {savingSale ? "Guardando..." : "Ingresar venta"}
+            {savingSale ? "Guardando..." : editingSale ? "Guardar cambios" : "Ingresar venta"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -17,6 +17,7 @@ export type SaleDetail = {
   producto_modelo: string;
   producto_categoria: string;
   producto_controla_stock: boolean;
+  ubicacion_salida: number | null;
   cantidad: number;
   valor_unitario: string;
   valor_total: string;
@@ -172,6 +173,7 @@ export type SaleListParams = {
 
 export type CreateSaleLinePayload = {
   producto: number;
+  ubicacion_salida?: number | null;
   cantidad: number;
   valor_unitario: string;
   codigo_sap?: string;

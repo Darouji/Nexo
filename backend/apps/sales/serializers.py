@@ -3,7 +3,7 @@ from drf_spectacular.utils import OpenApiTypes, extend_schema_field
 from rest_framework import serializers
 
 from apps.core.models import BaseStatus
-from apps.inventory.models import Producto
+from apps.inventory.models import InventoryLocation, Producto
 
 from .models import DetalleVenta, Venta, VentaAlert
 from .services import create_sale_with_details, update_sale_metadata
@@ -38,6 +38,7 @@ class DetalleVentaSerializer(serializers.ModelSerializer):
             "producto_modelo",
             "producto_categoria",
             "producto_controla_stock",
+            "ubicacion_salida",
             "cantidad",
             "valor_unitario",
             "valor_total",
@@ -52,6 +53,9 @@ class DetalleVentaSerializer(serializers.ModelSerializer):
 
 class DetalleVentaInputSerializer(serializers.Serializer):
     producto = serializers.PrimaryKeyRelatedField(queryset=Producto.objects.all())
+    ubicacion_salida = serializers.PrimaryKeyRelatedField(
+        queryset=InventoryLocation.objects.all(), required=False, allow_null=True
+    )
     cantidad = serializers.IntegerField(min_value=1)
     valor_unitario = serializers.DecimalField(
         max_digits=14,

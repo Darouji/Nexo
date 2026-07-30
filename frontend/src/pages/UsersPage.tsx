@@ -625,8 +625,7 @@ export function UsersPage({ currentUser }: UsersPageProps) {
                 fontWeight: 500,
               }}
             >
-              Administración de cuentas internas con acceso al sistema. Crear un
-              usuario no crea colaborador ni contacto externo.
+              Los usuarios son trabajadores de SERKAN con una cuenta para ingresar a la plataforma. El rol asignado define qué información y acciones puede utilizar cada persona.
             </Typography>
           </Box>
 

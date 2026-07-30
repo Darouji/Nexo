@@ -89,12 +89,14 @@ export function OrderDetailDialog({
   onClose,
   onTransition,
   onRegisterShipment,
+  onEdit,
 }: {
   order: PurchaseOrder | null;
   loading: boolean;
   onClose: () => void;
   onTransition: (action: PurchaseTransition) => void;
   onRegisterShipment: (order: PurchaseOrder) => void;
+  onEdit: (order: PurchaseOrder) => void;
 }) {
   if (!order) return null;
 
@@ -146,7 +148,10 @@ export function OrderDetailDialog({
           </CapabilityGate>
         ) : null}
         {order.status === "BORRADOR" ? (
-          <CapabilityGate capability="purchases.submit_review"><Button onClick={() => onTransition("submit-review")}>Enviar a revisión</Button></CapabilityGate>
+          <>
+            <CapabilityGate capability="purchases.edit_draft"><Button onClick={() => onEdit(order)}>Editar borrador</Button></CapabilityGate>
+            <CapabilityGate capability="purchases.submit_review"><Button onClick={() => onTransition("submit-review")}>Enviar a revisión</Button></CapabilityGate>
+          </>
         ) : null}
         {order.status === "EN_REVISION" ? (
           <CapabilityGate capability="purchases.approve_order"><Button onClick={() => onTransition("approve")}>Aprobar</Button></CapabilityGate>

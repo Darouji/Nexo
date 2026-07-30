@@ -79,14 +79,6 @@ export type CreateCollaboratorPayload = {
   observations?: string;
 };
 
-function extractResults<T>(data: ListResponse<T>) {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  return data.results ?? [];
-}
-
 function normalizeParams(params: ListCollaboratorParams = {}) {
   return {
     search: params.search?.trim() || undefined,
@@ -98,14 +90,18 @@ function normalizeParams(params: ListCollaboratorParams = {}) {
 }
 
 export async function fetchCollaborators(params: ListCollaboratorParams = {}) {
-  const response = await api.get<ListResponse<Collaborator>>(
-    "/collaborators/",
-    {
-      params: normalizeParams(params),
-    },
+  const firstResponse = await api.get<ListResponse<Collaborator>>(
+    "/collaborators/", { params: { ...normalizeParams(params), page_size: 100 } },
   );
-
-  return extractResults(response.data);
+  if (Array.isArray(firstResponse.data)) return firstResponse.data;
+  const collaborators = [...firstResponse.data.results];
+  let nextUrl = firstResponse.data.next;
+  while (nextUrl) {
+    const response = await api.get<PaginatedResponse<Collaborator>>(nextUrl);
+    collaborators.push(...response.data.results);
+    nextUrl = response.data.next;
+  }
+  return collaborators;
 }
 
 export async function createCollaborator(payload: CreateCollaboratorPayload) {

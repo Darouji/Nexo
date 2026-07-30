@@ -89,41 +89,15 @@ export function getApiErrorMessage(
   const directMessage =
     errorPayload?.message || data.message || data.detail || data.error;
 
-  if (typeof directMessage === "string" && directMessage.trim()) {
+  const detailedMessage = getFirstStringFromObject(errorPayload?.details);
+  if (
+    typeof directMessage === "string" &&
+    directMessage.trim() &&
+    directMessage !== "Hay errores de validación."
+  ) {
     return directMessage;
   }
-
-  return (
-    getFirstStringFromObject(errorPayload) ||
-    getFirstStringFromObject(data) ||
-    fallback
-  );
-}
-
-function getFirstErrorText(value: unknown): string | null {
-  if (typeof value === "string" && value.trim()) {
-    return value;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const text = getFirstErrorText(item);
-      if (text) {
-        return text;
-      }
-    }
-  }
-
-  if (value && typeof value === "object") {
-    for (const item of Object.values(value as Record<string, unknown>)) {
-      const text = getFirstErrorText(item);
-      if (text) {
-        return text;
-      }
-    }
-  }
-
-  return null;
+  return detailedMessage || (typeof directMessage === "string" ? directMessage : null) || fallback;
 }
 
 export function getApiFieldErrors(error: unknown): Record<string, string> {
@@ -145,12 +119,29 @@ export function getApiFieldErrors(error: unknown): Record<string, string> {
     return {};
   }
 
-  return Object.fromEntries(
-    Object.entries(details).flatMap(([field, value]) => {
-      const message = getFirstErrorText(value);
-      return message ? [[field, message]] : [];
-    }),
-  );
+  const fieldErrors: Record<string, string> = {};
+  const visit = (value: unknown, path: string) => {
+    if (typeof value === "string" && value.trim()) {
+      fieldErrors[path] = value;
+      return;
+    }
+    if (Array.isArray(value)) {
+      if (value.every((item) => typeof item === "string")) {
+        const message = value.find((item) => typeof item === "string" && item.trim());
+        if (typeof message === "string") fieldErrors[path] = message;
+      } else {
+        value.forEach((item, index) => visit(item, `${path}.${index}`));
+      }
+      return;
+    }
+    if (value && typeof value === "object") {
+      Object.entries(value as Record<string, unknown>).forEach(([key, item]) =>
+        visit(item, path ? `${path}.${key}` : key),
+      );
+    }
+  };
+  Object.entries(details).forEach(([field, value]) => visit(value, field));
+  return fieldErrors;
 }
 
 export function getApiRequestId(error: unknown) {

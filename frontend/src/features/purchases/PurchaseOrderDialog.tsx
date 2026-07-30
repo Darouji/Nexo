@@ -36,6 +36,7 @@ type Props = {
   optionsError: string;
   optionsLoading: boolean;
   loading: boolean;
+  editing: boolean;
   onChange: (form: PurchaseOrderForm) => void;
   onClose: () => void;
   onSave: () => void;
@@ -52,6 +53,7 @@ export function PurchaseOrderDialog({
   optionsError,
   optionsLoading,
   loading,
+  editing,
   onChange,
   onClose,
   onSave,
@@ -87,7 +89,7 @@ export function PurchaseOrderDialog({
 
   return (
     <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="lg">
-      <DialogTitle>Nueva orden de compra</DialogTitle>
+      <DialogTitle>{editing ? "Editar orden de compra" : "Nueva orden de compra"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={3}>
           {optionsLoading ? (
@@ -340,7 +342,7 @@ export function PurchaseOrderDialog({
             ? "Guardando..."
             : optionsLoading
               ? "Cargando opciones..."
-              : "Guardar borrador"}
+              : editing ? "Guardar cambios" : "Guardar borrador"}
         </Button>
       </DialogActions>
     </Dialog>

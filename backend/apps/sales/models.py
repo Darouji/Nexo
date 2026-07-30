@@ -295,6 +295,11 @@ class DetalleVenta(BaseModel):
         related_name="ventas_detalle",
         verbose_name="Producto",
     )
+    ubicacion_salida = models.ForeignKey(
+        "inventory.InventoryLocation",
+        on_delete=models.PROTECT, related_name="ventas_detalle_salida",
+        null=True, blank=True, verbose_name="Ubicación de salida",
+    )
 
     cantidad = models.PositiveIntegerField(verbose_name="Cantidad")
     valor_unitario = models.DecimalField(

@@ -391,9 +391,9 @@ export function InventoryLocationsSection({
               Traslados recientes
             </Typography>
             <TableContainer sx={{ maxHeight: 300 }}>
-            <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-              Movimientos recientes entre ubicaciones; el stock total no cambia.
-            </Typography>
+              <Typography variant="body2" sx={{ color: colors.text.secondary }}>
+                Movimientos recientes entre ubicaciones; el stock total no cambia.
+              </Typography>
               <Table
                 size="small"
                 stickyHeader
@@ -592,16 +592,14 @@ export function InventoryLocationsSection({
                 label="Ubicación de origen"
                 select
                 value={transferForm.originLocation}
-                onChange={(event) =>
-                  {
-                    clearTransferFieldError("origin_location");
-                    setTransferForm((current) => ({
-                      ...current,
-                      originLocation: event.target.value,
-                      quantity: "",
-                    }));
-                  }
-                }
+                onChange={(event) => {
+                  clearTransferFieldError("origin_location");
+                  setTransferForm((current) => ({
+                    ...current,
+                    originLocation: event.target.value,
+                    quantity: "",
+                  }));
+                }}
                 fullWidth
                 required
                 disabled={!transferForm.product}
@@ -624,15 +622,13 @@ export function InventoryLocationsSection({
                 label="Ubicación de destino"
                 select
                 value={transferForm.destinationLocation}
-                onChange={(event) =>
-                  {
-                    clearTransferFieldError("destination_location");
-                    setTransferForm((current) => ({
-                      ...current,
-                      destinationLocation: event.target.value,
-                    }));
-                  }
-                }
+                onChange={(event) => {
+                  clearTransferFieldError("destination_location");
+                  setTransferForm((current) => ({
+                    ...current,
+                    destinationLocation: event.target.value,
+                  }));
+                }}
                 fullWidth
                 required
                 disabled={!transferForm.originLocation}
@@ -658,20 +654,18 @@ export function InventoryLocationsSection({
               label="Cantidad a trasladar"
               type="number"
               value={transferForm.quantity}
-              onChange={(event) =>
-                {
-                  clearTransferFieldError("quantity");
-                  setTransferForm((current) => ({
-                    ...current,
-                    quantity: event.target.value,
-                  }));
-                }
-              }
+              onChange={(event) => {
+                clearTransferFieldError("quantity");
+                setTransferForm((current) => ({
+                  ...current,
+                  quantity: event.target.value,
+                }));
+              }}
               required
               error={
                 Boolean(transferFieldErrors.quantity) ||
                 transferQuantity >
-                (selectedOriginBalance?.quantity || Number.POSITIVE_INFINITY)
+                  (selectedOriginBalance?.quantity || Number.POSITIVE_INFINITY)
               }
               helperText={
                 transferFieldErrors.quantity ||
@@ -681,51 +675,54 @@ export function InventoryLocationsSection({
               }
             />
             <TextField
-              label="Motivo"
+              label="Motivo del traslado"
               value={transferForm.reason}
-              onChange={(event) =>
-                {
-                  clearTransferFieldError("reason");
-                  setTransferForm((current) => ({
-                    ...current,
-                    reason: event.target.value,
-                  }));
-                }
-              }
+              onChange={(event) => {
+                clearTransferFieldError("reason");
+                setTransferForm((current) => ({
+                  ...current,
+                  reason: event.target.value,
+                }));
+              }}
               required
               multiline
               minRows={2}
               error={Boolean(transferFieldErrors.reason)}
               helperText={
                 transferFieldErrors.reason ||
-                "El motivo quedará registrado en la trazabilidad."
+                "Obligatorio. Explica por qué se mueve el stock; quedará registrado en la trazabilidad."
               }
             />
-            <TextField
-              label="Referencia o evidencia"
-              value={transferForm.evidenceReference}
-              onChange={(event) =>
-                {
-                  clearTransferFieldError("evidence_reference");
-                  setTransferForm((current) => ({
-                    ...current,
-                    evidenceReference: event.target.value,
-                  }));
-                }
-              }
-              required={sensitiveTransfer}
-              error={
-                Boolean(transferFieldErrors.evidence_reference) ||
-                sensitiveTransfer &&
-                !transferForm.evidenceReference.trim()
-              }
-              helperText={
-                transferFieldErrors.evidence_reference ||
-                (sensitiveTransfer
-                  ? "Obligatoria porque interviene custodia o cliente/faena."
-                  : "Opcional. Ej.: guía de despacho, acta o ticket.")
-              }
-            />
+            {sensitiveTransfer ? (
+              <>
+                <Alert severity="warning" variant="outlined">
+                  Este traslado involucra una custodia personal o una ubicación de
+                  cliente/faena, por lo que necesita identificar el documento que
+                  respalda la entrega o recepción.
+                </Alert>
+                <TextField
+                  label="Documento de respaldo"
+                  placeholder="Ej.: Guía 1842, acta de entrega 07 o ticket INC-325"
+                  value={transferForm.evidenceReference}
+                  onChange={(event) => {
+                    clearTransferFieldError("evidence_reference");
+                    setTransferForm((current) => ({
+                      ...current,
+                      evidenceReference: event.target.value,
+                    }));
+                  }}
+                  required
+                  error={
+                    Boolean(transferFieldErrors.evidence_reference) ||
+                    !transferForm.evidenceReference.trim()
+                  }
+                  helperText={
+                    transferFieldErrors.evidence_reference ||
+                    "Escribe el número o nombre de la guía de despacho, acta, ticket o solicitud que acredita el movimiento."
+                  }
+                />
+              </>
+            ) : null}
           </Stack>
         </DialogContent>
         <DialogActions>

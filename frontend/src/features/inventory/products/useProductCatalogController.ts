@@ -1,3 +1,10 @@
+/**
+ * Controlador de estado y consultas del catálogo de productos.
+ *
+ * Mantiene la página como una capa de composición: concentra filtros, paginación,
+ * orden remoto, vistas nombradas y cancelación de solicitudes, mientras el backend
+ * conserva la validación y las reglas de negocio del producto.
+ */
 import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -52,6 +59,8 @@ export function useProductCatalogController({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(enabled);
 
+  // La cancelación reduce trabajo innecesario y la secuencia evita que una respuesta
+  // antigua sobrescriba el resultado de filtros aplicados posteriormente.
   const requestSequenceRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -111,6 +120,8 @@ export function useProductCatalogController({
     ],
   );
 
+  // La carga inicial usa explícitamente la vista operativa predeterminada: productos
+  // activos, primera página y orden estable por categoría y modelo.
   useEffect(() => {
     if (!enabled) {
       return;
@@ -228,6 +239,11 @@ export function useProductCatalogController({
     });
   }, [loadFirstPage]);
 
+  /**
+   * Restaura una vista nombrada como una operación atómica de interfaz: primero
+   * reconstruye todos sus filtros y luego solicita la primera página con ese mismo
+   * estado, evitando mezclar valores guardados con filtros anteriores de la pantalla.
+   */
   const applyNamedView = useCallback(
     (config: SavedGridViewConfig) => {
       const readFilter = (key: string) => {
@@ -298,6 +314,7 @@ export function useProductCatalogController({
     [loadProducts],
   );
 
+  // El estado ACTIVO es la vista base y no se contabiliza como filtro adicional.
   const activeFiltersCount = useMemo(
     () =>
       Number(categoryFilter.length > 0) +

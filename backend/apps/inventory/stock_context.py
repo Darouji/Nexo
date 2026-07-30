@@ -1,3 +1,6 @@
+# Protege la fuente de verdad del stock frente a escrituras directas al modelo.
+# Los servicios de dominio habilitan este contexto únicamente mientras registran
+# el movimiento Kardex y actualizan la existencia dentro de la misma operación.
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -24,4 +27,6 @@ def allow_stock_write():
     try:
         yield
     finally:
+        # Restablecer el token original evita que la autorización se propague a
+        # operaciones posteriores del mismo hilo o contexto asíncrono.
         _stock_write_authorized.reset(token)

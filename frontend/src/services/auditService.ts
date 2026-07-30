@@ -1,3 +1,10 @@
+/**
+ * Cliente de lectura para la trazabilidad de SERKAN.
+ *
+ * Distingue entre actividad global de operaciones y cambios detallados de un
+ * registro concreto. Este servicio no crea ni modifica auditorías; esas huellas
+ * se generan en los casos de uso y middleware del backend.
+ */
 import { api } from "./api";
 
 export type AuditActivityParams = {
@@ -33,12 +40,17 @@ export interface AuditLog {
   created_at: string;
 }
 
+/** Identificador de negocio conservado en la foto del objeto auditado. */
 export type AuditTargetIdentifier = {
   key: string;
   label: string;
   value: string;
 };
 
+/**
+ * Contexto legible del objetivo en el momento del evento; evita depender sólo
+ * de un ID interno o de la representación actual del registro.
+ */
 export type AuditTargetSnapshot = {
   entity_label: string;
   display_name: string;
@@ -79,6 +91,7 @@ export type RecordChangeResponse = {
   results: RecordChangeLog[];
 };
 
+/** Elimina parámetros vacíos para no convertirlos en filtros accidentales. */
 function normalizeAuditParams(params: AuditActivityParams = {}) {
   return {
     limit: params.limit || undefined,
@@ -87,6 +100,7 @@ function normalizeAuditParams(params: AuditActivityParams = {}) {
   };
 }
 
+/** Recupera el flujo global de actividad según módulo o tipo de acción. */
 export async function fetchAuditActivity(params: AuditActivityParams = {}) {
   const response = await api.get<AuditActivityResponse>("/audit/activity/", {
     params: normalizeAuditParams(params),
@@ -95,6 +109,10 @@ export async function fetchAuditActivity(params: AuditActivityParams = {}) {
   return response.data;
 }
 
+/**
+ * Recupera las diferencias de campos de un único objeto identificado por su
+ * aplicación, modelo e ID estable.
+ */
 export async function fetchRecordChangeHistory(params: RecordChangeParams) {
   const response = await api.get<RecordChangeResponse>(
     "/audit/record-changes/",

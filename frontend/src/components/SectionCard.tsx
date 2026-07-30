@@ -2,11 +2,19 @@ import type { ReactNode } from "react";
 import { Card, CardContent, Divider, Stack, Typography } from "@mui/material";
 import { colors } from "../theme/colors";
 
+type SectionTone = {
+  main: string;
+  soft: string;
+  border: string;
+  shadow?: string;
+};
+
 type SectionCardProps = {
   title?: string;
   subtitle?: string;
   actions?: ReactNode;
   children: ReactNode;
+  tone?: SectionTone;
 };
 
 export function SectionCard({
@@ -14,13 +22,14 @@ export function SectionCard({
   subtitle,
   actions,
   children,
+  tone,
 }: SectionCardProps) {
   return (
     <Card
       sx={{
         bgcolor: colors.background.paper,
-        border: `1px solid ${colors.border.light}`,
-        boxShadow: colors.shadow.card,
+        border: `2px solid ${tone?.border ?? colors.border.light}`,
+        boxShadow: tone?.shadow ?? colors.shadow.card,
       }}
     >
       <CardContent>
@@ -63,7 +72,12 @@ export function SectionCard({
               ) : null}
             </Stack>
 
-            <Divider sx={{ borderColor: colors.border.light, mb: 2.4 }} />
+            <Divider
+              sx={{
+                borderColor: tone?.border ?? colors.border.light,
+                mb: 2.4,
+              }}
+            />
           </>
         ) : null}
 

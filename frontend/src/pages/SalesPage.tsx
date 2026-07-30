@@ -699,9 +699,9 @@ export function SalesPage() {
       const discounted = Boolean(p.value);
       return <Chip label={discounted ? "Descontado" : "No"} size="small" sx={{ color: discounted ? colors.status.success : colors.text.muted, bgcolor: colors.surface.soft, borderColor: discounted ? colors.status.success : colors.border.medium, border: "1px solid", fontWeight: 800 }} />;
     } },
-    { colId: "actions", headerName: "Acciones", width: 455, sortable: false, filter: false, pinned: "right", cellRenderer: (p: ICellRendererParams<Sale>) => {
+    { colId: "actions", headerName: "Acciones", width: 455, minWidth: 455, sortable: false, filter: false, suppressMovable: true, cellRenderer: (p: ICellRendererParams<Sale>) => {
       const sale = p.data; if (!sale) return null; const isUpdating = updatingSaleId === sale.id;
-      return <Stack direction="row" spacing={1} sx={{ alignItems: "center", height: "100%" }}>
+      return <Stack direction="row" spacing={1} sx={{ alignItems: "center", height: "100%", flexWrap: "nowrap", whiteSpace: "nowrap" }}>
         <Button size="small" variant="outlined" startIcon={<InfoIcon />} onClick={() => { setDetailPagination({ page: 0, pageSize: 25 }); setAlertPagination({ page: 0, pageSize: 25 }); setDetailDialog({ open: true, sale }); }}>Detalle</Button>
         <Button size="small" variant="outlined" startIcon={<EditIcon />} disabled={sale.sale_status === "ANULADA" || isUpdating} onClick={() => handleOpenEditSale(sale)}>Editar</Button>
         <Button size="small" variant="outlined" startIcon={<CheckCircleIcon />} disabled={sale.sale_status !== "INGRESADA" || isUpdating} onClick={() => void handleConcretarSale(sale)}>Concretar</Button>

@@ -16,8 +16,9 @@ import FolderIcon from "@mui/icons-material/Folder";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import GroupsIcon from "@mui/icons-material/Groups";
-import DevicesOtherIcon from "@mui/icons-material/DevicesOther";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import HistoryIcon from "@mui/icons-material/History";
+import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -64,80 +65,21 @@ type HomeAlert = {
   actionSection: string;
 };
 
-const modules: ModuleCard[] = [
-  {
-    label: "Ventas",
-    description: "Registro comercial, ingresos, estados y trazabilidad.",
-    section: "Ventas / Ingresos",
-    color: colors.modules.sales,
-    icon: <PointOfSaleIcon />,
-    badge: "Comercial",
-  },
-  {
-    label: "Inventario",
-    description: "Productos, stock crítico y movimientos Kardex.",
-    section: "Productos",
-    color: colors.modules.inventory,
-    icon: <Inventory2Icon />,
-    badge: "Stock",
-  },
-  {
-    label: "Entidades comerciales",
-    description: "Holdings, mineras, áreas, subáreas y contactos.",
-    section: "Entidades comerciales",
-    color: colors.modules.commercial,
-    icon: <BusinessIcon />,
-  },
-  {
-    label: "Documentos",
-    description: "Facturas, guías, HES, archivos y versiones.",
-    section: "Documentos",
-    color: colors.modules.documents,
-    icon: <FolderIcon />,
-    badge: "Pendientes",
-  },
-  {
-    label: "Estadísticas",
-    description: "KPIs, gráficos e inteligencia comercial.",
-    section: "Estadísticas",
-    color: colors.modules.analytics,
-    icon: <BarChartIcon />,
-  },
-  {
-    label: "Importaciones Excel",
-    description: "Carga inteligente, prevalidación y errores por fila.",
-    section: "Importaciones Excel",
-    color: colors.modules.excel,
-    icon: <TableChartIcon />,
-  },
-  {
-    label: "Colaboradores",
-    description: "Personas internas, perfiles y trazabilidad.",
-    section: "Colaboradores",
-    color: colors.modules.collaborators,
-    icon: <GroupsIcon />,
-  },
-  {
-    label: "Activos y chips",
-    description: "Equipos, líneas, asignaciones y responsables.",
-    section: "Activos y chips",
-    color: colors.modules.assets,
-    icon: <DevicesOtherIcon />,
-  },
-  {
-    label: "Compras",
-    description: "Abastecimiento, costos, recepción y proveedores.",
-    section: "Compras / Egresos",
-    color: colors.modules.purchases,
-    icon: <ShoppingCartIcon />,
-  },
-  {
-    label: "Auditoría",
-    description: "Historial, cambios, anulaciones y operaciones críticas.",
-    section: "Auditoría",
-    color: colors.modules.audit,
-    icon: <AdminPanelSettingsIcon />,
-  },
+const primaryModules: ModuleCard[] = [
+  { label: "Entidades comerciales", description: "Mineras, áreas, subáreas y contactos del flujo comercial.", section: "Entidades comerciales", color: colors.modules.commercial, icon: <BusinessIcon />, badge: "Relaciones" },
+  { label: "Inventario", description: "Catálogo, stock, ubicaciones y recepciones físicas.", section: "Inventario", color: colors.modules.inventory, icon: <Inventory2Icon />, badge: "Stock" },
+  { label: "Ventas", description: "Ingresos, documentos comerciales y descuento de existencias.", section: "Ventas / Ingresos", color: colors.modules.sales, icon: <PointOfSaleIcon />, badge: "Comercial" },
+  { label: "Compras", description: "Órdenes, proveedores, envíos y recepción de productos.", section: "Compras / Egresos", color: colors.modules.purchases, icon: <ShoppingCartIcon />, badge: "Abastecimiento" },
+  { label: "Kardex", description: "Historial único y trazable de movimientos de inventario.", section: "Kardex", color: colors.modules.inventory, icon: <HistoryIcon /> },
+  { label: "Importaciones Excel", description: "Importa productos desde Excel con prevalidación y revisión por fila.", section: "Importaciones Excel", color: colors.modules.excel, icon: <TableChartIcon />, badge: "Productos" },
+  { label: "Estadísticas", description: "Indicadores reales, tendencias comerciales y alertas operativas.", section: "Estadísticas", color: colors.modules.analytics, icon: <BarChartIcon /> },
+];
+
+const managementModules: ModuleCard[] = [
+  { label: "Usuarios", description: "Cuentas con acceso y permisos dentro de la plataforma.", section: "Usuarios", color: colors.modules.audit, icon: <PeopleAltIcon /> },
+  { label: "Colaboradores", description: "Personal interno o temporal, con o sin acceso al sistema.", section: "Colaboradores", color: colors.modules.collaborators, icon: <GroupsIcon /> },
+  { label: "Documentos", description: "Facturas, guías, HES, contratos y versiones asociadas.", section: "Documentos", color: colors.modules.documents, icon: <FolderIcon /> },
+  { label: "Auditoría", description: "Trazabilidad detallada de acciones y cambios sensibles.", section: "Auditoría", color: colors.modules.audit, icon: <AdminPanelSettingsIcon /> },
 ];
 
 function getFirstName(user: AuthUser | null) {
@@ -280,6 +222,12 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
   const quickStats = buildQuickStats(stats);
   const alerts = buildHomeAlerts(stats);
   const urgentAlertsCount = alerts.length;
+  const managementRoles = ["ADMINISTRADOR", "RRHH", "FINANZAS_COMERCIAL", "INFORMATICO"];
+  const visibleManagementModules = managementRoles.includes(user?.role || "")
+    ? managementModules.filter((module) =>
+        module.section !== "Auditoría" || ["ADMINISTRADOR", "INFORMATICO"].includes(user?.role || ""),
+      )
+    : [];
 
   return (
     <Box sx={{ width: "100%" }}>
@@ -363,9 +311,9 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
               <Button
                 variant="contained"
                 endIcon={<ArrowForwardIcon />}
-                onClick={() => onSectionChange("Documentos")}
+                onClick={() => onSectionChange("Inventario")}
               >
-                Revisar pendientes
+                Abrir operación
               </Button>
 
               <Button
@@ -401,7 +349,7 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
         }}
       >
         <Stack spacing={3}>
-          <Box>
+          <Box sx={{ order: 2 }}>
             <Typography
               variant="h5"
               sx={{ color: colors.text.primary, fontWeight: 900, mb: 2 }}
@@ -421,7 +369,7 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
                 gap: 2,
               }}
             >
-              {modules.map((module) => (
+              {primaryModules.map((module) => (
                 <Card
                   key={module.label}
                   sx={{
@@ -512,7 +460,30 @@ export function HomePage({ user, onSectionChange }: HomePageProps) {
             </Box>
           </Box>
 
-          <Box>
+          {visibleManagementModules.length ? (
+            <Card sx={{ order: 3, p: 2.2, bgcolor: colors.background.paper, border: `1px solid ${colors.border.light}` }}>
+              <Typography variant="h6" sx={{ color: colors.text.primary, fontWeight: 900 }}>
+                Administración y soporte
+              </Typography>
+              <Typography variant="body2" sx={{ color: colors.text.muted, mb: 1.8 }}>
+                Personas, documentos y trazabilidad fuera del flujo operativo principal.
+              </Typography>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+                {visibleManagementModules.map((module) => (
+                  <Button
+                    key={module.label}
+                    variant="outlined"
+                    startIcon={module.icon}
+                    onClick={() => onSectionChange(module.section)}
+                    sx={{ color: module.color.main, borderColor: module.color.border, bgcolor: module.color.soft }}
+                  >
+                    {module.label}
+                  </Button>
+                ))}
+              </Stack>
+            </Card>
+          ) : null}
+          <Box sx={{ order: 1 }}>
             <Typography
               variant="h5"
               sx={{ color: colors.text.primary, fontWeight: 900, mb: 2 }}

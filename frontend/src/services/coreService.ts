@@ -29,6 +29,11 @@ export type DashboardStatistics = {
       count: number;
       total: string;
     };
+    analysis_period_months: number;
+    last_six_months: Array<{ month: string; count: number; total: string }>;
+    top_products: Array<{ id: number; label: string; sap_code: string; quantity: number; sales_count: number; revenue: string }>;
+    top_mineras: Array<{ id: number; label: string; sales_count: number; revenue: string }>;
+    top_contacts: Array<{ id: number; label: string; sales_count: number; revenue: string }>;
     active_alerts_count: number;
   };
   documents: {
@@ -45,7 +50,7 @@ export type DashboardStatistics = {
   };
 };
 
-export async function fetchDashboardStatistics() {
-  const response = await api.get<DashboardStatistics>("/stats/");
+export async function fetchDashboardStatistics(months = 6) {
+  const response = await api.get<DashboardStatistics>("/stats/", { params: { months } });
   return response.data;
 }

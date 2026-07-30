@@ -76,8 +76,9 @@ export function validatePurchaseOrderForm(form: PurchaseOrderForm) {
   if (!form.lines.length) errors.lines = "Agrega al menos una línea.";
 
   form.lines.forEach((line, index) => {
-    if (!line.description.trim()) {
-      errors[`lines.${index}.description`] = "Describe el bien o servicio.";
+    if (!line.product && !line.description.trim()) {
+      errors[`lines.${index}.description`] =
+        "Describe el servicio o concepto no inventariable.";
     }
     if (numberValue(line.quantity) <= 0) {
       errors[`lines.${index}.quantity`] = "Debe ser mayor que cero.";

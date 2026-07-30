@@ -127,6 +127,15 @@ export async function fetchDocumentOwnerTypes() {
   return response.data;
 }
 
+export type DocumentOwnerOption = { id: number; label: string };
+
+export async function fetchDocumentOwnerOptions(ownerContentType: number) {
+  const response = await api.get<DocumentOwnerOption[]>("/documents/files/owner-options/", {
+    params: { owner_content_type: ownerContentType },
+  });
+  return response.data;
+}
+
 export async function createDocumentFile(payload: CreateDocumentPayload) {
   const formData = new FormData();
   formData.append("title", payload.title.trim());

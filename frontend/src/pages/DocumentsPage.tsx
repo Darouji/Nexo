@@ -26,6 +26,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { GridColDef } from "@mui/x-data-grid";
 import { SmartDataGrid } from "../components/SmartDataGrid";
+import { CreateDocumentDialog } from "../features/documents/CreateDocumentDialog";
 import {
   fetchDocumentFiles,
   fetchDocumentVersions,
@@ -232,6 +233,7 @@ export function DocumentsPage() {
     null,
   );
   const [searchTerm, setSearchTerm] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -523,8 +525,7 @@ export function DocumentsPage() {
             <Button
               variant="contained"
               startIcon={<UploadFileIcon />}
-              disabled
-              title="La carga directa se activará cuando definamos el selector de registro asociado."
+              onClick={() => setCreateDialogOpen(true)}
             >
               Nuevo documento
             </Button>
@@ -865,6 +866,12 @@ export function DocumentsPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <CreateDocumentDialog
+        open={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        onCreated={() => void loadDocuments("refresh")}
+      />
     </Stack>
   );
 }

@@ -87,6 +87,12 @@ export function PurchaseOrderDialog({
       maximumFractionDigits: form.currency === "USD" ? 2 : 0,
     }).format(value);
 
+  const productControlsStock = (product: Product | undefined) =>
+    product
+      ? product.controla_stock ??
+        product.stock_status !== "NO_CONTROLA_STOCK"
+      : false;
+
   return (
     <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="lg">
       <DialogTitle>{editing ? "Editar orden de compra" : "Nueva orden de compra"}</DialogTitle>
@@ -241,27 +247,21 @@ export function PurchaseOrderDialog({
                   <Box
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "1fr", md: "2fr 2fr 2fr 1fr 1fr" },
+                      gridTemplateColumns: { xs: "1fr", md: "2.1fr 2fr 1fr 1.15fr" },
                       gap: 1.25,
                     }}
                   >
-                    <TextField
-                      label="Descripción"
-                      value={line.description}
-                      onChange={(event) => updateLine(index, { description: event.target.value })}
-                      error={Boolean(errors[`lines.${index}.description`])}
-                      helperText={errors[`lines.${index}.description`]}
-                    />
                     <TextField
                       select
                       label="Producto"
                       value={line.product}
                       onChange={(event) => {
                         const product = products.find((item) => String(item.id) === event.target.value);
+                        const controlsStock = productControlsStock(product);
                         updateLine(index, {
                           product: event.target.value,
-                          inventoryManaged: Boolean(product?.controla_stock),
-                          destinationLocation: product?.controla_stock ? line.destinationLocation : "",
+                          inventoryManaged: controlsStock,
+                          destinationLocation: controlsStock ? line.destinationLocation : "",
                         });
                       }}
                       error={Boolean(errors[`lines.${index}.product`])}
@@ -305,6 +305,19 @@ export function PurchaseOrderDialog({
                       onChange={(event) => updateLine(index, { unitPrice: event.target.value })}
                       error={Boolean(errors[`lines.${index}.unit_price`])}
                       helperText={errors[`lines.${index}.unit_price`]}
+                    />
+                    <TextField
+                      label="Descripción (opcional)"
+                      placeholder={
+                        line.product
+                          ? "Detalle adicional de esta línea"
+                          : "Obligatoria sólo para servicios o conceptos sin producto"
+                      }
+                      value={line.description}
+                      onChange={(event) => updateLine(index, { description: event.target.value })}
+                      error={Boolean(errors[`lines.${index}.description`])}
+                      helperText={errors[`lines.${index}.description`]}
+                      sx={{ gridColumn: { md: "1 / -1" } }}
                     />
                   </Box>
                 </Box>

@@ -13,7 +13,7 @@ from apps.core.models import AlertSeverity, BaseStatus
 from apps.documents.models import DocumentFile, DocumentType, DocumentVersion
 from apps.imports.models import ImportBatch, ImportBatchStatus, ImportRow, ImportRowStatus
 from apps.inventory.models import Categoria, KardexMovementType, MovimientoKardex, Producto
-from apps.sales.models import Venta, VentaAlert, VentaStatus
+from apps.sales.models import DetalleVenta, Venta, VentaAlert, VentaStatus
 
 
 MONEY_QUANTIZER = Decimal("0.01")
@@ -164,7 +164,7 @@ def get_inventory_statistics():
     }
 
 
-def get_sales_statistics():
+def get_sales_statistics(period_months=6):
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -180,10 +180,10 @@ def get_sales_statistics():
     current_month_sales = valid_sales.filter(fecha_venta__gte=month_start.date())
     current_month_totals = current_month_sales.aggregate(total=Sum("total"))
 
-    last_six_months_start = (month_start - timedelta(days=180)).date()
+    period_start = (month_start - timedelta(days=31 * max(period_months - 1, 0))).date()
 
     monthly_data = (
-        valid_sales.filter(fecha_venta__gte=last_six_months_start)
+        valid_sales.filter(fecha_venta__gte=period_start)
         .annotate(month=TruncMonth("fecha_venta"))
         .values("month")
         .annotate(count=Count("id"), total=Sum("total"))
@@ -202,6 +202,26 @@ def get_sales_statistics():
                 "total": decimal_to_string(item["total"]),
             }
         )
+
+    period_sales = valid_sales.filter(fecha_venta__gte=period_start)
+    period_details = DetalleVenta.objects.filter(venta__in=period_sales)
+
+    top_products = list(
+        period_details.values("producto_id", "producto__modelo", "producto__codigo_sap")
+        .annotate(quantity=Sum("cantidad"), revenue=Sum("valor_total"), sales_count=Count("venta_id", distinct=True))
+        .order_by("-quantity", "producto__modelo")[:5]
+)
+    top_mineras = list(
+        period_sales.values("minera_id", "minera__name")
+        .annotate(sales_count=Count("id"), revenue=Sum("total"))
+        .order_by("-revenue", "minera__name")[:5]
+)
+    top_contacts = list(
+        period_sales.exclude(contacto__isnull=True)
+        .values("contacto_id", "contacto__first_name", "contacto__last_name")
+        .annotate(sales_count=Count("id"), revenue=Sum("total"))
+        .order_by("-revenue", "contacto__first_name")[:5]
+)
 
     active_alerts = VentaAlert.objects.filter(is_active=True)
 
@@ -222,7 +242,27 @@ def get_sales_statistics():
             "count": current_month_sales.count(),
             "total": decimal_to_string(current_month_totals["total"]),
         },
+        "analysis_period_months": period_months,
         "last_six_months": monthly_sales,
+        "top_products": [
+            {
+                "id": item["producto_id"],
+                "label": item["producto__modelo"],
+                "sap_code": item["producto__codigo_sap"],
+                "quantity": int_or_zero(item["quantity"]),
+                "sales_count": int_or_zero(item["sales_count"]),
+                "revenue": decimal_to_string(item["revenue"]),
+            }
+            for item in top_products
+        ],
+        "top_mineras": [
+            {"id": item["minera_id"], "label": item["minera__name"], "sales_count": item["sales_count"], "revenue": decimal_to_string(item["revenue"])}
+            for item in top_mineras
+        ],
+        "top_contacts": [
+            {"id": item["contacto_id"], "label": f"{item['contacto__first_name']} {item['contacto__last_name']}".strip(), "sales_count": item["sales_count"], "revenue": decimal_to_string(item["revenue"])}
+            for item in top_contacts
+        ],
         "active_alerts_count": active_alerts.count(),
         "active_alerts_by_severity": count_by_choice(
             active_alerts,
@@ -269,13 +309,13 @@ def get_import_statistics():
     }
 
 
-def get_dashboard_statistics(user=None):
+def get_dashboard_statistics(user=None, sales_period_months=6):
     return {
         "generated_at": timezone.now().isoformat(),
         "general": get_general_statistics(user=user),
         "commercial": get_commercial_statistics(),
         "inventory": get_inventory_statistics(),
-        "sales": get_sales_statistics(),
+        "sales": get_sales_statistics(period_months=sales_period_months),
         "documents": get_document_statistics(),
         "imports": get_import_statistics(),
     }

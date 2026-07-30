@@ -1,4 +1,5 @@
 import CategoryIcon from "@mui/icons-material/Category";
+import AddIcon from "@mui/icons-material/Add";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LocalShippingIcon from "@mui/icons-material/LocalShipping";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
@@ -70,6 +71,7 @@ type InventoryCatalogSectionProps = {
     nextPaginationModel: SerkanGridPaginationModel,
   ) => void;
   productRowCount: number;
+  onCreateProduct: () => void;
 
   productSortModel: SerkanGridSortModel;
   onProductSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
@@ -114,6 +116,7 @@ export function InventoryCatalogSection({
   onCategoryFilterChange,
   statusFilter,
   onStatusFilterChange,
+  onCreateProduct,
   stockControlFilter,
   onStockControlFilterChange,
   stockStatusFilter,
@@ -197,6 +200,14 @@ export function InventoryCatalogSection({
         subtitle="Stock actual, stock mínimo, unidades por recibir, Kardex y acciones operativas."
         actions={
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={onCreateProduct}
+            >
+              Nuevo producto
+            </Button>
+
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}

@@ -328,7 +328,19 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       };
     });
 
-    return [rowNumberColumn, ...configuredColumns];
+    const operationalColumns = configuredColumns.filter(
+      (column) => String(column.colId ?? column.field ?? "") !== "actions",
+    );
+    const actionColumns = configuredColumns
+      .filter((column) => String(column.colId ?? column.field ?? "") === "actions")
+      .map((column) => ({
+        ...column,
+        pinned: null,
+        lockPinned: true,
+        suppressMovable: true,
+      }));
+
+    return [rowNumberColumn, ...operationalColumns, ...actionColumns];
   }, [clientManaged, columns, definition, onFilterModelChange, onSortModelChange]);
 
   const releaseLayoutMutationLock = useCallback(() => {
@@ -360,6 +372,27 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     [sortModel],
   );
 
+  const enforceActionsColumnPolicy = useCallback((api: GridApi<TRow>) => {
+    const currentState = api.getColumnState();
+    const actionsState = currentState.find((column) => column.colId === "actions");
+
+    if (!actionsState) {
+      return;
+    }
+
+    api.applyColumnState({
+      state: [
+        ...currentState.filter((column) => column.colId !== "actions"),
+        {
+          ...actionsState,
+          pinned: null,
+          hide: false,
+        },
+      ],
+      applyOrder: true,
+    });
+  }, []);
+
   const restoreStoredLayout = useCallback(
     (api: GridApi<TRow>) => {
       isApplyingStoredLayoutRef.current = true;
@@ -367,11 +400,12 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       const restored = restoreSerkanGridLayout(api, gridKey, layoutColumnIds);
 
       applyControlledSort(api);
+      enforceActionsColumnPolicy(api);
       setHasSavedLayout(restored);
       releaseLayoutMutationLock();
       return restored;
     },
-    [applyControlledSort, gridKey, layoutColumnIds, releaseLayoutMutationLock],
+    [applyControlledSort, enforceActionsColumnPolicy, gridKey, layoutColumnIds, releaseLayoutMutationLock],
   );
 
   const emitVisibleColumns = useCallback(
@@ -410,6 +444,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         applyControlledSort(api);
         releaseLayoutMutationLock();
       }
+      enforceActionsColumnPolicy(api);
 
       if (
         preference.config.page_size !== paginationModelRef.current.pageSize
@@ -427,6 +462,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     [
       applyControlledSort,
       emitVisibleColumns,
+      enforceActionsColumnPolicy,
       layoutColumnIds,
       onPaginationModelChange,
       releaseLayoutMutationLock,
@@ -658,6 +694,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         applyOrder: true,
       });
 
+      enforceActionsColumnPolicy(api);
       const columnFilters = Array.isArray(view.config.filters.column_filters)
         ? (view.config.filters.column_filters as SerkanGridFilter[])
         : [];
@@ -667,7 +704,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       onNamedViewApply?.(view.config);
       releaseLayoutMutationLock();
     },
-    [emitVisibleColumns, onNamedViewApply, releaseLayoutMutationLock],
+    [emitVisibleColumns, enforceActionsColumnPolicy, onNamedViewApply, releaseLayoutMutationLock],
   );
 
   const handleCreateNamedView = async () => {
@@ -857,10 +894,21 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
 
   const safePage = Math.min(paginationModel.page, totalPages - 1);
 
+  const gridAccent = gridKey.startsWith("inventory.")
+    ? colors.modules.inventory.border
+    : gridKey.startsWith("sales.")
+      ? colors.modules.sales.border
+      : gridKey.startsWith("purchases.")
+        ? colors.modules.purchases.border
+        : gridKey.startsWith("commercial.")
+          ? colors.modules.commercial.border
+          : colors.border.light;
+
   return (
     <>
       <Box
       data-grid-key={gridKey}
+
       sx={{
         height,
         minHeight,
@@ -868,8 +916,8 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         display: "flex",
         flexDirection: "column",
         bgcolor: colors.background.paper,
-        borderRadius: colors.radius.lg,
-        border: `1px solid ${colors.border.light}`,
+        borderRadius: colors.radius.xs,
+        border: `2px solid ${gridAccent}`,
         boxShadow: colors.shadow.card,
         overflow: "hidden",
       }}

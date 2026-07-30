@@ -10,6 +10,8 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  MenuItem,
+  TextField,
   Stack,
   Typography,
 } from "@mui/material";
@@ -23,6 +25,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { fetchDashboardStatistics } from "../services/coreService";
 import type { DashboardStatistics } from "../services/coreService";
 import { colors } from "../theme/colors";
+import { SalesAnalyticsCharts } from "../features/statistics/SalesAnalyticsCharts";
 
 type AccentColor = {
   main: string;
@@ -289,6 +292,7 @@ export function StatisticsPage() {
   const [stats, setStats] = useState<DashboardStatistics | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [periodMonths, setPeriodMonths] = useState(6);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -317,11 +321,11 @@ export function StatisticsPage() {
     };
   }, []);
 
-  const handleRefresh = () => {
+  const handleRefresh = (months = periodMonths) => {
     setRefreshing(true);
     setErrorMessage("");
 
-    fetchDashboardStatistics()
+    fetchDashboardStatistics(months)
       .then((data) => {
         setStats(data);
         setErrorMessage("");
@@ -463,16 +467,36 @@ export function StatisticsPage() {
             </Typography>
           </Box>
 
-          <Button
-            variant="contained"
-            startIcon={
-              refreshing ? <CircularProgress size={18} /> : <RefreshIcon />
-            }
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
-            {refreshing ? "Actualizando..." : "Actualizar"}
-          </Button>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
+            <TextField
+              select
+              size="small"
+              label="Período"
+              value={periodMonths}
+              onChange={(event) => {
+                const months = Number(event.target.value);
+                setPeriodMonths(months);
+                handleRefresh(months);
+              }}
+              sx={{ minWidth: 165, bgcolor: colors.background.paper, borderRadius: colors.radius.md }}
+            >
+              <MenuItem value={1}>Este mes</MenuItem>
+              <MenuItem value={3}>Últimos 3 meses</MenuItem>
+              <MenuItem value={5}>Últimos 5 meses</MenuItem>
+              <MenuItem value={6}>Últimos 6 meses</MenuItem>
+              <MenuItem value={12}>Últimos 12 meses</MenuItem>
+            </TextField>
+            <Button
+              variant="contained"
+              startIcon={
+                refreshing ? <CircularProgress size={18} /> : <RefreshIcon />
+              }
+              onClick={() => handleRefresh()}
+              disabled={refreshing}
+            >
+              {refreshing ? "Actualizando..." : "Actualizar"}
+            </Button>
+          </Stack>
         </Stack>
       </Box>
 
@@ -549,6 +573,8 @@ export function StatisticsPage() {
           }
         />
       </Box>
+
+      {stats ? <SalesAnalyticsCharts sales={stats.sales} /> : null}
 
       <Box
         sx={{

@@ -30,11 +30,11 @@ function resolveActiveThemeMode(): ThemeMode {
 export const ACTIVE_THEME_MODE: ThemeMode = resolveActiveThemeMode();
 
 const sharedRadius = {
-  xs: "6px",
-  sm: "10px",
-  md: "14px",
-  lg: "18px",
-  xl: "24px",
+  xs: "2px",
+  sm: "2px",
+  md: "2px",
+  lg: "2px",
+  xl: "2px",
 };
 
 const palettes = {

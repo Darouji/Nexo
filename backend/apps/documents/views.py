@@ -15,6 +15,15 @@ from .serializers import (
 )
 
 
+DOCUMENT_OWNER_TYPES = (
+    ("sales", "venta", "Venta / ingreso"),
+    ("purchases", "purchaseorder", "Orden de compra"),
+    ("inventory", "producto", "Producto"),
+    ("accounts", "user", "Usuario"),
+    ("collaborators", "collaborator", "Colaborador"),
+)
+
+
 class CanManageDocuments(BasePermission):
     message = "No tiene permisos para gestionar documentos."
 
@@ -32,7 +41,7 @@ class CanManageDocuments(BasePermission):
 
 class DocumentsPermissionMixin:
     def get_permissions(self):
-        if self.action in ["list", "retrieve", "owner_types"]:
+        if self.action in ["list", "retrieve", "owner_types", "owner_options"]:
             permission_classes = [IsAuthenticated, IsConsultaOrOperativoGlobal]
         else:
             permission_classes = [IsAuthenticated, CanManageDocuments]
@@ -67,13 +76,34 @@ class DocumentFileViewSet(DocumentsPermissionMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="owner-types")
     def owner_types(self, request):
-        allowed = (("accounts", "user", "Usuario"), ("collaborators", "collaborator", "Colaborador"))
+        allowed = DOCUMENT_OWNER_TYPES
         output = []
         for app_label, model, label in allowed:
             content_type = ContentType.objects.filter(app_label=app_label, model=model).first()
             if content_type:
                 output.append({"id": content_type.pk, "app_label": app_label, "model": model, "label": label})
         return Response(output)
+
+    @action(detail=False, methods=["get"], url_path="owner-options")
+    def owner_options(self, request):
+        content_type_id = request.query_params.get("owner_content_type")
+        if not content_type_id:
+            return Response({"owner_content_type": "Selecciona el tipo de registro."}, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_pairs = {(app_label, model) for app_label, model, _label in DOCUMENT_OWNER_TYPES}
+        content_type = ContentType.objects.filter(pk=content_type_id).first()
+        if not content_type or (content_type.app_label, content_type.model) not in allowed_pairs:
+            return Response({"owner_content_type": "Tipo de registro no permitido."}, status=status.HTTP_400_BAD_REQUEST)
+
+        model_class = content_type.model_class()
+        if model_class is None:
+            return Response([])
+
+        options = [
+            {"id": item.pk, "label": str(item)}
+            for item in model_class._default_manager.all()[:100]
+        ]
+        return Response(options)
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [

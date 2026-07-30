@@ -27,6 +27,7 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import GroupsIcon from "@mui/icons-material/Groups";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import EditIcon from "@mui/icons-material/Edit";
+import { PageHeader } from "../components/PageHeader";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
@@ -1486,47 +1487,13 @@ export function CommercialPage() {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        spacing={2}
-        sx={{
-          alignItems: { xs: "flex-start", md: "center" },
-          justifyContent: "space-between",
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{ color: colors.text.primary, fontWeight: 900 }}
-          >
-            Entidades comerciales
-          </Typography>
-
-          <Typography variant="body2" sx={{ color: colors.text.secondary }}>
-            Vista funcional de la jerarquía comercial: Holding, Minera, Área,
-            Subárea y Contacto. Crear contacto no crea usuario interno.
-          </Typography>
-        </Box>
-
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => openCreateDialog(activeTab)}
-          >
-            Crear {tabLabels[activeTab].slice(0, -1)}
-          </Button>
-
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => void loadCommercialData()}
-            disabled={loading}
-          >
-            Actualizar
-          </Button>
-        </Stack>
-      </Stack>
+      <PageHeader
+        title="Entidades comerciales"
+        subtitle="Holdings, mineras, áreas, subáreas y contactos vinculados al flujo comercial diario. Crear un contacto no le concede acceso a la plataforma."
+        eyebrow="Relaciones comerciales"
+        icon={<BusinessIcon />}
+        tone={colors.modules.commercial}
+      />
 
       <Box
         sx={{
@@ -1583,7 +1550,8 @@ export function CommercialPage() {
         }}
       >
         <Stack spacing={2}>
-          <Tabs
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
+            <Tabs
             value={activeTab}
             onChange={(_event, value: CommercialTab) => {
               setActiveTab(value);
@@ -1600,6 +1568,25 @@ export function CommercialPage() {
             <Tab value="subareas" label="Subáreas" />
             <Tab value="contactos" label="Contactos" />
           </Tabs>
+
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => openCreateDialog(activeTab)}
+              >
+                Crear {tabLabels[activeTab].slice(0, -1)}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => void loadCommercialData()}
+                disabled={loading}
+              >
+                Actualizar
+              </Button>
+            </Stack>
+          </Stack>
 
           <Divider />
 

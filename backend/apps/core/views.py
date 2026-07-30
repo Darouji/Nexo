@@ -191,7 +191,18 @@ def omnibox_search(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated, IsConsultaOrOperativoGlobal])
 def dashboard_statistics(request):
-    payload = get_dashboard_statistics(user=request.user)
+    try:
+        period_months = int(request.query_params.get("months", 6))
+    except (TypeError, ValueError):
+        period_months = 6
+
+    if period_months not in {1, 3, 5, 6, 12}:
+        period_months = 6
+
+    payload = get_dashboard_statistics(
+        user=request.user,
+        sales_period_months=period_months,
+    )
     return Response(payload)
 
 

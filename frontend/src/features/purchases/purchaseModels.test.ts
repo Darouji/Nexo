@@ -14,6 +14,32 @@ describe("purchaseModels", () => {
     expect(errors["lines.0.product"]).toBeTruthy();
     expect(errors["lines.0.destination_location"]).toBeTruthy();
   });
+  it("permite omitir descripción en productos y la exige en servicios", () => {
+    const productForm = createEmptyPurchaseOrderForm();
+    productForm.supplier = "4";
+    productForm.lines[0] = {
+      description: "",
+      product: "8",
+      destinationLocation: "2",
+      inventoryManaged: true,
+      quantity: "3",
+      unitPrice: "120",
+    };
+    expect(validatePurchaseOrderForm(productForm)["lines.0.description"]).toBeUndefined();
+
+    const serviceForm = createEmptyPurchaseOrderForm();
+    serviceForm.supplier = "4";
+    serviceForm.lines[0] = {
+      description: "",
+      product: "",
+      destinationLocation: "",
+      inventoryManaged: false,
+      quantity: "1",
+      unitPrice: "500",
+    };
+    expect(validatePurchaseOrderForm(serviceForm)["lines.0.description"]).toBeTruthy();
+  });
+
 
   it("congela el tipo de cambio en el payload USD", () => {
     const form = createEmptyPurchaseOrderForm();

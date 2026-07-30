@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { BrandLogo } from "../components/BrandLogo";
+import { WorkspaceNavigation } from "../components/WorkspaceNavigation";
 import type { ReactNode, SyntheticEvent } from "react";
 import {
   AppBar,
@@ -26,20 +27,17 @@ import {
   Typography,
 } from "@mui/material";
 import AssessmentIcon from "@mui/icons-material/Assessment";
+import FolderIcon from "@mui/icons-material/Folder";
 import BusinessIcon from "@mui/icons-material/Business";
 import CloseIcon from "@mui/icons-material/Close";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
-import DescriptionIcon from "@mui/icons-material/Description";
-import GroupsIcon from "@mui/icons-material/Groups";
 import HomeIcon from "@mui/icons-material/Home";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import HistoryIcon from "@mui/icons-material/History";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import LogoutIcon from "@mui/icons-material/Logout";
 import MenuIcon from "@mui/icons-material/Menu";
-import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
-import SecurityIcon from "@mui/icons-material/Security";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -59,8 +57,11 @@ import { applyFontScale, getStoredFontScale, type AppFontScale } from "../servic
 
 const drawerWidth = 294;
 
+type NavigationGroup = "GENERAL" | "OPERACION" | "HERRAMIENTAS";
+
 type MenuItem = {
   label: string;
+  group: NavigationGroup;
   moduleKey: string;
   fallbackRoles: string[];
   icon: ReactNode;
@@ -74,160 +75,16 @@ type MenuItem = {
 };
 
 const menuItems: MenuItem[] = [
-  {
-    label: "Inicio",
-    moduleKey: "inicio",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "FINANZAS_COMERCIAL",
-      "RRHH",
-      "INFORMATICO",
-      "OPERATIVO",
-      "CONSULTA",
-    ],
-    icon: <HomeIcon />,
-    helper: "Panel general",
-    accent: colors.primary,
-  },
-  {
-    label: "Usuarios",
-    moduleKey: "usuarios",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "RRHH",
-      "FINANZAS_COMERCIAL",
-      "INFORMATICO",
-    ],
-    icon: <PeopleAltIcon />,
-    helper: "Cuentas internas",
-    accent: colors.modules.audit,
-  },
-  {
-    label: "Colaboradores",
-    moduleKey: "colaboradores",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "RRHH",
-      "FINANZAS_COMERCIAL",
-      "INFORMATICO",
-    ],
-    icon: <GroupsIcon />,
-    helper: "Personas SERKAN",
-    accent: colors.modules.collaborators,
-  },
-  {
-    label: "Entidades comerciales",
-    moduleKey: "comercial",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "FINANZAS_COMERCIAL",
-      "RRHH",
-      "INFORMATICO",
-      "OPERATIVO",
-      "CONSULTA",
-    ],
-    icon: <BusinessIcon />,
-    helper: "Holding, minera y contactos",
-    accent: colors.modules.commercial,
-  },
-  {
-    label: "Inventario",
-    moduleKey: "inventario",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "FINANZAS_COMERCIAL",
-      "RRHH",
-      "INFORMATICO",
-      "OPERATIVO",
-      "CONSULTA",
-    ],
-    icon: <Inventory2Icon />,
-    helper: "Catálogo, ubicaciones y recepciones",
-    accent: colors.modules.inventory,
-  },
-  {
-    label: "Kardex",
-    moduleKey: "inventario",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "FINANZAS_COMERCIAL",
-      "RRHH",
-      "INFORMATICO",
-      "OPERATIVO",
-      "CONSULTA",
-    ],
-    icon: <HistoryIcon />,
-    helper: "Historial global de stock",
-    accent: colors.modules.inventory,
-  },
-  {
-    label: "Ventas / Ingresos",
-    moduleKey: "ventas",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "FINANZAS_COMERCIAL",
-      "OPERATIVO",
-      "CONSULTA",
-    ],
-    icon: <PointOfSaleIcon />,
-    helper: "Ventas y alertas",
-    accent: colors.modules.sales,
-  },
-  {
-    label: "Compras / Egresos",
-    moduleKey: "compras",
-    fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"],
-    icon: <ShoppingCartIcon />,
-    helper: "Órdenes, proveedores y recepciones",
-    accent: colors.modules.purchases,
-  },
-  {
-    label: "Importaciones Excel",
-    moduleKey: "importaciones",
-    fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "INFORMATICO"],
-    icon: <UploadFileIcon />,
-    helper: "Carga masiva",
-    accent: colors.modules.excel,
-  },
-  {
-    label: "Documentos",
-    moduleKey: "documentos",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "FINANZAS_COMERCIAL",
-      "RRHH",
-      "INFORMATICO",
-      "OPERATIVO",
-      "CONSULTA",
-    ],
-    icon: <DescriptionIcon />,
-    helper: "Archivos y versiones",
-    accent: colors.modules.documents,
-  },
-  {
-    label: "Estadísticas",
-    moduleKey: "estadisticas",
-    fallbackRoles: [
-      "ADMINISTRADOR",
-      "FINANZAS_COMERCIAL",
-      "RRHH",
-      "INFORMATICO",
-      "OPERATIVO",
-      "CONSULTA",
-    ],
-    icon: <AssessmentIcon />,
-    helper: "Indicadores",
-    accent: colors.modules.analytics,
-  },
-  {
-    label: "Auditoría",
-    moduleKey: "auditoria",
-    fallbackRoles: ["ADMINISTRADOR", "INFORMATICO"],
-    icon: <SecurityIcon />,
-    helper: "Trazabilidad",
-    accent: colors.modules.audit,
-  },
-];
+  { label: "Inicio", group: "GENERAL", moduleKey: "inicio", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO", "OPERATIVO", "CONSULTA"], icon: <HomeIcon />, helper: "Resumen y accesos rápidos", accent: colors.primary },
+  { label: "Entidades comerciales", group: "OPERACION", moduleKey: "comercial", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO", "OPERATIVO", "CONSULTA"], icon: <BusinessIcon />, helper: "Mineras, áreas y contactos", accent: colors.modules.commercial },
+  { label: "Inventario", group: "OPERACION", moduleKey: "inventario", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO", "OPERATIVO", "CONSULTA"], icon: <Inventory2Icon />, helper: "Catálogo y existencias", accent: colors.modules.inventory },
+  { label: "Ventas / Ingresos", group: "OPERACION", moduleKey: "ventas", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO", "OPERATIVO", "CONSULTA"], icon: <PointOfSaleIcon />, helper: "Ventas y documentos comerciales", accent: colors.modules.sales },
+  { label: "Compras / Egresos", group: "OPERACION", moduleKey: "compras", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL"], icon: <ShoppingCartIcon />, helper: "Órdenes, envíos y recepción", accent: colors.modules.purchases },
+  { label: "Kardex", group: "OPERACION", moduleKey: "inventario", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO", "OPERATIVO", "CONSULTA"], icon: <HistoryIcon />, helper: "Trazabilidad global de stock", accent: colors.modules.inventory },
+  { label: "Importaciones Excel", group: "HERRAMIENTAS", moduleKey: "importaciones", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "INFORMATICO"], icon: <UploadFileIcon />, helper: "Importa productos con prevalidación", accent: colors.modules.excel },
+  { label: "Documentos", group: "HERRAMIENTAS", moduleKey: "documentos", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO", "OPERATIVO", "CONSULTA"], icon: <FolderIcon />, helper: "Facturas, guías, HES y archivos asociados", accent: colors.modules.documents },
+  { label: "Estadísticas", group: "HERRAMIENTAS", moduleKey: "estadisticas", fallbackRoles: ["ADMINISTRADOR", "FINANZAS_COMERCIAL", "RRHH", "INFORMATICO", "OPERATIVO", "CONSULTA"], icon: <AssessmentIcon />, helper: "Indicadores y tendencias reales", accent: colors.modules.analytics },
+]
 
 type AppLayoutProps = {
   user: AuthUser | null;
@@ -555,156 +412,6 @@ function LayoutChooserDialog({
   );
 }
 
-function SidebarContent({
-  activeSection,
-  visibleMenuItems,
-  onSectionChange,
-  onClose,
-}: {
-  activeSection: string;
-  visibleMenuItems: MenuItem[];
-  onSectionChange: (section: string) => void;
-  onClose?: () => void;
-}) {
-  const handleItemClick = (section: string) => {
-    onSectionChange(section);
-    onClose?.();
-  };
-
-  return (
-    <Stack
-      sx={{
-        height: "100%",
-        bgcolor: colors.background.header,
-        borderRight: `1px solid ${colors.border.light}`,
-      }}
-    >
-      <Box
-        sx={{
-          px: 2.4,
-          py: 2.4,
-          borderBottom: `1px solid ${colors.border.light}`,
-        }}
-      >
-        <BrandLogo height={46} maxWidth={180} subtitle="V2 CONTROL OPERATIVO" />
-      </Box>
-
-      <Box sx={{ px: 1.4, py: 1.4, flex: 1, overflowY: "auto" }}>
-        <Stack spacing={0.7}>
-          {visibleMenuItems.map((item) => {
-            const selected = item.label === activeSection;
-
-            return (
-              <Button
-                key={item.label}
-                fullWidth
-                onClick={() => handleItemClick(item.label)}
-                sx={{
-                  minHeight: 56,
-                  px: 1.4,
-                  py: 1,
-                  justifyContent: "flex-start",
-                  textAlign: "left",
-                  borderRadius: colors.radius.md,
-                  color: selected ? item.accent.main : colors.text.secondary,
-                  bgcolor: selected ? item.accent.soft : "transparent",
-                  border: `1px solid ${
-                    selected ? item.accent.border : "transparent"
-                  }`,
-                  textTransform: "none",
-                  "&:hover": {
-                    bgcolor: selected ? item.accent.soft : colors.action.hover,
-                    color: selected ? item.accent.main : colors.text.primary,
-                  },
-                }}
-              >
-                <Stack direction="row" spacing={1.25} sx={{ width: "100%" }}>
-                  <Box
-                    sx={{
-                      width: 34,
-                      height: 34,
-                      display: "grid",
-                      placeItems: "center",
-                      flexShrink: 0,
-                      borderRadius: colors.radius.sm,
-                      color: selected ? item.accent.main : colors.text.muted,
-                      bgcolor: selected
-                        ? colors.background.paper
-                        : colors.action.muted,
-                      "& svg": { fontSize: 21 },
-                    }}
-                  >
-                    {item.icon}
-                  </Box>
-
-                  <Box sx={{ minWidth: 0 }}>
-                    <Stack
-                      direction="row"
-                      spacing={0.7}
-                      sx={{ alignItems: "center" }}
-                    >
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          color: selected
-                            ? item.accent.main
-                            : colors.text.primary,
-                          fontWeight: selected ? 950 : 800,
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        {item.label}
-                      </Typography>
-
-                      {item.demo ? (
-                        <Chip
-                          label="Demo"
-                          size="small"
-                          variant="outlined"
-                          sx={{
-                            height: 20,
-                            color: colors.status.info,
-                            borderColor: colors.status.info,
-                            bgcolor: colors.status.infoSoft,
-                            fontSize: "0.66rem",
-                          }}
-                        />
-                      ) : null}
-                    </Stack>
-
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: colors.text.muted,
-                        display: "block",
-                        lineHeight: 1.25,
-                      }}
-                    >
-                      {item.helper}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Button>
-            );
-          })}
-        </Stack>
-      </Box>
-
-      <Box
-        sx={{
-          px: 2,
-          py: 1.4,
-          borderTop: `1px solid ${colors.border.light}`,
-        }}
-      >
-        <Typography variant="caption" sx={{ color: colors.text.muted, fontWeight: 750 }}>
-          SERKAN ERP · Navegación operativa
-        </Typography>
-      </Box>
-    </Stack>
-  );
-}
-
 function HorizontalLayout({
   user,
   activeSection,
@@ -891,11 +598,13 @@ function VerticalLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const drawerContent = (
-    <SidebarContent
+    <WorkspaceNavigation
       activeSection={activeSection}
-      visibleMenuItems={visibleMenuItems}
-      onSectionChange={onSectionChange}
-      onClose={() => setMobileOpen(false)}
+      items={visibleMenuItems}
+      onSelect={(section) => {
+        onSectionChange(section);
+        setMobileOpen(false);
+      }}
     />
   );
 
@@ -1140,11 +849,9 @@ export function AppLayout({
   children,
 }: AppLayoutProps) {
   const [layoutMode, setLayoutMode] = useState<AppLayoutMode>(
-    () => getStoredLayoutMode() ?? "horizontal",
+    () => getStoredLayoutMode() ?? "vertical",
   );
-  const [layoutChooserOpen, setLayoutChooserOpen] = useState(
-    () => getStoredLayoutMode() === null,
-  );
+  const [layoutChooserOpen, setLayoutChooserOpen] = useState(false);
 
   const role = user?.role;
   const access = getStoredAccess();

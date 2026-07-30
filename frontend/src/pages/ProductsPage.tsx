@@ -1,8 +1,5 @@
-import AddIcon from "@mui/icons-material/Add";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
-import RefreshIcon from "@mui/icons-material/Refresh";
-
-import { Alert, Button } from "@mui/material";
+import { Alert } from "@mui/material";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/PageShell";
 import { CategoryManagerDialog } from "../features/inventory/categories/CategoryManagerDialog";
@@ -1693,41 +1690,6 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
         eyebrow={pagePresentation.eyebrow}
         icon={<Inventory2Icon />}
         tone={colors.modules.inventory}
-        actions={
-          section === "catalog" ? (
-            <>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleOpenCreateProduct}
-            >
-              Nuevo producto
-            </Button>
-
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={() => {
-                loadFirstProductPage();
-                void loadInventorySummary();
-                void loadActiveInventoryLocations();
-                loadPendingReceipts({
-                  page: pendingReceiptPaginationModel.page,
-                  pageSize: pendingReceiptPaginationModel.pageSize,
-                });
-                void refreshGlobalKardexIfLoaded();
-              }}
-              disabled={loading}
-              sx={{
-                color: colors.text.primary,
-                borderColor: colors.border.medium,
-              }}
-            >
-              Actualizar
-            </Button>
-            </>
-          ) : undefined
-        }
     >
       {section !== "kardex" && section !== "catalog" ? (
         <InventorySectionNavigation />
@@ -1775,6 +1737,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
         onProductColumnFiltersChange={handleProductColumnFiltersChange}
         productFilterResetKey={productFilterResetKey}
         onVisibleColumnsChange={setVisibleProductColumns}
+        onCreateProduct={handleOpenCreateProduct}
         onProductNamedViewApply={handleApplyProductNamedView}
         exporting={exportingProducts}
         canExportOfficial={canExportOfficial}

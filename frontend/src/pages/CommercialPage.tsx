@@ -12,7 +12,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
   MenuItem,
   Stack,
   Tab,
@@ -27,13 +26,19 @@ import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import GroupsIcon from "@mui/icons-material/Groups";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import EditIcon from "@mui/icons-material/Edit";
-import { PageHeader } from "../components/PageHeader";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
-import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
+import { PageHeader } from "../components/PageHeader";
+import { SectionCard } from "../components/SectionCard";
+import {
+  SerkanDataGrid,
+  type SerkanGridFilter,
+  type SerkanGridSortModel,
+} from "../components/SerkanDataGrid";
 import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
 import {
   createArea,
+  createCiudad,
   createContacto,
   createHolding,
   createMinera,
@@ -164,17 +169,22 @@ const tabLabels: Record<CommercialTab, string> = {
   subareas: "Subáreas",
   contactos: "Contactos",
 };
+
 function getContactCycleError(form: ContactoForm) {
   const hasAnyValue = Boolean(
     form.active_days || form.rest_days || form.active_cycle_start_date,
   );
+
   if (!hasAnyValue) return "";
+
   if (!form.active_days || !form.rest_days || !form.active_cycle_start_date) {
     return "Para calcular la disponibilidad debes completar días activos, días de descanso y fecha de inicio.";
   }
+
   if (Number(form.active_days) < 1 || Number(form.rest_days) < 1) {
     return "Los días activos y de descanso deben ser mayores a cero.";
   }
+
   return "";
 }
 
@@ -226,7 +236,11 @@ function formatDateTime(value: string) {
 }
 
 function formatContactCycle(contact: Contacto) {
-  if (!contact.active_days || !contact.rest_days || !contact.active_cycle_start_date) {
+  if (
+    !contact.active_days ||
+    !contact.rest_days ||
+    !contact.active_cycle_start_date
+  ) {
     return "Sin ciclo definido";
   }
 
@@ -362,20 +376,31 @@ function ContactAvailabilityCalendar({ contact }: { contact: Contacto }) {
     new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
   const monthNames = Array.from({ length: 12 }, (_, month) =>
-    new Intl.DateTimeFormat("es-CL", { month: "long" }).format(new Date(2026, month, 1)),
+    new Intl.DateTimeFormat("es-CL", { month: "long" }).format(
+      new Date(2026, month, 1),
+    ),
   );
   const currentYear = new Date().getFullYear();
-  const yearOptions = Array.from({ length: 21 }, (_, index) => currentYear - 5 + index);
+  const yearOptions = Array.from(
+    { length: 21 },
+    (_, index) => currentYear - 5 + index,
+  );
   const monthStartOffset = (visibleMonth.getDay() + 6) % 7;
   const daysInMonth = new Date(
     visibleMonth.getFullYear(),
     visibleMonth.getMonth() + 1,
     0,
   ).getDate();
-  const days = Array.from({ length: monthStartOffset + daysInMonth }, (_, index) =>
-    index < monthStartOffset
-      ? null
-      : new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), index - monthStartOffset + 1),
+  const days = Array.from(
+    { length: monthStartOffset + daysInMonth },
+    (_, index) =>
+      index < monthStartOffset
+        ? null
+        : new Date(
+            visibleMonth.getFullYear(),
+            visibleMonth.getMonth(),
+            index - monthStartOffset + 1,
+          ),
   );
 
   return (
@@ -386,12 +411,22 @@ function ContactAvailabilityCalendar({ contact }: { contact: Contacto }) {
           label="Mes"
           value={visibleMonth.getMonth()}
           onChange={(event) =>
-            setVisibleMonth(new Date(visibleMonth.getFullYear(), Number(event.target.value), 1))
+            setVisibleMonth(
+              new Date(
+                visibleMonth.getFullYear(),
+                Number(event.target.value),
+                1,
+              ),
+            )
           }
           fullWidth
         >
           {monthNames.map((month, index) => (
-            <MenuItem key={month} value={index} sx={{ textTransform: "capitalize" }}>
+            <MenuItem
+              key={month}
+              value={index}
+              sx={{ textTransform: "capitalize" }}
+            >
               {month}
             </MenuItem>
           ))}
@@ -401,34 +436,59 @@ function ContactAvailabilityCalendar({ contact }: { contact: Contacto }) {
           label="Año"
           value={visibleMonth.getFullYear()}
           onChange={(event) =>
-            setVisibleMonth(new Date(Number(event.target.value), visibleMonth.getMonth(), 1))
+            setVisibleMonth(
+              new Date(
+                Number(event.target.value),
+                visibleMonth.getMonth(),
+                1,
+              ),
+            )
           }
           fullWidth
         >
           {yearOptions.map((year) => (
-            <MenuItem key={year} value={year}>{year}</MenuItem>
+            <MenuItem key={year} value={year}>
+              {year}
+            </MenuItem>
           ))}
         </TextField>
         <Button
           variant="outlined"
-          onClick={() => setVisibleMonth(new Date(currentYear, new Date().getMonth(), 1))}
+          onClick={() =>
+            setVisibleMonth(new Date(currentYear, new Date().getMonth(), 1))
+          }
           sx={{ minWidth: 130 }}
         >
           Ir a hoy
         </Button>
       </Stack>
-      {!contact.active_days || !contact.rest_days || !contact.active_cycle_start_date ? (
+      {!contact.active_days ||
+      !contact.rest_days ||
+      !contact.active_cycle_start_date ? (
         <Alert severity="warning">
-          Este contacto todavía no tiene un ciclo completo. Edítalo para indicar días activos, descanso y fecha de inicio.
+          Este contacto todavía no tiene un ciclo completo. Edítalo para indicar
+          días activos, descanso y fecha de inicio.
         </Alert>
       ) : (
         <Alert severity="info">
-          Ciclo {contact.active_days}x{contact.rest_days}, modalidad {contact.shift_mode_display.toLowerCase()}.
+          Ciclo {contact.active_days}x{contact.rest_days}, modalidad{" "}
+          {contact.shift_mode_display.toLowerCase()}.
         </Alert>
       )}
-      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 0.75 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+          gap: 0.75,
+        }}
+      >
         {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => (
-          <Typography key={day} variant="caption" align="center" sx={{ fontWeight: 800 }}>
+          <Typography
+            key={day}
+            variant="caption"
+            align="center"
+            sx={{ fontWeight: 800 }}
+          >
             {day}
           </Typography>
         ))}
@@ -438,15 +498,29 @@ function ContactAvailabilityCalendar({ contact }: { contact: Contacto }) {
           return (
             <Box
               key={date.toISOString()}
-              title={availability === "TRABAJA" ? "Trabaja" : availability === "DESCANSA" ? "Descansa" : "Sin definir"}
+              title={
+                availability === "TRABAJA"
+                  ? "Trabaja"
+                  : availability === "DESCANSA"
+                    ? "Descansa"
+                    : "Sin definir"
+              }
               sx={{
                 minHeight: 48,
                 display: "grid",
                 placeItems: "center",
                 borderRadius: 1,
                 fontWeight: 800,
-                bgcolor: availability === "TRABAJA" ? "success.dark" : availability === "DESCANSA" ? "error.dark" : "action.disabledBackground",
-                color: availability === "SIN_DEFINIR" ? "text.secondary" : "common.white",
+                bgcolor:
+                  availability === "TRABAJA"
+                    ? "success.dark"
+                    : availability === "DESCANSA"
+                      ? "error.dark"
+                      : "action.disabledBackground",
+                color:
+                  availability === "SIN_DEFINIR"
+                    ? "text.secondary"
+                    : "common.white",
               }}
             >
               {date.getDate()}
@@ -475,8 +549,12 @@ export function CommercialPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [dialogError, setDialogError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [availabilityContact, setAvailabilityContact] = useState<Contacto | null>(null);
-  const [editingRecord, setEditingRecord] = useState<{ type: CommercialTab; id: number } | null>(null);
+  const [availabilityContact, setAvailabilityContact] =
+    useState<Contacto | null>(null);
+  const [editingRecord, setEditingRecord] = useState<{
+    type: CommercialTab;
+    id: number;
+  } | null>(null);
 
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [mineras, setMineras] = useState<Minera[]>([]);
@@ -486,12 +564,15 @@ export function CommercialPage() {
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
 
   const [createDialog, setCreateDialog] = useState<CommercialTab | null>(null);
-  const [holdingForm, setHoldingForm] = useState<HoldingForm>(emptyHoldingForm);
+  const [holdingForm, setHoldingForm] =
+    useState<HoldingForm>(emptyHoldingForm);
   const [mineraForm, setMineraForm] = useState<MineraForm>(emptyMineraForm);
   const [areaForm, setAreaForm] = useState<AreaForm>(emptyAreaForm);
-  const [subareaForm, setSubareaForm] = useState<SubareaForm>(emptySubareaForm);
+  const [subareaForm, setSubareaForm] =
+    useState<SubareaForm>(emptySubareaForm);
   const [contactoForm, setContactoForm] =
     useState<ContactoForm>(emptyContactoForm);
+  const [contactCityInput, setContactCityInput] = useState("");
 
   const loadCommercialData = useCallback(async () => {
     try {
@@ -587,6 +668,7 @@ export function CommercialPage() {
         active_cycle_start_date: contact.active_cycle_start_date ?? "",
         observations: contact.observations,
       });
+      setContactCityInput(contact.city_name ?? "");
     }
   };
 
@@ -625,7 +707,8 @@ export function CommercialPage() {
           headerName: "Descripción",
           minWidth: 260,
           flex: 1.2,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin descripción",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin descripción",
         },
         {
           field: "status",
@@ -639,7 +722,8 @@ export function CommercialPage() {
           field: "updated_at",
           headerName: "Última actualización",
           width: 180,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => formatDateTime(String(params.value || "")),
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            formatDateTime(String(params.value || "")),
         },
         editColumn,
       ];
@@ -652,33 +736,38 @@ export function CommercialPage() {
           field: "rut",
           headerName: "RUT",
           width: 135,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin RUT",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin RUT",
         },
         {
           field: "holding_name",
           headerName: "Holding",
           minWidth: 180,
           flex: 0.8,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin holding",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin holding",
         },
         {
           field: "city_name",
           headerName: "Ciudad",
           width: 150,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin ciudad",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin ciudad",
         },
         {
           field: "email",
           headerName: "Correo",
           minWidth: 190,
           flex: 0.8,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin correo",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin correo",
         },
         {
           field: "phone",
           headerName: "Teléfono",
           width: 150,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin teléfono",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin teléfono",
         },
         {
           field: "status",
@@ -706,14 +795,16 @@ export function CommercialPage() {
           headerName: "Holding",
           minWidth: 180,
           flex: 0.8,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin holding",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin holding",
         },
         {
           field: "location",
           headerName: "Ubicación",
           minWidth: 180,
           flex: 0.7,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin ubicación",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin ubicación",
         },
         {
           field: "status",
@@ -747,14 +838,16 @@ export function CommercialPage() {
           headerName: "Holding",
           minWidth: 180,
           flex: 0.8,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin holding",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin holding",
         },
         {
           field: "description",
           headerName: "Descripción",
           minWidth: 240,
           flex: 1,
-          cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin descripción",
+          cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+            params.value || "Sin descripción",
         },
         {
           field: "status",
@@ -780,7 +873,8 @@ export function CommercialPage() {
         headerName: "Cargo",
         minWidth: 180,
         flex: 0.8,
-        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin cargo",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+          params.value || "Sin cargo",
       },
       {
         field: "minera_name",
@@ -805,21 +899,23 @@ export function CommercialPage() {
         headerName: "Correo",
         minWidth: 210,
         flex: 1,
-        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin correo",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+          params.value || "Sin correo",
       },
       {
         field: "phone",
         headerName: "Teléfono",
         width: 150,
-        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin teléfono",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+          params.value || "Sin teléfono",
       },
       {
         field: "shift_mode_display",
         headerName: "Modalidad",
         width: 135,
-        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => params.value || "Sin definir",
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+          params.value || "Sin definir",
       },
-
       {
         colId: "cycle",
         headerName: "Ciclo laboral",
@@ -827,7 +923,8 @@ export function CommercialPage() {
         flex: 0.8,
         sortable: false,
         filter: false,
-        cellRenderer: (params: ICellRendererParams<CommercialRecord>) => formatContactCycle(params.data as Contacto),
+        cellRenderer: (params: ICellRendererParams<CommercialRecord>) =>
+          formatContactCycle(params.data as Contacto),
       },
       {
         field: "status",
@@ -880,6 +977,7 @@ export function CommercialPage() {
     setAreaForm(emptyAreaForm);
     setSubareaForm(emptySubareaForm);
     setContactoForm(emptyContactoForm);
+    setContactCityInput("");
   };
 
   const canSaveCreate = () => {
@@ -903,11 +1001,37 @@ export function CommercialPage() {
       return Boolean(
         contactoForm.subarea &&
           contactoForm.first_name.trim() &&
-          !getContactCycleError(contactoForm)
+          !getContactCycleError(contactoForm),
       );
     }
 
     return false;
+  };
+
+  const resolveContactCityId = async () => {
+    const cityName = contactCityInput.trim();
+
+    if (!cityName) {
+      return null;
+    }
+
+    const normalizedName = normalizeSearch(cityName);
+    const existingCity = ciudades.find(
+      (city) => normalizeSearch(city.name) === normalizedName,
+    );
+
+    if (existingCity) {
+      return existingCity.id;
+    }
+
+    const createdCity = await createCiudad({ name: cityName });
+    setCiudades((current) =>
+      [...current, createdCity].sort((first, second) =>
+        first.name.localeCompare(second.name, "es"),
+      ),
+    );
+
+    return createdCity.id;
   };
 
   const handleCreate = async () => {
@@ -927,7 +1051,11 @@ export function CommercialPage() {
         };
         if (isEditing) await updateHolding(editingRecord.id, payload);
         else await createHolding(payload);
-        setSuccessMessage(isEditing ? "Holding actualizado correctamente." : "Holding creado correctamente.");
+        setSuccessMessage(
+          isEditing
+            ? "Holding actualizado correctamente."
+            : "Holding creado correctamente.",
+        );
       }
 
       if (createDialog === "mineras") {
@@ -943,7 +1071,11 @@ export function CommercialPage() {
         };
         if (isEditing) await updateMinera(editingRecord.id, payload);
         else await createMinera(payload);
-        setSuccessMessage(isEditing ? "Minera actualizada correctamente." : "Minera creada correctamente.");
+        setSuccessMessage(
+          isEditing
+            ? "Minera actualizada correctamente."
+            : "Minera creada correctamente.",
+        );
       }
 
       if (createDialog === "areas") {
@@ -955,7 +1087,11 @@ export function CommercialPage() {
         };
         if (isEditing) await updateArea(editingRecord.id, payload);
         else await createArea(payload);
-        setSuccessMessage(isEditing ? "Área actualizada correctamente." : "Área creada correctamente.");
+        setSuccessMessage(
+          isEditing
+            ? "Área actualizada correctamente."
+            : "Área creada correctamente.",
+        );
       }
 
       if (createDialog === "subareas") {
@@ -966,27 +1102,41 @@ export function CommercialPage() {
         };
         if (isEditing) await updateSubarea(editingRecord.id, payload);
         else await createSubarea(payload);
-        setSuccessMessage(isEditing ? "Subárea actualizada correctamente." : "Subárea creada correctamente.");
+        setSuccessMessage(
+          isEditing
+            ? "Subárea actualizada correctamente."
+            : "Subárea creada correctamente.",
+        );
       }
 
       if (createDialog === "contactos") {
+        const cityId = await resolveContactCityId();
         const payload = {
           first_name: contactoForm.first_name.trim(),
           last_name: contactoForm.last_name.trim(),
           position: contactoForm.position.trim(),
           subarea: Number(contactoForm.subarea),
-          city: contactoForm.city,
+          city: cityId,
           email: contactoForm.email.trim(),
           phone: contactoForm.phone.trim(),
           shift_mode: contactoForm.shift_mode,
-          active_days: contactoForm.active_days ? Number(contactoForm.active_days) : null,
-          rest_days: contactoForm.rest_days ? Number(contactoForm.rest_days) : null,
-          active_cycle_start_date: contactoForm.active_cycle_start_date || null,
+          active_days: contactoForm.active_days
+            ? Number(contactoForm.active_days)
+            : null,
+          rest_days: contactoForm.rest_days
+            ? Number(contactoForm.rest_days)
+            : null,
+          active_cycle_start_date:
+            contactoForm.active_cycle_start_date || null,
           observations: contactoForm.observations.trim(),
         };
         if (isEditing) await updateContacto(editingRecord.id, payload);
         else await createContacto(payload);
-        setSuccessMessage(isEditing ? "Contacto actualizado correctamente." : "Contacto creado correctamente.");
+        setSuccessMessage(
+          isEditing
+            ? "Contacto actualizado correctamente."
+            : "Contacto creado correctamente.",
+        );
       }
 
       setCreateDialog(null);
@@ -999,6 +1149,7 @@ export function CommercialPage() {
       setSaving(false);
     }
   };
+
   const renderCreateDialogContent = () => {
     if (createDialog === "holdings") {
       return (
@@ -1075,8 +1226,9 @@ export function CommercialPage() {
                 }))
               }
               getOptionLabel={(option) => option.name}
+              sx={{ flex: 1, minWidth: 0 }}
               renderInput={(params) => (
-                <TextField {...params} label="Holding asociado" />
+                <TextField {...params} label="Holding asociado" fullWidth />
               )}
             />
           </Stack>
@@ -1093,7 +1245,9 @@ export function CommercialPage() {
             getOptionLabel={(option) =>
               option.region ? `${option.name} — ${option.region}` : option.name
             }
-            renderInput={(params) => <TextField {...params} label="Ciudad" />}
+            renderInput={(params) => (
+              <TextField {...params} label="Ciudad" fullWidth />
+            )}
           />
 
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
@@ -1268,6 +1422,9 @@ export function CommercialPage() {
     }
 
     if (createDialog === "contactos") {
+      const selectedCity =
+        ciudades.find((city) => city.id === contactoForm.city) ?? null;
+
       return (
         <Stack spacing={2.2} sx={{ mt: 1 }}>
           <Autocomplete
@@ -1356,23 +1513,61 @@ export function CommercialPage() {
           </Stack>
 
           <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-            <Autocomplete
+            <Autocomplete<Ciudad, false, false, true>
+              freeSolo
               options={ciudades}
-              value={
-                ciudades.find((city) => city.id === contactoForm.city) ?? null
-              }
-              onChange={(_event, value) =>
+              value={selectedCity}
+              inputValue={contactCityInput}
+              onInputChange={(_event, value, reason) => {
+                setContactCityInput(value);
+
+                if (
+                  reason === "input" &&
+                  (!selectedCity ||
+                    normalizeSearch(selectedCity.name) !==
+                      normalizeSearch(value))
+                ) {
+                  setContactoForm((current) => ({
+                    ...current,
+                    city: null,
+                  }));
+                }
+              }}
+              onChange={(_event, value) => {
+                if (typeof value === "string") {
+                  setContactCityInput(value);
+                  setContactoForm((current) => ({
+                    ...current,
+                    city: null,
+                  }));
+                  return;
+                }
+
                 setContactoForm((current) => ({
                   ...current,
                   city: value?.id ?? null,
-                }))
-              }
+                }));
+                setContactCityInput(value?.name ?? "");
+              }}
               getOptionLabel={(option) =>
-                option.region
-                  ? `${option.name} — ${option.region}`
-                  : option.name
+                typeof option === "string"
+                  ? option
+                  : option.region
+                    ? `${option.name} — ${option.region}`
+                    : option.name
               }
-              renderInput={(params) => <TextField {...params} label="Ciudad" />}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              noOptionsText="La ciudad se creará al guardar el contacto."
+              sx={{ flex: 1, minWidth: { xs: 0, md: 320 } }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Ciudad"
+                  placeholder="Escribe o selecciona una ciudad"
+                  helperText="Puedes elegir una ciudad existente o escribir una nueva."
+                  fullWidth
+                />
+              )}
             />
 
             <TextField
@@ -1386,13 +1581,13 @@ export function CommercialPage() {
                 }))
               }
               fullWidth
+              sx={{ flex: 1, minWidth: 0 }}
             >
               <MenuItem value="SIN_DEFINIR">Sin definir</MenuItem>
               <MenuItem value="DIA">Día</MenuItem>
               <MenuItem value="NOCHE">Noche</MenuItem>
             </TextField>
           </Stack>
-
 
           <Box
             sx={{
@@ -1412,8 +1607,10 @@ export function CommercialPage() {
                 }))
               }
               error={Boolean(
-                (contactoForm.rest_days || contactoForm.active_cycle_start_date) &&
-                  (!contactoForm.active_days || Number(contactoForm.active_days) < 1),
+                (contactoForm.rest_days ||
+                  contactoForm.active_cycle_start_date) &&
+                  (!contactoForm.active_days ||
+                    Number(contactoForm.active_days) < 1),
               )}
               helperText="Junto a los días de descanso define el ciclo laboral."
               slotProps={{ htmlInput: { min: 1, max: 365 } }}
@@ -1429,8 +1626,10 @@ export function CommercialPage() {
                 }))
               }
               error={Boolean(
-                (contactoForm.active_days || contactoForm.active_cycle_start_date) &&
-                  (!contactoForm.rest_days || Number(contactoForm.rest_days) < 1),
+                (contactoForm.active_days ||
+                  contactoForm.active_cycle_start_date) &&
+                  (!contactoForm.rest_days ||
+                    Number(contactoForm.rest_days) < 1),
               )}
               helperText={
                 contactoForm.active_days && !contactoForm.rest_days
@@ -1460,10 +1659,13 @@ export function CommercialPage() {
                   : undefined
               }
               slotProps={{ inputLabel: { shrink: true } }}
-            />          </Box>
+            />
+          </Box>
 
           {getContactCycleError(contactoForm) ? (
-            <Alert severity="warning">{getContactCycleError(contactoForm)}</Alert>
+            <Alert severity="warning">
+              {getContactCycleError(contactoForm)}
+            </Alert>
           ) : null}
           <TextField
             label="Observaciones"
@@ -1542,16 +1744,44 @@ export function CommercialPage() {
         />
       </Box>
 
-      <Card
-        sx={{
-          p: 2,
-          bgcolor: colors.background.paper,
-          border: `1px solid ${colors.border.light}`,
-        }}
+      {successMessage ? (
+        <Alert severity="success" variant="outlined">
+          {successMessage}
+        </Alert>
+      ) : null}
+
+      {errorMessage ? (
+        <Alert severity="error" variant="outlined">
+          {errorMessage}
+        </Alert>
+      ) : null}
+
+      <SectionCard
+        title="Directorio comercial"
+        subtitle="Selecciona una entidad, aplica filtros y administra sus registros desde una única grilla."
+        tone={colors.modules.commercial}
+        actions={
+          <>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => openCreateDialog(activeTab)}
+            >
+              Crear {tabLabels[activeTab].slice(0, -1)}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => void loadCommercialData()}
+              disabled={loading}
+            >
+              Actualizar
+            </Button>
+          </>
+        }
       >
         <Stack spacing={2}>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5} sx={{ alignItems: { md: "center" }, justifyContent: "space-between" }}>
-            <Tabs
+          <Tabs
             value={activeTab}
             onChange={(_event, value: CommercialTab) => {
               setActiveTab(value);
@@ -1561,6 +1791,7 @@ export function CommercialPage() {
             }}
             variant="scrollable"
             scrollButtons="auto"
+            sx={{ borderBottom: `1px solid ${colors.border.light}` }}
           >
             <Tab value="holdings" label="Holdings" />
             <Tab value="mineras" label="Mineras" />
@@ -1569,33 +1800,14 @@ export function CommercialPage() {
             <Tab value="contactos" label="Contactos" />
           </Tabs>
 
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => openCreateDialog(activeTab)}
-              >
-                Crear {tabLabels[activeTab].slice(0, -1)}
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<RefreshIcon />}
-                onClick={() => void loadCommercialData()}
-                disabled={loading}
-              >
-                Actualizar
-              </Button>
-            </Stack>
-          </Stack>
-
-          <Divider />
-
           <SerkanFilterToolbar
             searchLabel={`Buscar en ${tabLabels[activeTab].toLowerCase()}`}
             searchPlaceholder="Nombre, RUT, correo, teléfono, minera, área o subárea..."
             searchValue={searchTerm}
             onSearchValueChange={setSearchTerm}
-            onApply={() => setPagination((current) => ({ ...current, page: 0 }))}
+            onApply={() =>
+              setPagination((current) => ({ ...current, page: 0 }))
+            }
             onClear={() => {
               setSearchTerm("");
               setColumnFilters([]);
@@ -1610,48 +1822,30 @@ export function CommercialPage() {
           >
             <Box />
           </SerkanFilterToolbar>
+
+          <SerkanDataGrid
+            key={activeTab}
+            gridKey={`commercial.${activeTab}`}
+            serverManaged
+            clientManaged
+            ariaLabel={tabLabels[activeTab]}
+            rows={activeRows}
+            columns={columns}
+            loading={loading}
+            paginationModel={pagination}
+            onPaginationModelChange={setPagination}
+            rowCount={activeRows.length}
+            sortModel={sortModel}
+            onSortModelChange={setSortModel}
+            onFilterModelChange={(filters) => {
+              setColumnFilters(filters);
+              setPagination((current) => ({ ...current, page: 0 }));
+            }}
+            filterResetKey={filterResetKey}
+            namedViewFilters={{ search: searchTerm }}
+          />
         </Stack>
-      </Card>
-
-      <Alert severity="info" variant="outlined">
-        Esta pantalla usa relaciones reales del backend. El frontend ayuda a
-        elegir entidades existentes, pero las validaciones críticas siguen
-        protegidas en Django.
-      </Alert>
-
-      {successMessage ? (
-        <Alert severity="success" variant="outlined">
-          {successMessage}
-        </Alert>
-      ) : null}
-
-      {errorMessage ? (
-        <Alert severity="error" variant="outlined">
-          {errorMessage}
-        </Alert>
-      ) : null}
-
-      <SerkanDataGrid
-        key={activeTab}
-        gridKey={`commercial.${activeTab}`}
-        serverManaged
-        clientManaged
-        ariaLabel={tabLabels[activeTab]}
-        rows={activeRows}
-        columns={columns}
-        loading={loading}
-        paginationModel={pagination}
-        onPaginationModelChange={setPagination}
-        rowCount={activeRows.length}
-        sortModel={sortModel}
-        onSortModelChange={setSortModel}
-        onFilterModelChange={(filters) => {
-          setColumnFilters(filters);
-          setPagination((current) => ({ ...current, page: 0 }));
-        }}
-        filterResetKey={filterResetKey}
-        namedViewFilters={{ search: searchTerm }}
-      />
+      </SectionCard>
 
       <Dialog
         open={Boolean(availabilityContact)}
@@ -1663,7 +1857,9 @@ export function CommercialPage() {
           Disponibilidad de {availabilityContact?.full_name ?? "contacto"}
         </DialogTitle>
         <DialogContent>
-          {availabilityContact ? <ContactAvailabilityCalendar contact={availabilityContact} /> : null}
+          {availabilityContact ? (
+            <ContactAvailabilityCalendar contact={availabilityContact} />
+          ) : null}
         </DialogContent>
         <DialogActions>
           {availabilityContact ? (
@@ -1688,8 +1884,14 @@ export function CommercialPage() {
       >
         <DialogTitle>
           {editingRecord
-            ? `Editar ${tabLabels[editingRecord.type].slice(0, -1).toLowerCase()}`
-            : `Crear ${createDialog ? tabLabels[createDialog].slice(0, -1).toLowerCase() : "registro"}`}
+            ? `Editar ${tabLabels[editingRecord.type]
+                .slice(0, -1)
+                .toLowerCase()}`
+            : `Crear ${
+                createDialog
+                  ? tabLabels[createDialog].slice(0, -1).toLowerCase()
+                  : "registro"
+              }`}
         </DialogTitle>
 
         <DialogContent>
@@ -1709,7 +1911,11 @@ export function CommercialPage() {
             onClick={() => void handleCreate()}
             disabled={saving || !canSaveCreate()}
           >
-            {saving ? "Guardando..." : editingRecord ? "Guardar cambios" : "Guardar"}
+            {saving
+              ? "Guardando..."
+              : editingRecord
+                ? "Guardar cambios"
+                : "Guardar"}
           </Button>
         </DialogActions>
       </Dialog>

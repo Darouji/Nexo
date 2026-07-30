@@ -103,14 +103,6 @@ export const appTheme = createTheme({
             colors.modules.analytics.border,
             colors.modules.analytics.shadow,
           ),
-        "[data-serkan-section='comercial'] > .MuiBox-root": {
-          ...moduleBlockStyle(
-            colors.modules.commercial.border,
-            colors.modules.commercial.shadow,
-          ),
-          padding: "16px",
-          backgroundColor: colors.background.paper,
-        },
       },
     },
 

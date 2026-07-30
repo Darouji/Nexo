@@ -1,3 +1,6 @@
+# Utilidades transversales para registrar cambios de campos y eventos de negocio.
+# La auditoría se conserva como historial explicable: actor, origen, motivo,
+# objeto afectado y diferencias relevantes, sin reemplazar datos anteriores.
 from django.contrib.contenttypes.models import ContentType
 
 from .audit_targets import build_audit_target_snapshot
@@ -35,6 +38,8 @@ def capture_field_values(instance, fields):
         try:
             values[field_name] = normalize_audit_value(getattr(instance, field_name))
         except Exception:
+            # La auditoría no debe impedir la operación por un campo no legible;
+            # deja una marca explícita en vez de inventar un valor.
             values[field_name] = "<no disponible>"
 
     return values
@@ -71,6 +76,8 @@ def create_record_change_logs_from_snapshot(
         except Exception:
             new_value = "<no disponible>"
 
+        # Evita ruido: sólo persiste diferencias reales entre la foto previa y
+        # el estado que quedó guardado.
         if old_value == new_value:
             continue
 
@@ -88,6 +95,8 @@ def create_record_change_logs_from_snapshot(
             )
         )
 
+    # La creación agrupada mantiene un único cierre eficiente para todos los
+    # campos modificados por el mismo caso de uso.
     if logs:
         RecordChangeLog.objects.bulk_create(logs)
 
@@ -139,6 +148,8 @@ def create_business_audit_log(
     )
 
     audit_metadata = dict(metadata or {})
+    # La foto del objetivo conserva contexto legible aunque el registro cambie
+    # posteriormente o su representación textual evolucione.
     audit_metadata.setdefault(
         "target_snapshot",
         build_audit_target_snapshot(instance),

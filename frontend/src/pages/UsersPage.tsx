@@ -27,6 +27,7 @@ import LockIcon from "@mui/icons-material/Lock";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { ProfileDocumentsSection } from "../components/ProfileDocumentsSection";
 import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
 import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
 import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
@@ -1132,6 +1133,16 @@ export function UsersPage({ currentUser }: UsersPageProps) {
                   {selectedUser.observations || "Sin observaciones"}
                 </Typography>
               </Box>
+
+              <Divider />
+
+              <ProfileDocumentsSection
+                ownerKind="user"
+                ownerId={selectedUser.id}
+                ownerLabel={selectedUser.full_name || selectedUser.username}
+              />
+
+              <Divider />
 
               <Box>
                 <Typography variant="caption" sx={{ color: colors.text.muted }}>

@@ -26,6 +26,7 @@ import LinkIcon from "@mui/icons-material/Link";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import EditIcon from "@mui/icons-material/Edit";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { ProfileDocumentsSection } from "../components/ProfileDocumentsSection";
 import { SerkanDataGrid } from "../components/SerkanDataGrid";
 import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
 import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
@@ -976,6 +977,16 @@ export function CollaboratorsPage() {
                   {selectedCollaborator.observations || "Sin observaciones"}
                 </Typography>
               </Box>
+
+              <Divider />
+
+              <ProfileDocumentsSection
+                ownerKind="collaborator"
+                ownerId={selectedCollaborator.id}
+                ownerLabel={selectedCollaborator.full_name}
+              />
+
+              <Divider />
 
               <Box>
                 <Typography variant="caption" sx={{ color: colors.text.muted }}>

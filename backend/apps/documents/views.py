@@ -1,3 +1,4 @@
+from django.contrib.contenttypes.models import ContentType
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import BasePermission, IsAuthenticated
@@ -23,6 +24,7 @@ class CanManageDocuments(BasePermission):
             [
                 UserRole.ADMINISTRADOR,
                 UserRole.INFORMATICO,
+                UserRole.RRHH,
                 UserRole.FINANZAS_COMERCIAL,
             ],
         )
@@ -30,7 +32,7 @@ class CanManageDocuments(BasePermission):
 
 class DocumentsPermissionMixin:
     def get_permissions(self):
-        if self.action in ["list", "retrieve"]:
+        if self.action in ["list", "retrieve", "owner_types"]:
             permission_classes = [IsAuthenticated, IsConsultaOrOperativoGlobal]
         else:
             permission_classes = [IsAuthenticated, CanManageDocuments]
@@ -51,6 +53,28 @@ class DocumentFileViewSet(DocumentsPermissionMixin, viewsets.ModelViewSet):
         .all()
     )
     serializer_class = DocumentFileSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        params = self.request.query_params
+        if params.get("owner_app"):
+            queryset = queryset.filter(owner_content_type__app_label=params["owner_app"])
+        if params.get("owner_model"):
+            queryset = queryset.filter(owner_content_type__model=params["owner_model"])
+        if params.get("owner_object_id"):
+            queryset = queryset.filter(owner_object_id=str(params["owner_object_id"]))
+        return queryset.distinct()
+
+    @action(detail=False, methods=["get"], url_path="owner-types")
+    def owner_types(self, request):
+        allowed = (("accounts", "user", "Usuario"), ("collaborators", "collaborator", "Colaborador"))
+        output = []
+        for app_label, model, label in allowed:
+            content_type = ContentType.objects.filter(app_label=app_label, model=model).first()
+            if content_type:
+                output.append({"id": content_type.pk, "app_label": app_label, "model": model, "label": label})
+        return Response(output)
+
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = [
         "title",

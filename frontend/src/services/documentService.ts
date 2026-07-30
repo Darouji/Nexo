@@ -12,9 +12,15 @@ type ListResponse<T> = T[] | PaginatedResponse<T>;
 export type ListParams = {
   search?: string;
   ordering?: string;
+  owner_app?: string;
+  owner_model?: string;
+  owner_object_id?: string | number;
 };
 
 export type DocumentType =
+  | "CONTRATO"
+  | "ANEXO"
+  | "CERTIFICADO"
   | "FACTURA"
   | "GUIA_DESPACHO"
   | "HES"
@@ -77,6 +83,9 @@ function normalizeParams(params: ListParams = {}) {
   return {
     search: params.search?.trim() || undefined,
     ordering: params.ordering || undefined,
+    owner_app: params.owner_app || undefined,
+    owner_model: params.owner_model || undefined,
+    owner_object_id: params.owner_object_id || undefined,
   };
 }
 
@@ -100,6 +109,34 @@ export async function fetchDocumentVersions(params: ListParams = {}) {
     ordering: "document,-version_number",
     ...params,
   });
+}
+
+export type DocumentOwnerType = { id: number; app_label: string; model: string; label: string };
+
+export type CreateDocumentPayload = {
+  title: string;
+  document_type: DocumentType;
+  description?: string;
+  owner_content_type: number;
+  owner_object_id: string | number;
+  file: File;
+};
+
+export async function fetchDocumentOwnerTypes() {
+  const response = await api.get<DocumentOwnerType[]>("/documents/files/owner-types/");
+  return response.data;
+}
+
+export async function createDocumentFile(payload: CreateDocumentPayload) {
+  const formData = new FormData();
+  formData.append("title", payload.title.trim());
+  formData.append("document_type", payload.document_type);
+  formData.append("description", payload.description?.trim() || "");
+  formData.append("owner_content_type", String(payload.owner_content_type));
+  formData.append("owner_object_id", String(payload.owner_object_id));
+  formData.append("file", payload.file);
+  const response = await api.post<DocumentFile>("/documents/files/", formData);
+  return response.data;
 }
 
 export async function replaceDocumentVersion(

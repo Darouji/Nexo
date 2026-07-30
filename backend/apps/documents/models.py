@@ -43,6 +43,9 @@ ALLOWED_MIME_TYPES = {
 
 
 class DocumentType(models.TextChoices):
+    CONTRATO = "CONTRATO", "Contrato"
+    ANEXO = "ANEXO", "Anexo de contrato"
+    CERTIFICADO = "CERTIFICADO", "Certificado"
     FACTURA = "FACTURA", "Factura"
     GUIA_DESPACHO = "GUIA_DESPACHO", "Guía de despacho"
     HES = "HES", "HES"

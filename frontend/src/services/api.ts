@@ -1,3 +1,10 @@
+/**
+ * Cliente HTTP transversal de SERKAN.
+ *
+ * Centraliza la URL base, autenticación actualmente implementada, expiración de
+ * sesión y traducción de errores. Los servicios de dominio deben usar esta
+ * instancia para conservar contratos y feedback coherentes entre módulos.
+ */
 import axios, { AxiosHeaders, type AxiosError } from "axios";
 import { clearStoredAuth, getStoredToken } from "./authStorage";
 
@@ -15,6 +22,7 @@ export const api = axios.create({
   timeout: 30000,
 });
 
+/** Adjunta el token vigente a todas las solicitudes que requieran identidad. */
 api.interceptors.request.use((config) => {
   const token = getStoredToken();
 
@@ -27,6 +35,10 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Un 401 invalida el estado local y notifica al árbol React para volver al
+ * inicio de sesión, evitando que cada pantalla implemente su propia reacción.
+ */
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
@@ -39,6 +51,7 @@ api.interceptors.response.use(
   },
 );
 
+/** Busca el primer mensaje legible dentro de un objeto de validación. */
 function getFirstStringFromObject(value: unknown): string | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -63,6 +76,11 @@ function getFirstStringFromObject(value: unknown): string | null {
   return null;
 }
 
+/**
+ * Convierte errores técnicos o de negocio en un mensaje principal apto para la
+ * interfaz. Prefiere el detalle específico sobre el resumen genérico de
+ * validación enviado por el backend.
+ */
 export function getApiErrorMessage(
   error: unknown,
   fallback = "No se pudo completar la operación.",
@@ -100,6 +118,10 @@ export function getApiErrorMessage(
   return detailedMessage || (typeof directMessage === "string" ? directMessage : null) || fallback;
 }
 
+/**
+ * Aplana errores anidados usando rutas como `lines.0.quantity` para que cada
+ * formulario pueda asociar el mensaje con el campo o fila correspondiente.
+ */
 export function getApiFieldErrors(error: unknown): Record<string, string> {
   if (!axios.isAxiosError(error)) {
     return {};
@@ -144,6 +166,7 @@ export function getApiFieldErrors(error: unknown): Record<string, string> {
   return fieldErrors;
 }
 
+/** Recupera el identificador técnico que permite rastrear la solicitud fallida. */
 export function getApiRequestId(error: unknown) {
   if (!axios.isAxiosError(error)) {
     return null;

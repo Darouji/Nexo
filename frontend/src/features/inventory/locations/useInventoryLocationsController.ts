@@ -7,10 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  getApiErrorMessage,
-  getApiFieldErrors,
-} from "../../../services/api";
+import { getApiErrorMessage, getApiFieldErrors } from "../../../services/api";
 import { getStoredAccess } from "../../../services/authService";
 import { fetchCollaborators } from "../../../services/collaboratorService";
 import { createIdempotencyKey } from "../../../services/idempotency";
@@ -131,15 +128,16 @@ export function useInventoryLocationsController({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [nextLocations, nextBalancesPage, nextTransfers] = await Promise.all([
-        fetchInventoryLocations(),
-        fetchProductLocationBalancesPage({
-          positiveOnly: true,
-          page: balancePage + 1,
-          pageSize: balancePageSize,
-        }),
-        fetchInventoryTransfers(),
-      ]);
+      const [nextLocations, nextBalancesPage, nextTransfers] =
+        await Promise.all([
+          fetchInventoryLocations(),
+          fetchProductLocationBalancesPage({
+            positiveOnly: true,
+            page: balancePage + 1,
+            pageSize: balancePageSize,
+          }),
+          fetchInventoryTransfers(),
+        ]);
       setLocations(nextLocations);
       setBalances(nextBalancesPage.results);
       setBalanceCount(nextBalancesPage.count);
@@ -338,10 +336,7 @@ export function useInventoryLocationsController({
     }
   };
 
-  const openTransfer = (
-    productId: number,
-    originLocationId: number,
-  ) => {
+  const openTransfer = (productId: number, originLocationId: number) => {
     setTransferErrorMessage("");
     setTransferFieldErrors({});
     setTransferForm({
@@ -401,7 +396,8 @@ export function useInventoryLocationsController({
           destination_location: Number(transferForm.destinationLocation),
           quantity: Number(transferForm.quantity),
           reason: transferForm.reason.trim(),
-          evidence_reference: transferForm.evidenceReference.trim() || undefined,
+          evidence_reference:
+            transferForm.evidenceReference.trim() || undefined,
         },
         transferForm.idempotencyKey,
       );
@@ -413,9 +409,7 @@ export function useInventoryLocationsController({
       const fieldErrors = getApiFieldErrors(error);
       setTransferFieldErrors(fieldErrors);
       setTransferErrorMessage(
-        Object.keys(fieldErrors).length > 0
-          ? ""
-          : getApiErrorMessage(error),
+        Object.keys(fieldErrors).length > 0 ? "" : getApiErrorMessage(error),
       );
     } finally {
       setSaving(false);

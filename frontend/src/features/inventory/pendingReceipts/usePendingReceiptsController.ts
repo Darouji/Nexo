@@ -1,3 +1,10 @@
+/**
+ * Controlador de la grilla e historial de pendientes por recibir.
+ *
+ * Coordina filtros, paginación, exportaciones y consulta de operaciones sin asumir
+ * las reglas de recepción o cancelación, que deben permanecer en los servicios y
+ * endpoints transaccionales del backend.
+ */
 import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -61,6 +68,8 @@ export function usePendingReceiptsController({
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
 
+  // La secuencia complementa AbortController: incluso si una respuesta ya no puede
+  // cancelarse, solo la consulta más reciente puede actualizar la grilla o su carga.
   const requestSequenceRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -231,6 +240,8 @@ export function usePendingReceiptsController({
     });
   }, [loadFirstPage]);
 
+  // Una vista nombrada restaura filtros explícitos; no convierte filtros temporales
+  // de la sesión en preferencias automáticas del usuario.
   const applyNamedView = useCallback(
     (config: SavedGridViewConfig) => {
       const readFilter = (key: string) => {
@@ -279,6 +290,11 @@ export function usePendingReceiptsController({
     [loadPendingReceipts],
   );
 
+  /**
+   * La exportación de vista respeta filtros y columnas visibles. La modalidad
+   * oficial delega al backend la definición completa de columnas para conservar
+   * un formato estable y auditable, independiente de la personalización visual.
+   */
   const exportGrid = useCallback(
     async (mode: "view" | "official") => {
       if (rowCount === 0) {
@@ -315,6 +331,8 @@ export function usePendingReceiptsController({
     [buildParams, onError, onSuccess, rowCount, visibleColumns],
   );
 
+  // El historial se consulta por separado para no cargar todas las operaciones en
+  // la respuesta paginada principal y para conservar el contexto del registro abierto.
   const openHistory = useCallback(async (pendingReceipt: PendingReceipt) => {
     setHistoryOpen(true);
     setHistoryPendingReceipt(pendingReceipt);

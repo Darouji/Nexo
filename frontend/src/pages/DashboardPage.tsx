@@ -1,3 +1,11 @@
+/**
+ * Actúa como coordinador del espacio de trabajo autenticado.
+ *
+ * Traduce las rutas del navegador a módulos de SERKAN, aplica la regla de
+ * acceso correspondiente y monta la pantalla funcional dentro del layout
+ * común. Las validaciones de permisos del backend siguen siendo la autoridad;
+ * esta capa evita exponer navegación que el usuario no debería utilizar.
+ */
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Box, Typography } from "@mui/material";
@@ -46,6 +54,9 @@ const MANAGEMENT_ROLES = [
   "INFORMATICO",
 ];
 
+// Los roles de respaldo conservan compatibilidad con cuentas antiguas que aún
+// no poseen capacidades detalladas. PermissionGate prioriza las capacidades
+// entregadas por el backend cuando están disponibles.
 const sectionAccessRules: Record<string, SectionAccessRule> = {
   Inicio: {
     moduleKey: "inicio",
@@ -112,6 +123,8 @@ const sectionPaths: Record<string, string> = {
   Auditoría: "/auditoria",
 };
 
+// Además de las rutas canónicas se mantienen alias históricos para no romper
+// enlaces guardados ni accesos directos creados durante versiones anteriores.
 const pathSections: Record<string, string> = {
   ...Object.fromEntries(
     Object.entries(sectionPaths).map(([section, path]) => [path, section]),
@@ -164,6 +177,8 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
   useEffect(() => {
     const currentPath = normalizePathname(location.pathname);
 
+    // Estas redirecciones consolidan rutas antiguas en una única URL canónica,
+    // evitando que dos direcciones representen estados distintos del mismo flujo.
     if (currentPath === "/inventario") {
       navigate("/inventario/catalogo", {
         replace: true,
@@ -198,6 +213,8 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
     onLogout();
   };
 
+  // Mantener el montaje de páginas en un único punto facilita auditar qué
+  // pantalla corresponde a cada sección visible del menú principal.
   const renderContent = () => {
     switch (activeSection) {
       case "Inicio":

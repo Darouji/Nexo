@@ -1,3 +1,10 @@
+/**
+ * Contratos y operaciones de logística asociada a Compras.
+ *
+ * Un envío conserva transportista, seguimiento, custodio, ETA, eventos y cobros.
+ * Los eventos agregan historia y pueden actualizar estado, custodia o fecha
+ * estimada; no reemplazan silenciosamente el recorrido anterior.
+ */
 import { api } from "./api";
 
 export type ShipmentStatus =
@@ -19,6 +26,7 @@ export type ShipmentTransportMode =
   | "TERRESTRE"
   | "OTRO";
 
+/** Parte que mantiene la custodia operacional del envío en un momento dado. */
 export type ShipmentCustodian =
   | "PROVEEDOR"
   | "TRANSPORTISTA_ORIGEN"
@@ -43,6 +51,10 @@ export type Carrier = {
   status: "ACTIVO" | "INACTIVO";
 };
 
+/**
+ * Hecho fechado del recorrido. Puede aportar evidencia y cambiar la fotografía
+ * vigente, pero permanece disponible como parte del historial del envío.
+ */
 export type ShipmentEvent = {
   id: number;
   event_type: string;
@@ -60,6 +72,10 @@ export type ShipmentEvent = {
   created_at: string;
 };
 
+/**
+ * Costo logístico con moneda, tipo de cambio, fuente y estado de confirmación.
+ * La interfaz no debe tratar cobros abiertos o en disputa como costo definitivo.
+ */
 export type ShipmentCharge = {
   id: number;
   charge_type: string;
@@ -117,6 +133,7 @@ export type PurchaseShipment = {
   updated_at: string;
 };
 
+/** Indicadores operativos calculados por el backend para priorizar seguimiento. */
 export type ShipmentSummary = {
   orders_in_review: number;
   open_shipments: number;
@@ -208,6 +225,7 @@ export async function fetchShipmentSummary(signal?: AbortSignal) {
   return response.data;
 }
 
+/** Recupera el detalle completo, incluidos eventos y cobros históricos. */
 export async function fetchPurchaseShipment(shipmentId: number) {
   const response = await api.get<PurchaseShipment>(
     `/purchases/envios/${shipmentId}/`,
@@ -215,6 +233,7 @@ export async function fetchPurchaseShipment(shipmentId: number) {
   return response.data;
 }
 
+/** Busca transportistas existentes antes de crear una variante duplicada. */
 export async function fetchCarrierSuggestions(
   search: string,
   signal?: AbortSignal,
@@ -226,6 +245,10 @@ export async function fetchCarrierSuggestions(
   return response.data;
 }
 
+/**
+ * Resuelve un nombre contra transportistas y alias conocidos; el backend indica
+ * si reutilizó un registro o creó uno nuevo.
+ */
 export async function resolveCarrier(name: string) {
   const response = await api.post<{ carrier: Carrier; created: boolean }>(
     "/purchases/transportistas/resolver/",
@@ -234,6 +257,7 @@ export async function resolveCarrier(name: string) {
   return response.data;
 }
 
+/** Evita crear dos envíos cuando una misma solicitud se repite. */
 export async function createPurchaseShipment(
   payload: ShipmentPayload,
   idempotencyKey: string,
@@ -246,6 +270,10 @@ export async function createPurchaseShipment(
   return response.data;
 }
 
+/**
+ * Agrega un hecho trazable al envío. El backend valida coherencia temporal y las
+ * transiciones de estado o custodia solicitadas por el evento.
+ */
 export async function registerShipmentEvent(
   shipmentId: number,
   payload: ShipmentEventPayload,
@@ -259,6 +287,7 @@ export async function registerShipmentEvent(
   return response.data;
 }
 
+/** Registra un costo con su evidencia y calidad sin recalcularlo en el cliente. */
 export async function registerShipmentCharge(
   shipmentId: number,
   payload: ShipmentChargePayload,
@@ -272,6 +301,7 @@ export async function registerShipmentCharge(
   return response.data;
 }
 
+/** Exporta la vista u oficio desde backend para respetar filtros y permisos. */
 export async function exportPurchaseShipments(
   params: ShipmentListParams & {
     columns?: string;

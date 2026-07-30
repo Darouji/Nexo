@@ -376,8 +376,8 @@ export function useInventoryLocationsController({
           origin_location: Number(transferForm.originLocation),
           destination_location: Number(transferForm.destinationLocation),
           quantity: Number(transferForm.quantity),
-          reason: transferForm.reason,
-          evidence_reference: transferForm.evidenceReference,
+          reason: transferForm.reason.trim(),
+          evidence_reference: transferForm.evidenceReference.trim() || undefined,
         },
         transferForm.idempotencyKey,
       );

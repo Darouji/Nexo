@@ -39,13 +39,6 @@ export function AppRoutes() {
   const [welcomeUser, setWelcomeUser] = useState<AuthUser | null>(null);
 
   useEffect(() => {
-    if (!welcomeUser) return;
-
-    const timeoutId = window.setTimeout(() => setWelcomeUser(null), 950);
-    return () => window.clearTimeout(timeoutId);
-  }, [welcomeUser]);
-
-  useEffect(() => {
     let isMounted = true;
 
     const handleUnauthorized = () => {
@@ -109,7 +102,12 @@ export function AppRoutes() {
   return (
     <>
       <DashboardPage user={user} onLogout={() => setUser(null)} />
-      {welcomeUser ? <WelcomeScreen user={welcomeUser} /> : null}
+      {welcomeUser ? (
+        <WelcomeScreen
+          user={welcomeUser}
+          onContinue={() => setWelcomeUser(null)}
+        />
+      ) : null}
     </>
   );
 }

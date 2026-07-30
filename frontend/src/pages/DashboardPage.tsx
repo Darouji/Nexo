@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { AppLayout } from "../layouts/AppLayout";
 import { HomePage } from "./HomePage";
 import { ProductsPage } from "./ProductsPage";
+import { InventoryLocationsPage } from "./InventoryLocationsPage";
 import { PurchasesPage } from "./PurchasesPage";
 import { logout } from "../services/authService";
 import { colors } from "../theme/colors";
@@ -211,7 +212,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
         }
 
         if (normalizePathname(location.pathname) === "/inventario/ubicaciones") {
-          return <ProductsPage section="locations" />;
+          return <InventoryLocationsPage />;
         }
 
         return <ProductsPage section="catalog" />;
@@ -270,7 +271,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
           />
         }
       >
-        {renderContent()}
+        <Box data-serkan-section={accessRule.moduleKey}>{renderContent()}</Box>
       </PermissionGate>
     </AppLayout>
   );

@@ -1,4 +1,5 @@
-import { Box, Fade, Stack, Typography } from "@mui/material";
+import { Box, Button, Fade, Stack, Typography } from "@mui/material";
+import LoginIcon from "@mui/icons-material/Login";
 import { BrandLogo } from "./BrandLogo";
 import type { AuthUser } from "../types/auth";
 import { colors } from "../theme/colors";
@@ -12,9 +13,18 @@ function getDisplayName(user: AuthUser) {
   return fullName || user.full_name || user.username;
 }
 
-export function WelcomeScreen({ user }: { user: AuthUser }) {
+export function WelcomeScreen({
+  user,
+  onContinue,
+}: {
+  user: AuthUser;
+  onContinue: () => void;
+}) {
   return (
     <Box
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="serkan-welcome-title"
       sx={{
         position: "fixed",
         inset: 0,
@@ -26,17 +36,53 @@ export function WelcomeScreen({ user }: { user: AuthUser }) {
         background: `${colors.gradients.heroAccent}, ${colors.gradients.page}`,
       }}
     >
-      <Fade in timeout={240}>
-        <Stack spacing={2} sx={{ alignItems: "center", textAlign: "center" }}>
-          <BrandLogo height={54} maxWidth={220} subtitle="ERP OPERATIVO" />
+      <Fade in timeout={360}>
+        <Stack
+          spacing={3}
+          sx={{
+            width: "100%",
+            maxWidth: 620,
+            alignItems: "center",
+            textAlign: "center",
+            px: { xs: 3, sm: 5 },
+            py: { xs: 4, sm: 5 },
+            bgcolor: colors.background.paper,
+            border: `2px solid ${colors.primary.border}`,
+            boxShadow: colors.shadow.elevated,
+          }}
+        >
+          <BrandLogo height={76} maxWidth={310} subtitle="ERP OPERATIVO" />
+
           <Box>
-            <Typography variant="h4" sx={{ color: colors.text.primary, fontWeight: 950 }}>
+            <Typography
+              id="serkan-welcome-title"
+              variant="h3"
+              sx={{
+                color: colors.text.primary,
+                fontWeight: 950,
+                letterSpacing: "-0.04em",
+              }}
+            >
               Bienvenido, {getDisplayName(user)}
             </Typography>
-            <Typography sx={{ color: colors.text.secondary, mt: 0.7 }}>
-              Preparando tu espacio de trabajo.
+            <Typography
+              variant="h6"
+              sx={{ color: colors.text.secondary, mt: 1.2, fontWeight: 500 }}
+            >
+              Tu espacio de trabajo en SERKAN está preparado.
             </Typography>
           </Box>
+
+          <Button
+            autoFocus
+            variant="contained"
+            size="large"
+            startIcon={<LoginIcon />}
+            onClick={onContinue}
+            sx={{ minWidth: { xs: "100%", sm: 260 }, minHeight: 48 }}
+          >
+            Entrar a SERKAN
+          </Button>
         </Stack>
       </Fade>
     </Box>

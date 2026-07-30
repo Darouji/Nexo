@@ -1,5 +1,4 @@
 import AddIcon from "@mui/icons-material/Add";
-import DeleteOutlineIcon from "@mui/icons-material/Delete";
 import {
   Alert,
   Box,
@@ -71,7 +70,8 @@ export function PurchaseOrderDialog({
   };
 
   const netAmount = form.lines.reduce(
-    (sum, line) => sum + Number(line.quantity || 0) * Number(line.unitPrice || 0),
+    (sum, line) =>
+      sum + Number(line.quantity || 0) * Number(line.unitPrice || 0),
     0,
   );
   const selectedSupplier = suppliers.find(
@@ -80,6 +80,9 @@ export function PurchaseOrderDialog({
   const taxRate = purchaseTaxRateForCountry(selectedSupplier?.country);
   const taxAmount = netAmount * (taxRate / 100);
   const totalAmount = netAmount + taxAmount;
+  const activeLocations = locations.filter(
+    (location) => location.status === "ACTIVO",
+  );
   const formatMoney = (value: number) =>
     new Intl.NumberFormat("es-CL", {
       style: "currency",
@@ -94,8 +97,15 @@ export function PurchaseOrderDialog({
       : false;
 
   return (
-    <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="lg">
-      <DialogTitle>{editing ? "Editar orden de compra" : "Nueva orden de compra"}</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={loading ? undefined : onClose}
+      fullWidth
+      maxWidth="lg"
+    >
+      <DialogTitle>
+        {editing ? "Editar orden de compra" : "Nueva orden de compra"}
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={3}>
           {optionsLoading ? (
@@ -120,15 +130,22 @@ export function PurchaseOrderDialog({
               <TextField
                 label="Número de orden (opcional)"
                 value={form.number}
-                onChange={(event) => onChange({ ...form, number: event.target.value })}
+                onChange={(event) =>
+                  onChange({ ...form, number: event.target.value })
+                }
                 error={Boolean(errors.number)}
-                helperText={errors.number || "Si lo dejas vacío, SERKAN asignará el siguiente número oficial."}
+                helperText={
+                  errors.number ||
+                  "Si lo dejas vacío, SERKAN asignará el siguiente número oficial."
+                }
               />
               <TextField
                 select
                 label="Proveedor"
                 value={form.supplier}
-                onChange={(event) => onChange({ ...form, supplier: event.target.value })}
+                onChange={(event) =>
+                  onChange({ ...form, supplier: event.target.value })
+                }
                 error={Boolean(errors.supplier)}
                 helperText={errors.supplier}
               >
@@ -146,7 +163,8 @@ export function PurchaseOrderDialog({
                   onChange({
                     ...form,
                     currency: event.target.value as "CLP" | "USD",
-                    exchangeRate: event.target.value === "CLP" ? "" : form.exchangeRate,
+                    exchangeRate:
+                      event.target.value === "CLP" ? "" : form.exchangeRate,
                   })
                 }
               >
@@ -158,7 +176,9 @@ export function PurchaseOrderDialog({
                 type="number"
                 value={form.exchangeRate}
                 disabled={form.currency === "CLP"}
-                onChange={(event) => onChange({ ...form, exchangeRate: event.target.value })}
+                onChange={(event) =>
+                  onChange({ ...form, exchangeRate: event.target.value })
+                }
                 error={Boolean(errors.exchange_rate)}
                 helperText={
                   errors.exchange_rate ||
@@ -171,7 +191,9 @@ export function PurchaseOrderDialog({
                 label="Fecha de emisión"
                 type="date"
                 value={form.issueDate}
-                onChange={(event) => onChange({ ...form, issueDate: event.target.value })}
+                onChange={(event) =>
+                  onChange({ ...form, issueDate: event.target.value })
+                }
                 error={Boolean(errors.issue_date)}
                 helperText={errors.issue_date}
                 slotProps={{ inputLabel: { shrink: true } }}
@@ -180,26 +202,42 @@ export function PurchaseOrderDialog({
                 label="Recepción esperada"
                 type="date"
                 value={form.expectedDate}
-                onChange={(event) => onChange({ ...form, expectedDate: event.target.value })}
+                onChange={(event) =>
+                  onChange({ ...form, expectedDate: event.target.value })
+                }
                 slotProps={{ inputLabel: { shrink: true } }}
               />
             </Box>
           </Box>
 
           <Box>
-            <Stack direction="row" sx={{ justifyContent: "space-between", mb: 1.5 }}>
+            <Stack
+              direction="row"
+              sx={{ justifyContent: "space-between", mb: 1.5 }}
+            >
               <Typography variant="subtitle1" sx={{ fontWeight: 900 }}>
                 Bienes y servicios
               </Typography>
               <Button
                 startIcon={<AddIcon />}
                 onClick={() =>
-                  onChange({ ...form, lines: [...form.lines, { ...EMPTY_PURCHASE_LINE }] })
+                  onChange({
+                    ...form,
+                    lines: [...form.lines, { ...EMPTY_PURCHASE_LINE }],
+                  })
                 }
               >
                 Agregar línea
               </Button>
             </Stack>
+
+            {!optionsLoading && !optionsError && activeLocations.length === 0 ? (
+              <Alert severity="warning" variant="outlined" sx={{ mb: 1.5 }}>
+                No existe ninguna bodega o ubicación de inventario activa. Los
+                productos que controlan stock necesitan una ubicación de recepción.
+                Registra primero una desde Inventario → Ubicaciones de inventario.
+              </Alert>
+            ) : null}
 
             <Stack spacing={1.5}>
               {form.lines.map((line, index) => (
@@ -211,19 +249,32 @@ export function PurchaseOrderDialog({
                     borderRadius: colors.radius.md,
                   }}
                 >
-                  <Stack direction="row" sx={{ justifyContent: "space-between" }}>
-                    <Typography sx={{ fontWeight: 850 }}>Línea {index + 1}</Typography>
+                  <Stack
+                    direction="row"
+                    sx={{ justifyContent: "space-between" }}
+                  >
+                    <Typography sx={{ fontWeight: 850 }}>
+                      Línea {index + 1}
+                    </Typography>
                     <IconButton
                       aria-label={`Eliminar línea ${index + 1}`}
                       disabled={form.lines.length === 1}
                       onClick={() =>
                         onChange({
                           ...form,
-                          lines: form.lines.filter((_, lineIndex) => lineIndex !== index),
+                          lines: form.lines.filter(
+                            (_, lineIndex) => lineIndex !== index,
+                          ),
                         })
                       }
                     >
-                      <DeleteOutlineIcon />
+                      <Typography
+                        component="span"
+                        aria-hidden
+                        sx={{ fontSize: "1.5rem", lineHeight: 1, fontWeight: 500 }}
+                      >
+                        ×
+                      </Typography>
                     </IconButton>
                   </Stack>
                   <FormControlLabel
@@ -242,12 +293,21 @@ export function PurchaseOrderDialog({
                         }
                       />
                     }
-                    label={line.product ? (line.inventoryManaged ? "El producto controla stock y requiere recepción física" : "El producto no controla stock ni genera Kardex") : "Línea inventariable"}
+                    label={
+                      line.product
+                        ? line.inventoryManaged
+                          ? "El producto controla stock y requiere recepción física"
+                          : "El producto no controla stock ni genera Kardex"
+                        : "Línea inventariable"
+                    }
                   />
                   <Box
                     sx={{
                       display: "grid",
-                      gridTemplateColumns: { xs: "1fr", md: "2.1fr 2fr 1fr 1.15fr" },
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        md: "2.1fr 2fr 1fr 1.15fr",
+                      },
                       gap: 1.25,
                     }}
                   >
@@ -256,12 +316,17 @@ export function PurchaseOrderDialog({
                       label="Producto"
                       value={line.product}
                       onChange={(event) => {
-                        const product = products.find((item) => String(item.id) === event.target.value);
+                        const selectedProductId = String(event.target.value);
+                        const product = products.find(
+                          (item) => String(item.id) === selectedProductId,
+                        );
                         const controlsStock = productControlsStock(product);
                         updateLine(index, {
-                          product: event.target.value,
+                          product: selectedProductId,
                           inventoryManaged: controlsStock,
-                          destinationLocation: controlsStock ? line.destinationLocation : "",
+                          destinationLocation: controlsStock
+                            ? line.destinationLocation
+                            : "",
                         });
                       }}
                       error={Boolean(errors[`lines.${index}.product`])}
@@ -277,14 +342,27 @@ export function PurchaseOrderDialog({
                       select
                       label="Ubicación destino"
                       value={line.destinationLocation}
-                      disabled={!line.inventoryManaged}
-                      onChange={(event) =>
-                        updateLine(index, { destinationLocation: event.target.value })
+                      disabled={
+                        !line.inventoryManaged || activeLocations.length === 0
                       }
-                      error={Boolean(errors[`lines.${index}.destination_location`])}
-                      helperText={errors[`lines.${index}.destination_location`]}
+                      onChange={(event) =>
+                        updateLine(index, {
+                          destinationLocation: event.target.value,
+                        })
+                      }
+                      error={Boolean(
+                        errors[`lines.${index}.destination_location`],
+                      )}
+                      helperText={
+                        errors[`lines.${index}.destination_location`] ||
+                        (!line.inventoryManaged
+                          ? "No aplica porque esta línea no controla stock."
+                          : activeLocations.length === 0
+                            ? "No hay una bodega o ubicación activa disponible."
+                            : "Selecciona dónde se recibirá físicamente el producto.")
+                      }
                     >
-                      {locations.filter((location) => location.status === "ACTIVO").map((location) => (
+                      {activeLocations.map((location) => (
                         <MenuItem key={location.id} value={location.id}>
                           {location.name}
                         </MenuItem>
@@ -294,7 +372,9 @@ export function PurchaseOrderDialog({
                       label="Cantidad"
                       type="number"
                       value={line.quantity}
-                      onChange={(event) => updateLine(index, { quantity: event.target.value })}
+                      onChange={(event) =>
+                        updateLine(index, { quantity: event.target.value })
+                      }
                       error={Boolean(errors[`lines.${index}.quantity`])}
                       helperText={errors[`lines.${index}.quantity`]}
                     />
@@ -302,7 +382,9 @@ export function PurchaseOrderDialog({
                       label="Precio unitario"
                       type="number"
                       value={line.unitPrice}
-                      onChange={(event) => updateLine(index, { unitPrice: event.target.value })}
+                      onChange={(event) =>
+                        updateLine(index, { unitPrice: event.target.value })
+                      }
                       error={Boolean(errors[`lines.${index}.unit_price`])}
                       helperText={errors[`lines.${index}.unit_price`]}
                     />
@@ -314,7 +396,9 @@ export function PurchaseOrderDialog({
                           : "Obligatoria sólo para servicios o conceptos sin producto"
                       }
                       value={line.description}
-                      onChange={(event) => updateLine(index, { description: event.target.value })}
+                      onChange={(event) =>
+                        updateLine(index, { description: event.target.value })
+                      }
                       error={Boolean(errors[`lines.${index}.description`])}
                       helperText={errors[`lines.${index}.description`]}
                       sx={{ gridColumn: { md: "1 / -1" } }}
@@ -322,7 +406,9 @@ export function PurchaseOrderDialog({
                   </Box>
                 </Box>
               ))}
-              {errors.lines ? <Alert severity="error">{errors.lines}</Alert> : null}
+              {errors.lines ? (
+                <Alert severity="error">{errors.lines}</Alert>
+              ) : null}
             </Stack>
           </Box>
 
@@ -337,7 +423,9 @@ export function PurchaseOrderDialog({
           <TextField
             label="Observaciones"
             value={form.notes}
-            onChange={(event) => onChange({ ...form, notes: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...form, notes: event.target.value })
+            }
             multiline
             minRows={3}
             fullWidth
@@ -345,7 +433,9 @@ export function PurchaseOrderDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>Cancelar</Button>
+        <Button onClick={onClose} disabled={loading}>
+          Cancelar
+        </Button>
         <Button
           variant="contained"
           onClick={onSave}
@@ -355,7 +445,9 @@ export function PurchaseOrderDialog({
             ? "Guardando..."
             : optionsLoading
               ? "Cargando opciones..."
-              : editing ? "Guardar cambios" : "Guardar borrador"}
+              : editing
+                ? "Guardar cambios"
+                : "Guardar borrador"}
         </Button>
       </DialogActions>
     </Dialog>

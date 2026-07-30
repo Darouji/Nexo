@@ -3,6 +3,7 @@ import { BrandLogo } from "../components/BrandLogo";
 import type { ReactNode, SyntheticEvent } from "react";
 import {
   AppBar,
+  Avatar,
   Box,
   Button,
   Card,
@@ -12,8 +13,11 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  Divider,
   Drawer,
   IconButton,
+  Menu,
+  MenuItem as MuiMenuItem,
   Stack,
   Tab,
   Tabs,
@@ -36,6 +40,7 @@ import MenuIcon from "@mui/icons-material/Menu";
 import PeopleAltIcon from "@mui/icons-material/PeopleAlt";
 import PointOfSaleIcon from "@mui/icons-material/PointOfSale";
 import SecurityIcon from "@mui/icons-material/Security";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { AuthUser } from "../types/auth";
@@ -50,6 +55,7 @@ import {
   getStoredThemeMode,
 } from "../services/themePreference";
 import { colors } from "../theme/colors";
+import { applyFontScale, getStoredFontScale, type AppFontScale } from "../services/accessibilityPreference";
 
 const drawerWidth = 294;
 
@@ -248,58 +254,154 @@ function getUserDisplayName(user: AuthUser | null) {
   return fullName || user.full_name || user.username;
 }
 
-function ThemeModeButton() {
+function WorkspaceSettingsMenu({
+  user,
+  layoutMode,
+  onOpenLayoutChooser,
+  onLogout,
+}: {
+  user: AuthUser | null;
+  layoutMode: AppLayoutMode;
+  onOpenLayoutChooser: () => void;
+  onLogout: () => void;
+}) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [fontScale, setFontScale] = useState<AppFontScale>(() => getStoredFontScale());
   const currentMode = getStoredThemeMode(colors.mode);
-  const nextMode = currentMode === "dark" ? "light" : "dark";
-  const title =
-    nextMode === "dark" ? "Cambiar a modo oscuro" : "Cambiar a modo claro";
+  const userName = getUserDisplayName(user);
+  const initials = userName
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  const selectFontScale = (scale: AppFontScale) => {
+    setFontScale(scale);
+    applyFontScale(scale);
+  };
 
   return (
-    <Tooltip title={title}>
-      <IconButton
-        onClick={() => applyThemeMode(nextMode)}
-        sx={{
-          color: colors.text.primary,
-          border: `1px solid ${colors.border.light}`,
-          borderRadius: colors.radius.sm,
-          bgcolor: colors.background.paper,
-          "&:hover": {
-            bgcolor: colors.action.hover,
+    <>
+      <Tooltip title="Configuración de la experiencia">
+        <IconButton
+          onClick={(event) => setAnchorEl(event.currentTarget)}
+          sx={{
+            color: colors.text.primary,
+            border: `1px solid ${colors.border.light}`,
+            borderRadius: colors.radius.sm,
+            bgcolor: colors.background.paper,
+            "&:hover": { bgcolor: colors.action.hover },
+          }}
+        >
+          <SettingsOutlinedIcon />
+        </IconButton>
+      </Tooltip>
+
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{
+          paper: {
+            sx: {
+              width: 300,
+              mt: 1,
+              p: 0.75,
+              borderRadius: colors.radius.lg,
+              border: `1px solid ${colors.border.light}`,
+              bgcolor: colors.background.paper,
+              boxShadow: colors.shadow.elevated,
+            },
           },
         }}
       >
-        {currentMode === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
-      </IconButton>
-    </Tooltip>
-  );
-}
+        <Box sx={{ px: 1.25, py: 1, display: "flex", gap: 1.2, alignItems: "center" }}>
+          <Avatar sx={{ width: 34, height: 34, bgcolor: colors.primary.soft, color: colors.primary.main, fontWeight: 900 }}>
+            {initials || "S"}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: 900, color: colors.text.primary }}>
+              {userName}
+            </Typography>
+            <Typography variant="caption" noWrap sx={{ color: colors.text.muted }}>
+              {user?.role_display || user?.role || "Sesión activa"}
+            </Typography>
+          </Box>
+        </Box>
 
-function LayoutModeButton({
-  layoutMode,
-  onOpenLayoutChooser,
-}: {
-  layoutMode: AppLayoutMode;
-  onOpenLayoutChooser: () => void;
-}) {
-  return (
-    <Button
-      variant="outlined"
-      size="small"
-      onClick={onOpenLayoutChooser}
-      sx={{
-        display: { xs: "none", sm: "inline-flex" },
-        color: colors.text.primary,
-        borderColor: colors.border.light,
-        bgcolor: colors.background.paper,
-        fontWeight: 850,
-        "&:hover": {
-          borderColor: colors.primary.border,
-          bgcolor: colors.action.hover,
-        },
-      }}
-    >
-      Vista: {layoutMode === "vertical" ? "Lateral" : "Superior"}
-    </Button>
+        <Divider sx={{ borderColor: colors.border.light, my: 0.5 }} />
+
+        <MuiMenuItem
+          onClick={() => {
+            setAnchorEl(null);
+            onOpenLayoutChooser();
+          }}
+          sx={{ borderRadius: colors.radius.sm }}
+        >
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+              Vista de trabajo
+            </Typography>
+            <Typography variant="caption" sx={{ color: colors.text.muted }}>
+              {layoutMode === "vertical" ? "Navegación lateral" : "Navegación superior"}
+            </Typography>
+          </Box>
+        </MuiMenuItem>
+
+        <MuiMenuItem
+          onClick={() => applyThemeMode(currentMode === "dark" ? "light" : "dark")}
+          sx={{ borderRadius: colors.radius.sm, gap: 1.25 }}
+        >
+          {currentMode === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+              {currentMode === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+            </Typography>
+            <Typography variant="caption" sx={{ color: colors.text.muted }}>
+              La preferencia se guarda en este equipo.
+            </Typography>
+          </Box>
+        </MuiMenuItem>
+
+        <Box sx={{ px: 1.5, pt: 1.1, pb: 0.8 }}>
+          <Typography variant="caption" sx={{ color: colors.text.muted, fontWeight: 800 }}>
+            Tamaño del texto
+          </Typography>
+          <Stack direction="row" spacing={0.8} sx={{ mt: 0.7 }}>
+            {[
+              ["compact", "A−", "Compacto"],
+              ["standard", "A", "Normal"],
+              ["large", "A+", "Grande"],
+            ].map(([scale, label, title]) => (
+              <Button
+                key={scale}
+                size="small"
+                variant={fontScale === scale ? "contained" : "outlined"}
+                onClick={() => selectFontScale(scale as AppFontScale)}
+                title={title}
+                sx={{ flex: 1, minWidth: 0, fontWeight: 900 }}
+              >
+                {label}
+              </Button>
+            ))}
+          </Stack>
+        </Box>
+
+        <Divider sx={{ borderColor: colors.border.light, my: 0.5 }} />
+
+        <MuiMenuItem
+          onClick={onLogout}
+          sx={{ borderRadius: colors.radius.sm, color: colors.status.error, gap: 1.25 }}
+        >
+          <LogoutIcon fontSize="small" />
+          <Typography variant="body2" sx={{ fontWeight: 850 }}>
+            Cerrar sesión
+          </Typography>
+        </MuiMenuItem>
+      </Menu>
+    </>
   );
 }
 
@@ -454,23 +556,15 @@ function LayoutChooserDialog({
 }
 
 function SidebarContent({
-  user,
   activeSection,
   visibleMenuItems,
   onSectionChange,
-  onLogout,
   onClose,
-  layoutMode,
-  onOpenLayoutChooser,
 }: {
-  user: AuthUser | null;
   activeSection: string;
   visibleMenuItems: MenuItem[];
   onSectionChange: (section: string) => void;
-  onLogout: () => void;
   onClose?: () => void;
-  layoutMode: AppLayoutMode;
-  onOpenLayoutChooser: () => void;
 }) {
   const handleItemClick = (section: string) => {
     onSectionChange(section);
@@ -598,83 +692,14 @@ function SidebarContent({
 
       <Box
         sx={{
-          p: 1.6,
+          px: 2,
+          py: 1.4,
           borderTop: `1px solid ${colors.border.light}`,
         }}
       >
-        {user ? (
-          <Box
-            sx={{
-              p: 1.5,
-              mb: 1.2,
-              borderRadius: colors.radius.md,
-              bgcolor: colors.background.paper,
-              border: `1px solid ${colors.border.light}`,
-            }}
-          >
-            <Typography
-              variant="body2"
-              sx={{ color: colors.text.primary, fontWeight: 900 }}
-            >
-              {getUserDisplayName(user)}
-            </Typography>
-
-            <Typography
-              variant="caption"
-              sx={{ color: colors.text.muted, display: "block", mb: 1 }}
-            >
-              {user.email || user.username}
-            </Typography>
-
-            <Chip
-              size="small"
-              label={user.role_display || user.role || "Sin rol"}
-              variant="outlined"
-              sx={{
-                color: colors.accent.main,
-                bgcolor: colors.accent.soft,
-                borderColor: colors.accent.border,
-                fontWeight: 800,
-              }}
-            />
-          </Box>
-        ) : null}
-
-        <Stack direction="row" spacing={1} sx={{ mb: 1.2 }}>
-          <Button
-            fullWidth
-            variant="outlined"
-            size="small"
-            onClick={onOpenLayoutChooser}
-            sx={{
-              color: colors.text.primary,
-              borderColor: colors.border.light,
-              fontWeight: 850,
-            }}
-          >
-            {layoutMode === "vertical" ? "Lateral" : "Superior"}
-          </Button>
-
-          <ThemeModeButton />
-        </Stack>
-
-        <Button
-          fullWidth
-          variant="outlined"
-          startIcon={<LogoutIcon />}
-          onClick={onLogout}
-          sx={{
-            color: colors.status.error,
-            borderColor: colors.status.error,
-            fontWeight: 850,
-            "&:hover": {
-              bgcolor: colors.status.errorSoft,
-              borderColor: colors.status.error,
-            },
-          }}
-        >
-          Salir
-        </Button>
+        <Typography variant="caption" sx={{ color: colors.text.muted, fontWeight: 750 }}>
+          SERKAN ERP · Navegación operativa
+        </Typography>
       </Box>
     </Stack>
   );
@@ -763,30 +788,12 @@ function HorizontalLayout({
               </Box>
             ) : null}
 
-            <LayoutModeButton
+            <WorkspaceSettingsMenu
+              user={user}
               layoutMode={layoutMode}
               onOpenLayoutChooser={onOpenLayoutChooser}
+              onLogout={onLogout}
             />
-
-            <ThemeModeButton />
-
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<LogoutIcon />}
-              onClick={onLogout}
-              sx={{
-                color: colors.status.error,
-                borderColor: colors.status.error,
-                fontWeight: 700,
-                "&:hover": {
-                  bgcolor: colors.status.errorSoft,
-                  borderColor: colors.status.error,
-                },
-              }}
-            >
-              Salir
-            </Button>
           </Stack>
         </Toolbar>
 
@@ -885,14 +892,10 @@ function VerticalLayout({
 
   const drawerContent = (
     <SidebarContent
-      user={user}
       activeSection={activeSection}
       visibleMenuItems={visibleMenuItems}
       onSectionChange={onSectionChange}
-      onLogout={onLogout}
       onClose={() => setMobileOpen(false)}
-      layoutMode={layoutMode}
-      onOpenLayoutChooser={onOpenLayoutChooser}
     />
   );
 
@@ -1089,12 +1092,12 @@ function VerticalLayout({
                 </Box>
               ) : null}
 
-              <LayoutModeButton
+              <WorkspaceSettingsMenu
+                user={user}
                 layoutMode={layoutMode}
                 onOpenLayoutChooser={onOpenLayoutChooser}
+                onLogout={onLogout}
               />
-
-              <ThemeModeButton />
 
               <Chip
                 label="Backend protegido"

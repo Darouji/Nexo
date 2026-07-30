@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, CircularProgress, Stack, Typography } from "@mui/material";
 import { DashboardPage } from "../pages/DashboardPage";
+import { WelcomeScreen } from "../components/WelcomeScreen";
 import { LoginPage } from "../pages/LoginPage";
 import {
   clearStoredAuth,
@@ -35,6 +36,14 @@ function SessionLoadingScreen() {
 export function AppRoutes() {
   const [bootstrapping, setBootstrapping] = useState(Boolean(getStoredToken()));
   const [user, setUser] = useState<AuthUser | null>(() => getStoredUser());
+  const [welcomeUser, setWelcomeUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    if (!welcomeUser) return;
+
+    const timeoutId = window.setTimeout(() => setWelcomeUser(null), 950);
+    return () => window.clearTimeout(timeoutId);
+  }, [welcomeUser]);
 
   useEffect(() => {
     let isMounted = true;
@@ -87,8 +96,20 @@ export function AppRoutes() {
   }
 
   if (!user) {
-    return <LoginPage onLoginSuccess={(loggedUser) => setUser(loggedUser)} />;
+    return (
+      <LoginPage
+        onLoginSuccess={(loggedUser) => {
+          setWelcomeUser(loggedUser);
+          setUser(loggedUser);
+        }}
+      />
+    );
   }
 
-  return <DashboardPage user={user} onLogout={() => setUser(null)} />;
+  return (
+    <>
+      <DashboardPage user={user} onLogout={() => setUser(null)} />
+      {welcomeUser ? <WelcomeScreen user={welcomeUser} /> : null}
+    </>
+  );
 }

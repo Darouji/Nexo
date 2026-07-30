@@ -1,4 +1,4 @@
-import { Tabs, Tab } from "@mui/material";
+import { Tab, Tabs } from "@mui/material";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { colors } from "../../../theme/colors";
@@ -14,12 +14,24 @@ export type InventorySection =
   | "locations"
   | "kardex";
 
-export function InventorySectionNavigation() {
+type InventorySectionNavigationProps = {
+  embedded?: boolean;
+};
+
+export function InventorySectionNavigation({
+  embedded = false,
+}: InventorySectionNavigationProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
   const selectedPath =
     inventorySections.find((section) => section.path === location.pathname)
       ?.path ?? inventorySections[0].path;
+
+  // ProductsPage todavía conserva la llamada histórica sobre la sección de
+  // ubicaciones. La instancia visible se renderiza dentro de su SectionCard.
+  if (!embedded && location.pathname === "/inventario/ubicaciones") {
+    return null;
+  }
 
   return (
     <Tabs

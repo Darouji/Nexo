@@ -1,5 +1,5 @@
 import AddIcon from "@mui/icons-material/Add";
-import DeleteOutlineIcon from "@mui/icons-material/Delete";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import {
   Alert,
   Box,
@@ -256,10 +256,13 @@ export function PurchaseOrderDialog({
                       label="Producto"
                       value={line.product}
                       onChange={(event) => {
-                        const product = products.find((item) => String(item.id) === event.target.value);
+                        const selectedProductId = String(event.target.value);
+                        const product = products.find(
+                          (item) => String(item.id) === selectedProductId,
+                        );
                         const controlsStock = productControlsStock(product);
                         updateLine(index, {
-                          product: event.target.value,
+                          product: selectedProductId,
                           inventoryManaged: controlsStock,
                           destinationLocation: controlsStock ? line.destinationLocation : "",
                         });

@@ -3,19 +3,22 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+*.sqlite
 *.sqlite3
-*.sqlite3.*.bak
+*.sqlite3.*
 venv/
-.env
+.venv/
 
+# Variables de entorno
+.env
 .env.*
 !.env.example
 !backend/.env.example
 !backend/.env.production.example
 
 # Django
-media/
-staticfiles/
+backend/media/
+backend/staticfiles/
 
 # Node / React
 node_modules/

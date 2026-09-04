@@ -18,7 +18,7 @@ function storeAccess(canExportOfficial: boolean) {
     permissions: {},
   };
 
-  window.localStorage.setItem("serkan_auth_access", JSON.stringify(access));
+  window.localStorage.setItem("nexo_auth_access", JSON.stringify(access));
 }
 
 describe("CapabilityGate", () => {

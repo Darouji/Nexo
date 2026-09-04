@@ -35,7 +35,7 @@ export type ShipmentCustodian =
   | "AGENTE_ADUANA"
   | "COURIER_CHILE"
   | "ULTIMA_MILLA"
-  | "SERKAN"
+  | "EMPRESA"
   | "OTRO";
 
 export type Carrier = {

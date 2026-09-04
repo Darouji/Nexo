@@ -13,13 +13,13 @@ import type { ReactNode } from "react";
 
 import { SectionCard } from "../../../components/SectionCard";
 import {
-  SerkanDataGrid,
-  type SerkanGridFilter,
-  type SerkanGridPaginationModel,
-  type SerkanGridSortModel,
-} from "../../../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../../../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../../../components/filters/SerkanMultiSelectFilter";
+  NexoDataGrid,
+  type NexoGridFilter,
+  type NexoGridPaginationModel,
+  type NexoGridSortModel,
+} from "../../../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../../../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../../../components/filters/NexoMultiSelectFilter";
 import type { SavedGridViewConfig } from "../../../services/gridService";
 import type {
   Category,
@@ -59,16 +59,16 @@ type InventoryCatalogSectionProps = {
 
   onClearProductFilters: () => void;
 
-  productPaginationModel: SerkanGridPaginationModel;
+  productPaginationModel: NexoGridPaginationModel;
   onProductPaginationModelChange: (
-    nextPaginationModel: SerkanGridPaginationModel,
+    nextPaginationModel: NexoGridPaginationModel,
   ) => void;
   productRowCount: number;
   onCreateProduct: () => void;
 
-  productSortModel: SerkanGridSortModel;
-  onProductSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
-  onProductColumnFiltersChange: (filters: SerkanGridFilter[]) => void;
+  productSortModel: NexoGridSortModel;
+  onProductSortModelChange: (nextSortModel: NexoGridSortModel) => void;
+  onProductColumnFiltersChange: (filters: NexoGridFilter[]) => void;
   productFilterResetKey: number;
   onVisibleColumnsChange: (fieldKeys: string[]) => void;
   onProductNamedViewApply: (config: SavedGridViewConfig) => void;
@@ -190,7 +190,7 @@ export function InventoryCatalogSection({
         <Stack spacing={2}>
           {navigationSlot}
 
-          <SerkanFilterToolbar
+          <NexoFilterToolbar
             searchLabel="Buscar productos"
             searchPlaceholder="Producto, categoría, detalle o código SAP..."
             searchValue={searchTerm}
@@ -203,7 +203,7 @@ export function InventoryCatalogSection({
             activeFiltersCount={activeProductFiltersCount}
             panelId="product-filter-panel"
           >
-            <SerkanMultiSelectFilter
+            <NexoMultiSelectFilter
               label="Categorías"
               options={categories.map((category) => ({
                 value: String(category.id),
@@ -213,7 +213,7 @@ export function InventoryCatalogSection({
               onChange={onCategoryFilterChange}
             />
 
-            <SerkanMultiSelectFilter
+            <NexoMultiSelectFilter
               label="Estados del producto"
               options={[
                 { value: "ACTIVO", label: "Activo" },
@@ -239,7 +239,7 @@ export function InventoryCatalogSection({
               <MenuItem value="false">No</MenuItem>
             </TextField>
 
-            <SerkanMultiSelectFilter
+            <NexoMultiSelectFilter
               label="Estados de stock"
               options={[
                 { value: "STOCK_CORRECTO", label: "Stock correcto" },
@@ -255,9 +255,9 @@ export function InventoryCatalogSection({
                 onStockStatusFilterChange(values as ProductStockStatus[])
               }
             />
-          </SerkanFilterToolbar>
+          </NexoFilterToolbar>
 
-          <SerkanDataGrid
+          <NexoDataGrid
             gridKey="inventory.products"
             serverManaged
             ariaLabel="Catálogo de productos de inventario"

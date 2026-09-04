@@ -6,10 +6,10 @@
  * las reglas de negocio y la autorización permanecen en el backend.
  */
 import type {
-  SerkanGridPaginationModel,
-  SerkanGridFilter,
-  SerkanGridSortModel,
-} from "../../../components/SerkanDataGrid";
+  NexoGridPaginationModel,
+  NexoGridFilter,
+  NexoGridSortModel,
+} from "../../../components/NexoDataGrid";
 import type {
   AuditOrigin,
   Category,
@@ -39,8 +39,8 @@ export type KardexDialogState = {
   product: Product | null;
   movements: KardexMovement[];
   rowCount: number;
-  paginationModel: SerkanGridPaginationModel;
-  sortModel: SerkanGridSortModel;
+  paginationModel: NexoGridPaginationModel;
+  sortModel: NexoGridSortModel;
   ordering: string;
   loading: boolean;
 };
@@ -105,7 +105,7 @@ export type ProductFilterOverrides = {
   stockControl?: string;
   stockStatus?: ProductStockStatus[];
   ordering?: string;
-  columnFilters?: SerkanGridFilter[];
+  columnFilters?: NexoGridFilter[];
 };
 
 export type PendingReceiptFilterOverrides = {
@@ -114,7 +114,7 @@ export type PendingReceiptFilterOverrides = {
   dateFrom?: string;
   dateTo?: string;
   ordering?: string;
-  columnFilters?: SerkanGridFilter[];
+  columnFilters?: NexoGridFilter[];
   page?: number;
   pageSize?: number;
 };
@@ -125,29 +125,29 @@ export type KardexFilterOverrides = {
   origin?: AuditOrigin[];
   ordering?: string;
   product?: number;
-  columnFilters?: SerkanGridFilter[];
+  columnFilters?: NexoGridFilter[];
   page?: number;
   pageSize?: number;
 };
 
 // AG Grid utiliza índices de página basados en cero; la conversión al contrato
 // paginado de Django se realiza al construir los parámetros de consulta.
-export const defaultProductPaginationModel: SerkanGridPaginationModel = {
+export const defaultProductPaginationModel: NexoGridPaginationModel = {
   page: 0,
   pageSize: 25,
 };
 
-export const defaultKardexSortModel: SerkanGridSortModel = {
+export const defaultKardexSortModel: NexoGridSortModel = {
   field: "created_at",
   direction: "desc",
 };
 
-export const defaultKardexPaginationModel: SerkanGridPaginationModel = {
+export const defaultKardexPaginationModel: NexoGridPaginationModel = {
   page: 0,
   pageSize: 10,
 };
 
-export const defaultPendingReceiptPaginationModel: SerkanGridPaginationModel = {
+export const defaultPendingReceiptPaginationModel: NexoGridPaginationModel = {
   page: 0,
   pageSize: 10,
 };

@@ -64,10 +64,10 @@ import { downloadBlob } from "../services/download";
 import { createIdempotencyKey } from "../services/idempotency";
 
 import type {
-  SerkanGridFilter,
-  SerkanGridPaginationModel,
-  SerkanGridSortModel,
-} from "../components/SerkanDataGrid";
+  NexoGridFilter,
+  NexoGridPaginationModel,
+  NexoGridSortModel,
+} from "../components/NexoDataGrid";
 import type {
   AuditOrigin,
   Category,
@@ -260,9 +260,9 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
   const [hasLoadedGlobalKardex, setHasLoadedGlobalKardex] = useState(false);
   const [globalKardexRowCount, setGlobalKardexRowCount] = useState(0);
   const [globalKardexPaginationModel, setGlobalKardexPaginationModel] =
-    useState<SerkanGridPaginationModel>(defaultKardexPaginationModel);
+    useState<NexoGridPaginationModel>(defaultKardexPaginationModel);
   const [globalKardexSortModel, setGlobalKardexSortModel] =
-    useState<SerkanGridSortModel>({
+    useState<NexoGridSortModel>({
       field: "created_at",
       direction: "desc",
     });
@@ -277,7 +277,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
     string[]
   >([]);
   const [globalKardexOrigin, setGlobalKardexOrigin] = useState<AuditOrigin[]>([]);
-  const [globalKardexColumnFilters, setGlobalKardexColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [globalKardexColumnFilters, setGlobalKardexColumnFilters] = useState<NexoGridFilter[]>([]);
   const [globalKardexFilterResetKey, setGlobalKardexFilterResetKey] = useState(0);
   const [visibleGlobalKardexColumns, setVisibleGlobalKardexColumns] = useState<string[]>([]);
   const [exportingGlobalKardex, setExportingGlobalKardex] = useState(false);
@@ -394,7 +394,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
   };
 
   const handleGlobalKardexPaginationModelChange = (
-    nextPaginationModel: SerkanGridPaginationModel,
+    nextPaginationModel: NexoGridPaginationModel,
   ) => {
     setGlobalKardexPaginationModel(nextPaginationModel);
 
@@ -405,7 +405,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
   };
 
   const handleGlobalKardexSortModelChange = (
-    nextSortModel: SerkanGridSortModel,
+    nextSortModel: NexoGridSortModel,
   ) => {
     const nextOrdering = nextSortModel
       ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
@@ -441,7 +441,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
     });
   };
 
-  const handleGlobalKardexColumnFiltersChange = (nextFilters: SerkanGridFilter[]) => {
+  const handleGlobalKardexColumnFiltersChange = (nextFilters: NexoGridFilter[]) => {
     const nextPaginationModel = { ...globalKardexPaginationModel, page: 0 };
     setGlobalKardexColumnFilters(nextFilters);
     setGlobalKardexPaginationModel(nextPaginationModel);
@@ -1047,9 +1047,9 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
 
   const loadProductKardexPage = async (
     product: Product,
-    paginationModel: SerkanGridPaginationModel = defaultKardexPaginationModel,
+    paginationModel: NexoGridPaginationModel = defaultKardexPaginationModel,
     ordering = "-created_at",
-    sortModel: SerkanGridSortModel = defaultKardexSortModel,
+    sortModel: NexoGridSortModel = defaultKardexSortModel,
   ) => {
     setKardexDialog((current) => ({
       ...current,
@@ -1107,7 +1107,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
   };
 
   const handleProductKardexPaginationModelChange = (
-    nextPaginationModel: SerkanGridPaginationModel,
+    nextPaginationModel: NexoGridPaginationModel,
   ) => {
     const product = kardexDialog.product;
 
@@ -1129,7 +1129,7 @@ export function ProductsPage({ section = "catalog" }: ProductsPageProps) {
   };
 
   const handleProductKardexSortModelChange = (
-    nextSortModel: SerkanGridSortModel,
+    nextSortModel: NexoGridSortModel,
   ) => {
     const product = kardexDialog.product;
 

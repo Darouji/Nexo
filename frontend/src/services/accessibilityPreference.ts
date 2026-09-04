@@ -1,10 +1,10 @@
 /**
- * Gestiona las tres escalas tipográficas de SERKAN para adaptar la densidad y
+ * Gestiona las tres escalas tipográficas de NEXO para adaptar la densidad y
  * legibilidad de la interfaz sin duplicar estilos dentro de cada pantalla.
  */
 export type AppFontScale = "compact" | "standard" | "large";
 
-const FONT_SCALE_STORAGE_KEY = "serkan_font_scale";
+const FONT_SCALE_STORAGE_KEY = "nexo_font_scale";
 
 const scaleValues: Record<AppFontScale, string> = {
   compact: "14px",

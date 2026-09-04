@@ -1,5 +1,5 @@
 /**
- * Contratos y operaciones de la jerarquía comercial de SERKAN.
+ * Contratos y operaciones de la jerarquía comercial de NEXO.
  *
  * Las relaciones siguen Holding → Minera → Área → Subárea → Contacto. El
  * backend valida coherencia, normalización y duplicados; el frontend usa estas
@@ -84,7 +84,7 @@ export interface Subarea extends BaseCommercialRecord {
 
 /**
  * Persona externa asociada a la estructura comercial. No representa una cuenta
- * de acceso ni un colaborador interno de SERKAN.
+ * de acceso ni un colaborador interno de NEXO.
  */
 export interface Contacto extends BaseCommercialRecord {
   first_name: string;

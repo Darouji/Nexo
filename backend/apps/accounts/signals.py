@@ -2,7 +2,7 @@
 Signals de accounts.
 
 Actualmente no se usan signals para crear perfiles automáticamente,
-porque SERKAN V2 separa explícitamente:
+porque NEXO ERP/CRM separa explícitamente:
 - Usuario interno
 - Colaborador interno
 - Contacto externo

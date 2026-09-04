@@ -10,10 +10,10 @@ import {
 import type { ColDef } from "ag-grid-community";
 
 import {
-  SerkanDataGrid,
-  type SerkanGridPaginationModel,
-  type SerkanGridSortModel,
-} from "../../../components/SerkanDataGrid";
+  NexoDataGrid,
+  type NexoGridPaginationModel,
+  type NexoGridSortModel,
+} from "../../../components/NexoDataGrid";
 import type {
   KardexMovement,
   Product,
@@ -27,13 +27,13 @@ type ProductKardexDialogProps = {
   loading: boolean;
   rowCount: number;
 
-  paginationModel: SerkanGridPaginationModel;
+  paginationModel: NexoGridPaginationModel;
   onPaginationModelChange: (
-    nextPaginationModel: SerkanGridPaginationModel,
+    nextPaginationModel: NexoGridPaginationModel,
   ) => void;
 
-  sortModel: SerkanGridSortModel;
-  onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
+  sortModel: NexoGridSortModel;
+  onSortModelChange: (nextSortModel: NexoGridSortModel) => void;
 
   onClose: () => void;
 };
@@ -66,7 +66,7 @@ export function ProductKardexDialog({
             registrada en cada movimiento.
           </Alert>
 
-          <SerkanDataGrid
+          <NexoDataGrid
             gridKey="inventory.product-kardex"
             ariaLabel={
               product

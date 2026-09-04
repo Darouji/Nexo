@@ -27,9 +27,9 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import EditIcon from "@mui/icons-material/Edit";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { ProfileDocumentsSection } from "../components/ProfileDocumentsSection";
-import { SerkanDataGrid } from "../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
+import { NexoDataGrid } from "../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../components/filters/NexoMultiSelectFilter";
 import { getApiErrorMessage as getErrorMessage, getApiFieldErrors } from "../services/api";
 import {
   createCollaborator,
@@ -451,7 +451,7 @@ export function CollaboratorsPage() {
                 fontWeight: 500,
               }}
             >
-              Los colaboradores son personas que trabajan o han trabajado para SERKAN, con o sin acceso a la plataforma. Sirve para registrar personal temporal, de apoyo o permanente; solo quienes necesiten usar el sistema requieren además una cuenta de usuario.
+              Los colaboradores son personas que trabajan o han trabajado para NEXO, con o sin acceso a la plataforma. Sirve para registrar personal temporal, de apoyo o permanente; solo quienes necesiten usar el sistema requieren además una cuenta de usuario.
             </Typography>
           </Box>
 
@@ -558,7 +558,7 @@ export function CollaboratorsPage() {
               </Typography>
             </Box>
 
-            <SerkanFilterToolbar
+            <NexoFilterToolbar
               searchLabel="Buscar colaboradores"
               searchPlaceholder="Nombre, RUT, correo, cargo, departamento, teléfono o usuario..."
               searchValue={searchTerm}
@@ -575,16 +575,16 @@ export function CollaboratorsPage() {
               activeFiltersCount={statusFilter.length + linkedFilter.length}
               panelId="collaborators-advanced-filters"
             >
-              <SerkanMultiSelectFilter label="Estado" options={[
+              <NexoMultiSelectFilter label="Estado" options={[
                 { value: "ACTIVO", label: "Activo" }, { value: "INACTIVO", label: "Inactivo" },
                 { value: "ARCHIVADO", label: "Archivado" },
               ]} value={statusFilter} onChange={(value) => { setStatusFilter(value); setPagination((current) => ({ ...current, page: 0 })); }} />
-              <SerkanMultiSelectFilter label="Usuario vinculado" options={[
+              <NexoMultiSelectFilter label="Usuario vinculado" options={[
                 { value: "linked", label: "Vinculado" }, { value: "unlinked", label: "Sin usuario" },
               ]} value={linkedFilter} onChange={(value) => { setLinkedFilter(value); setPagination((current) => ({ ...current, page: 0 })); }} />
-            </SerkanFilterToolbar>
+            </NexoFilterToolbar>
 
-            <SerkanDataGrid
+            <NexoDataGrid
               gridKey="collaborators.collaborators" serverManaged clientManaged
               ariaLabel="Nómina interna de colaboradores"
               rows={filteredCollaborators} columns={columns} loading={refreshing}

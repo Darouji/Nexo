@@ -1,7 +1,7 @@
 /**
  * Actúa como coordinador del espacio de trabajo autenticado.
  *
- * Traduce las rutas del navegador a módulos de SERKAN, aplica la regla de
+ * Traduce las rutas del navegador a módulos de NEXO, aplica la regla de
  * acceso correspondiente y monta la pantalla funcional dentro del layout
  * común. Las validaciones de permisos del backend siguen siendo la autoridad;
  * esta capa evita exponer navegación que el usuario no debería utilizar.
@@ -288,7 +288,7 @@ export function DashboardPage({ user, onLogout }: DashboardPageProps) {
           />
         }
       >
-        <Box data-serkan-section={accessRule.moduleKey}>{renderContent()}</Box>
+        <Box data-nexo-section={accessRule.moduleKey}>{renderContent()}</Box>
       </PermissionGate>
     </AppLayout>
   );

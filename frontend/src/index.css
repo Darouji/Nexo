@@ -1,5 +1,5 @@
 :root {
-  --serkan-root-font-size: 13.6px;
+  --nexo-root-font-size: 13.6px;
 }
 
 html,
@@ -12,7 +12,7 @@ body,
 }
 
 html {
-  font-size: var(--serkan-root-font-size);
+  font-size: var(--nexo-root-font-size);
   font-family:
     Inter,
     Roboto,

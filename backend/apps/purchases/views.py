@@ -182,7 +182,7 @@ class SupplierViewSet(PurchasePermissionMixin, viewsets.ModelViewSet):
     def export(self, request):
         return _export_grid(
             self, request, SUPPLIER_GRID_DEFINITION,
-            "serkan_proveedores", "Proveedores",
+            "nexo_proveedores", "Proveedores",
         )
 
 
@@ -269,7 +269,7 @@ class PurchaseOrderViewSet(
     def export(self, request):
         return _export_grid(
             self, request, ORDER_GRID_DEFINITION,
-            "serkan_ordenes_compra", "Órdenes de compra",
+            "nexo_ordenes_compra", "Órdenes de compra",
         )
 
 
@@ -546,7 +546,7 @@ class PurchaseReceiptCommitmentViewSet(
     def export(self, request):
         return _export_grid(
             self, request, RECEIPT_GRID_DEFINITION,
-            "serkan_recepciones_compra", "Recepciones",
+            "nexo_recepciones_compra", "Recepciones",
         )
 
 

@@ -1,4 +1,4 @@
-# Autenticación actualmente utilizada por la API de SERKAN.
+# Autenticación actualmente utilizada por la API de NEXO.
 # La expiración se valida en backend para que una credencial antigua no recupere
 # acceso aunque todavía permanezca almacenada en el cliente.
 from datetime import timedelta

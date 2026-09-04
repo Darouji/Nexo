@@ -31,11 +31,11 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import {
-  SerkanDataGrid,
-  type SerkanGridFilter,
-  type SerkanGridSortModel,
-} from "../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
+  NexoDataGrid,
+  type NexoGridFilter,
+  type NexoGridSortModel,
+} from "../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../components/filters/NexoFilterToolbar";
 import {
   createArea,
   createCiudad,
@@ -541,8 +541,8 @@ export function CommercialPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
-  const [sortModel, setSortModel] = useState<SerkanGridSortModel>(null);
-  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [sortModel, setSortModel] = useState<NexoGridSortModel>(null);
+  const [columnFilters, setColumnFilters] = useState<NexoGridFilter[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1802,7 +1802,7 @@ export function CommercialPage() {
             <Tab value="contactos" label="Contactos" />
           </Tabs>
 
-          <SerkanFilterToolbar
+          <NexoFilterToolbar
             searchLabel={`Buscar en ${tabLabels[activeTab].toLowerCase()}`}
             searchPlaceholder="Nombre, RUT, correo, teléfono, minera, área o subárea..."
             searchValue={searchTerm}
@@ -1823,9 +1823,9 @@ export function CommercialPage() {
             panelId="commercial-advanced-filters"
           >
             <Box />
-          </SerkanFilterToolbar>
+          </NexoFilterToolbar>
 
-          <SerkanDataGrid
+          <NexoDataGrid
             key={activeTab}
             gridKey={`commercial.${activeTab}`}
             serverManaged

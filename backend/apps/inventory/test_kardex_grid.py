@@ -17,13 +17,13 @@ class KardexGridApiTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
             username="kardex-grid-admin",
-            email="kardex-grid-admin@serkan.cl",
+            email="kardex-grid-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
         self.reader = User.objects.create_user(
             username="kardex-grid-reader",
-            email="kardex-grid-reader@serkan.cl",
+            email="kardex-grid-reader@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )

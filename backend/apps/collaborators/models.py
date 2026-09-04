@@ -40,7 +40,7 @@ def normalize_email(value):
 
 class Collaborator(BaseModel):
     """
-    Persona interna de SERKAN.
+    Persona interna de NEXO.
 
     Regla de negocio:
     - Crear colaborador NO crea usuario.

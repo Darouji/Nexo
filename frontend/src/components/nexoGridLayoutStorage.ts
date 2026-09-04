@@ -1,5 +1,5 @@
 /**
- * Persistencia local del diseño estable de una grilla SERKAN.
+ * Persistencia local del diseño estable de una grilla NEXO.
  *
  * Guarda únicamente orden, ancho, visibilidad, fijación y flexibilidad de las
  * columnas. Búsquedas, filtros y ordenamiento de datos no forman parte de esta
@@ -7,7 +7,7 @@
  */
 import type { ColumnState, GridApi } from "ag-grid-community";
 
-const STORAGE_PREFIX = "serkan:grid-layout";
+const STORAGE_PREFIX = "nexo:grid-layout";
 
 // La versión forma parte de la clave para no interpretar estructuras antiguas
 // con un contrato incompatible.
@@ -158,7 +158,7 @@ function readStoredGridLayout(gridKey: string): PersistedGridLayout | null {
  * Reaplica sólo columnas que todavía existen. Así una pantalla puede agregar o
  * retirar columnas sin invalidar por completo el diseño personal conocido.
  */
-export function restoreSerkanGridLayout<TRow>(
+export function restoreNexoGridLayout<TRow>(
   api: GridApi<TRow>,
   gridKey: string,
   columnDefinitionIds: string[],
@@ -185,7 +185,7 @@ export function restoreSerkanGridLayout<TRow>(
 }
 
 /** Guarda el estado visual actual sin incluir columnas internas del adaptador. */
-export function persistSerkanGridLayout<TRow>(
+export function persistNexoGridLayout<TRow>(
   api: GridApi<TRow>,
   gridKey: string,
   columnDefinitionIds: string[],
@@ -224,7 +224,7 @@ export function persistSerkanGridLayout<TRow>(
   }
 }
 
-export function clearSerkanGridLayout(gridKey: string) {
+export function clearNexoGridLayout(gridKey: string) {
   if (typeof window === "undefined") {
     return;
   }

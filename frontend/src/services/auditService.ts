@@ -1,5 +1,5 @@
 /**
- * Cliente de lectura para la trazabilidad de SERKAN.
+ * Cliente de lectura para la trazabilidad de NEXO.
  *
  * Distingue entre actividad global de operaciones y cambios detallados de un
  * registro concreto. Este servicio no crea ni modifica auditorías; esas huellas

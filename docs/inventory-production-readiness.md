@@ -1,4 +1,4 @@
-# Cierre de Inventario para producción — SERKAN V2
+# Cierre de Inventario para producción — NEXO ERP/CRM
 
 ## Propósito
 
@@ -8,7 +8,7 @@ las políticas transversales vigentes.
 
 La fase declara **Inventario listo dentro de la aplicación** únicamente cuando
 cumple integridad, permisos, auditoría, exportación, accesibilidad, rendimiento,
-documentación y pruebas. La salida completa a producción de SERKAN continúa
+documentación y pruebas. La salida completa a producción de NEXO continúa
 dependiendo del endurecimiento transversal de autenticación, infraestructura,
 privacidad y operación descrito en la Fase 8.
 
@@ -29,7 +29,7 @@ privacidad y operación descrito en la Fase 8.
 ## Decisiones que prevalecen
 
 - El renombrado de columnas es global y está disponible para los perfiles
-  administrativos definidos por SERKAN; nunca es una preferencia personal.
+  administrativos definidos por NEXO; nunca es una preferencia personal.
 - La duplicación visual de columnas y las vistas organizacionales publicadas
   permanecen como funciones futuras.
 - Las vistas nombradas personales sí pertenecen al núcleo inmediato.

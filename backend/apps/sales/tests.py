@@ -31,7 +31,7 @@ class SalesServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="admin",
-            email="admin@serkan.cl",
+            email="admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -666,7 +666,7 @@ class SalesServiceTests(TestCase):
     def test_api_consulta_user_cannot_update_sale_lines(self):
         consulta_user = User.objects.create_user(
             username="consulta",
-            email="consulta@serkan.cl",
+            email="consulta@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )
@@ -763,7 +763,7 @@ class SalesServiceTests(TestCase):
     def test_api_consulta_user_cannot_view_sale_traceability(self):
         consulta_user = User.objects.create_user(
             username="consulta_trazabilidad",
-            email="consulta.trazabilidad@serkan.cl",
+            email="consulta.trazabilidad@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )

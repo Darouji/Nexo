@@ -13,7 +13,7 @@ class UserRole(models.TextChoices):
     CONSULTA = "CONSULTA", "Consulta"
 
 
-class SerkanUserManager(UserManager):
+class NexoUserManager(UserManager):
     use_in_migrations = True
 
     def _create_user(self, username, email=None, password=None, **extra_fields):
@@ -54,7 +54,7 @@ class SerkanUserManager(UserManager):
 
 class User(AbstractUser):
     """
-    Usuario interno de SERKAN V2.
+    Usuario interno de NEXO ERP/CRM.
 
     Regla de negocio:
     - Un usuario es una cuenta con acceso al sistema.
@@ -128,7 +128,7 @@ class User(AbstractUser):
         verbose_name="Actualizado por",
     )
 
-    objects = SerkanUserManager()
+    objects = NexoUserManager()
 
     REQUIRED_FIELDS = ["email"]
 

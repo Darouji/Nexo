@@ -1,5 +1,5 @@
 /**
- * Cliente HTTP transversal de SERKAN.
+ * Cliente HTTP transversal de NEXO.
  *
  * Centraliza la URL base, autenticación actualmente implementada, expiración de
  * sesión y traducción de errores. Los servicios de dominio deben usar esta
@@ -8,7 +8,7 @@
 import axios, { AxiosHeaders, type AxiosError } from "axios";
 import { clearStoredAuth, getStoredToken } from "./authStorage";
 
-export const AUTH_UNAUTHORIZED_EVENT = "serkan:auth-unauthorized";
+export const AUTH_UNAUTHORIZED_EVENT = "nexo:auth-unauthorized";
 
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 

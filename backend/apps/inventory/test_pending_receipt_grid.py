@@ -17,13 +17,13 @@ class PendingReceiptGridApiTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
             username="pending-grid-admin",
-            email="pending-grid-admin@serkan.cl",
+            email="pending-grid-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
         self.reader = User.objects.create_user(
             username="pending-grid-reader",
-            email="pending-grid-reader@serkan.cl",
+            email="pending-grid-reader@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )

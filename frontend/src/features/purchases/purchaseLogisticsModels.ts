@@ -48,7 +48,7 @@ export const SHIPMENT_CUSTODIAN_OPTIONS: Array<{
   { value: "AGENTE_ADUANA", label: "Agente de aduanas" },
   { value: "COURIER_CHILE", label: "Courier en Chile" },
   { value: "ULTIMA_MILLA", label: "Transportista de última milla" },
-  { value: "SERKAN", label: "SERKAN" },
+  { value: "EMPRESA", label: "EMPRESA" },
   { value: "OTRO", label: "Otro" },
 ];
 

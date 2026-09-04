@@ -6,7 +6,7 @@
  * reglas de aprobación, moneda, cantidades e inventario permanecen en servicios
  * transaccionales del servidor.
  */
-import type { SerkanGridFilter } from "../components/SerkanDataGrid";
+import type { NexoGridFilter } from "../components/NexoDataGrid";
 import { api } from "./api";
 
 export type PurchaseCurrency = "CLP" | "USD";
@@ -380,6 +380,6 @@ export async function exportPurchases(
 }
 
 /** Serializa filtros remotos únicamente cuando existe al menos uno. */
-export function serializeGridFilters(filters: SerkanGridFilter[]) {
+export function serializeGridFilters(filters: NexoGridFilter[]) {
   return filters.length ? JSON.stringify(filters) : undefined;
 }

@@ -101,7 +101,7 @@ def build_product_export_response(*, queryset, mode, export_format, columns):
         for product in queryset
     ]
 
-    filename = f"serkan_catalogo_productos_{mode}.{export_format}"
+    filename = f"nexo_catalogo_productos_{mode}.{export_format}"
 
     if export_format == "csv":
         output = StringIO(newline="")
@@ -189,7 +189,7 @@ def build_pending_receipt_export_response(
         ]
         for pending_receipt in queryset
     ]
-    filename = f"serkan_recepciones_fisicas_{mode}.{export_format}"
+    filename = f"nexo_recepciones_fisicas_{mode}.{export_format}"
 
     if export_format == "csv":
         output = StringIO(newline="")
@@ -308,7 +308,7 @@ def build_kardex_export_response(*, queryset, mode, export_format, columns):
         ]
         for movement in queryset
     ]
-    filename = f"serkan_kardex_global_{mode}.{export_format}"
+    filename = f"nexo_kardex_global_{mode}.{export_format}"
 
     if export_format == "csv":
         output = StringIO(newline="")

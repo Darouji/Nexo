@@ -133,7 +133,7 @@ export function WorkspaceNavigation({
 
       <Box sx={{ px: 2, py: 1.3, borderTop: `1px solid ${colors.border.light}` }}>
         <Typography variant="caption" sx={{ color: colors.text.muted, fontWeight: 750 }}>
-          SERKAN ERP · V2
+          NEXO ERP · V2
         </Typography>
       </Box>
     </Stack>

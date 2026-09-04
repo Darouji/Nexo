@@ -149,7 +149,7 @@ COMMERCIAL_SPECS = [
         "subarea": "Taller Mecánico",
         "contact_first": "Carlos",
         "contact_last": "Rojas",
-        "email": "carlos.rojas@cordillera-demo.cl",
+        "email": "carlos.rojas@example.invalid",
     },
     {
         "minera": "Minera Desierto Norte Demo",
@@ -157,7 +157,7 @@ COMMERCIAL_SPECS = [
         "subarea": "Vehículos Livianos",
         "contact_first": "Marcela",
         "contact_last": "Fuentes",
-        "email": "marcela.fuentes@desierto-demo.cl",
+        "email": "marcela.fuentes@example.invalid",
     },
     {
         "minera": "Minera Valle Cobre Demo",
@@ -165,7 +165,7 @@ COMMERCIAL_SPECS = [
         "subarea": "Repuestos y Suministros",
         "contact_first": "Rodrigo",
         "contact_last": "Soto",
-        "email": "rodrigo.soto@vallecobre-demo.cl",
+        "email": "rodrigo.soto@example.invalid",
     },
 ]
 

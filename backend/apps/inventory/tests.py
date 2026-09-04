@@ -41,7 +41,7 @@ class CategoriaManagementServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="category-admin",
-            email="category-admin@serkan.cl",
+            email="category-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -234,7 +234,7 @@ class PendientePorRecibirServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="inventory-admin",
-            email="inventory-admin@serkan.cl",
+            email="inventory-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -863,14 +863,14 @@ class PendientePorRecibirApiTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
             username="inventory-api-admin",
-            email="inventory-api-admin@serkan.cl",
+            email="inventory-api-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
 
         self.consulta = User.objects.create_user(
             username="inventory-api-consulta",
-            email="inventory-api-consulta@serkan.cl",
+            email="inventory-api-consulta@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )
@@ -1400,7 +1400,7 @@ class ProductOriginAndCategoryHistoryTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="inventory-origin-admin",
-            email="inventory-origin-admin@serkan.cl",
+            email="inventory-origin-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -1490,7 +1490,7 @@ class ProductCreationAndOriginApiTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
             username="product-contract-admin",
-            email="product-contract-admin@serkan.cl",
+            email="product-contract-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -1998,7 +1998,7 @@ class KardexImmutabilityTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="kardex-immutable-admin",
-            email="kardex-immutable-admin@serkan.cl",
+            email="kardex-immutable-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -2078,7 +2078,7 @@ class StockWriteGuardTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="stock-guard-admin",
-            email="stock-guard-admin@serkan.cl",
+            email="stock-guard-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -2158,7 +2158,7 @@ class InventoryReadFilteringApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="inventory-read-filter-admin",
-            email="inventory-read-filter-admin@serkan.cl",
+            email="inventory-read-filter-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -2259,7 +2259,7 @@ class ProductCategoryAtomicApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="product-category-atomic-admin",
-            email="product-category-atomic-admin@serkan.cl",
+            email="product-category-atomic-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )

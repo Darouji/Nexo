@@ -8,14 +8,14 @@ import {
   type Theme,
 } from "@mui/material";
 
-export type SerkanFilterOption = {
+export type NexoFilterOption = {
   value: string;
   label: string;
 };
 
-type SerkanMultiSelectFilterProps = {
+type NexoMultiSelectFilterProps = {
   label: string;
-  options: SerkanFilterOption[];
+  options: NexoFilterOption[];
   value: string[];
   onChange: (value: string[]) => void;
   placeholder?: string;
@@ -23,7 +23,7 @@ type SerkanMultiSelectFilterProps = {
   sx?: SxProps<Theme>;
 };
 
-export function SerkanMultiSelectFilter({
+export function NexoMultiSelectFilter({
   label,
   options,
   value,
@@ -31,7 +31,7 @@ export function SerkanMultiSelectFilter({
   placeholder = "Todos",
   disabled = false,
   sx,
-}: SerkanMultiSelectFilterProps) {
+}: NexoMultiSelectFilterProps) {
   const selectedOptions = options.filter((option) =>
     value.includes(option.value),
   );

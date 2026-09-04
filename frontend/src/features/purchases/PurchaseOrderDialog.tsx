@@ -136,7 +136,7 @@ export function PurchaseOrderDialog({
                 error={Boolean(errors.number)}
                 helperText={
                   errors.number ||
-                  "Si lo dejas vacío, SERKAN asignará el siguiente número oficial."
+                  "Si lo dejas vacío, NEXO asignará el siguiente número oficial."
                 }
               />
               <TextField

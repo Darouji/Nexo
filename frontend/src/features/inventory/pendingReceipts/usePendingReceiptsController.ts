@@ -9,10 +9,10 @@ import axios from "axios";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
-  SerkanGridFilter,
-  SerkanGridPaginationModel,
-  SerkanGridSortModel,
-} from "../../../components/SerkanDataGrid";
+  NexoGridFilter,
+  NexoGridPaginationModel,
+  NexoGridSortModel,
+} from "../../../components/NexoDataGrid";
 import { getApiErrorMessage } from "../../../services/api";
 import { downloadBlob } from "../../../services/download";
 import type { SavedGridViewConfig } from "../../../services/gridService";
@@ -44,8 +44,8 @@ export function usePendingReceiptsController({
   const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
   const [rowCount, setRowCount] = useState(0);
   const [paginationModel, setPaginationModel] =
-    useState<SerkanGridPaginationModel>(defaultPendingReceiptPaginationModel);
-  const [sortModel, setSortModel] = useState<SerkanGridSortModel>({
+    useState<NexoGridPaginationModel>(defaultPendingReceiptPaginationModel);
+  const [sortModel, setSortModel] = useState<NexoGridSortModel>({
     field: "created_at",
     direction: "desc",
   });
@@ -54,7 +54,7 @@ export function usePendingReceiptsController({
   const [statusFilter, setStatusFilter] = useState<PendingReceiptStatus[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [columnFilters, setColumnFilters] = useState<NexoGridFilter[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [loading, setLoading] = useState(enabled);
@@ -181,7 +181,7 @@ export function usePendingReceiptsController({
   );
 
   const changePagination = useCallback(
-    (nextPaginationModel: SerkanGridPaginationModel) => {
+    (nextPaginationModel: NexoGridPaginationModel) => {
       setPaginationModel(nextPaginationModel);
       void loadPendingReceipts({
         page: nextPaginationModel.page,
@@ -192,7 +192,7 @@ export function usePendingReceiptsController({
   );
 
   const changeSort = useCallback(
-    (nextSortModel: SerkanGridSortModel) => {
+    (nextSortModel: NexoGridSortModel) => {
       const nextOrdering = nextSortModel
         ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
         : "-created_at";
@@ -211,7 +211,7 @@ export function usePendingReceiptsController({
   );
 
   const changeColumnFilters = useCallback(
-    (nextFilters: SerkanGridFilter[]) => {
+    (nextFilters: NexoGridFilter[]) => {
       const nextPaginationModel = { ...paginationModel, page: 0 };
       setColumnFilters(nextFilters);
       setPaginationModel(nextPaginationModel);
@@ -250,7 +250,7 @@ export function usePendingReceiptsController({
       };
       const savedColumnFilters = config.filters.column_filters;
       const nextColumnFilters = Array.isArray(savedColumnFilters)
-        ? (savedColumnFilters as SerkanGridFilter[])
+        ? (savedColumnFilters as NexoGridFilter[])
         : [];
       const nextSearch = readFilter("search");
       const savedStatus = config.filters.status;

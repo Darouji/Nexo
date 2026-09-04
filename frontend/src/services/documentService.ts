@@ -1,5 +1,5 @@
 /**
- * Contratos y operaciones del repositorio documental de SERKAN.
+ * Contratos y operaciones del repositorio documental de NEXO.
  *
  * El documento lógico conserva su identidad y propietario; cada archivo cargado
  * crea una versión. Reemplazar no sobrescribe silenciosamente el historial, sino

@@ -7,10 +7,10 @@
  */
 import type { AccessPayload, AuthSessionStatus, AuthUser } from "../types/auth";
 
-const TOKEN_KEY = "serkan_auth_token";
-const USER_KEY = "serkan_auth_user";
-const ACCESS_KEY = "serkan_auth_access";
-const SESSION_KEY = "serkan_auth_session";
+const TOKEN_KEY = "nexo_auth_token";
+const USER_KEY = "nexo_auth_user";
+const ACCESS_KEY = "nexo_auth_access";
+const SESSION_KEY = "nexo_auth_session";
 
 type PersistAuthDataInput = {
   token?: string | null;

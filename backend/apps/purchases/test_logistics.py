@@ -32,7 +32,7 @@ class PurchaseLogisticsFlowTests(TestCase):
     def setUp(self):
         self.finance = User.objects.create_user(
             username="finanzas_logistica",
-            email="finanzas-logistica@serkan.test",
+            email="finanzas-logistica@example.invalid",
             role=UserRole.FINANZAS_COMERCIAL,
         )
         self.supplier = Supplier.objects.create(
@@ -188,22 +188,22 @@ class PurchaseLogisticsPermissionTests(TestCase):
     def setUp(self):
         self.finance = User.objects.create_user(
             username="finanzas_permisos",
-            email="finanzas-permisos@serkan.test",
+            email="finanzas-permisos@example.invalid",
             role=UserRole.FINANZAS_COMERCIAL,
         )
         self.rrhh = User.objects.create_user(
             username="rrhh_logistica",
-            email="rrhh-logistica@serkan.test",
+            email="rrhh-logistica@example.invalid",
             role=UserRole.RRHH,
         )
         self.operator = User.objects.create_user(
             username="operativo_logistica",
-            email="operativo-logistica@serkan.test",
+            email="operativo-logistica@example.invalid",
             role=UserRole.OPERATIVO,
         )
         self.viewer = User.objects.create_user(
             username="consulta_logistica",
-            email="consulta-logistica@serkan.test",
+            email="consulta-logistica@example.invalid",
             role=UserRole.CONSULTA,
         )
         supplier = Supplier.objects.create(

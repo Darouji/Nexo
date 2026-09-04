@@ -380,7 +380,7 @@ export function StatisticsPage() {
       <Stack spacing={2} sx={{ alignItems: "center", py: 6 }}>
         <CircularProgress />
         <Typography sx={{ color: colors.text.secondary }}>
-          Cargando estadísticas reales de SERKAN...
+          Cargando estadísticas reales de NEXO...
         </Typography>
       </Stack>
     );

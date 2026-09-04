@@ -51,7 +51,7 @@ class Migration(migrations.Migration):
                 'indexes': [models.Index(fields=['role', 'status'], name='accounts_us_role_9fc6ca_idx'), models.Index(fields=['username'], name='accounts_us_usernam_c0ea66_idx'), models.Index(fields=['email'], name='accounts_us_email_74c8d6_idx')],
             },
             managers=[
-                ('objects', apps.accounts.models.SerkanUserManager()),
+                ('objects', apps.accounts.models.NexoUserManager()),
             ],
         ),
     ]

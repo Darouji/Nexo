@@ -24,7 +24,7 @@ export function WelcomeScreen({
     <Box
       role="dialog"
       aria-modal="true"
-      aria-labelledby="serkan-welcome-title"
+      aria-labelledby="nexo-welcome-title"
       sx={{
         position: "fixed",
         inset: 0,
@@ -55,7 +55,7 @@ export function WelcomeScreen({
 
           <Box>
             <Typography
-              id="serkan-welcome-title"
+              id="nexo-welcome-title"
               variant="h3"
               sx={{
                 color: colors.text.primary,
@@ -69,7 +69,7 @@ export function WelcomeScreen({
               variant="h6"
               sx={{ color: colors.text.secondary, mt: 1.2, fontWeight: 500 }}
             >
-              Tu espacio de trabajo en SERKAN está preparado.
+              Tu espacio de trabajo en NEXO está preparado.
             </Typography>
           </Box>
 
@@ -81,7 +81,7 @@ export function WelcomeScreen({
             onClick={onContinue}
             sx={{ minWidth: { xs: "100%", sm: 260 }, minHeight: 48 }}
           >
-            Entrar a SERKAN
+            Entrar a NEXO
           </Button>
         </Stack>
       </Fade>

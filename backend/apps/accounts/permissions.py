@@ -1,4 +1,4 @@
-# Permisos de API compartidos por los dominios de SERKAN.
+# Permisos de API compartidos por los dominios de NEXO.
 # Esta capa aplica autorización en backend; los controles visuales de React sólo
 # reflejan estas decisiones y nunca deben considerarse una barrera de seguridad.
 from rest_framework.permissions import SAFE_METHODS, BasePermission
@@ -124,7 +124,7 @@ class CanViewAuditLogs(BasePermission):
     """
     Permiso para ver auditoría y trazabilidad sensible.
 
-    Decisión funcional SERKAN:
+    Decisión funcional NEXO:
     Administrador, Informático, RRHH y Finanzas/Comercial tienen acceso
     amplio debido al tamaño reducido del equipo interno.
 

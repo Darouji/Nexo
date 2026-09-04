@@ -30,12 +30,12 @@ class PurchaseApiContractTests(TestCase):
     def setUp(self):
         self.finance = User.objects.create_user(
             username="finanzas_api",
-            email="finanzas-api@serkan.test",
+            email="finanzas-api@example.invalid",
             role=UserRole.FINANZAS_COMERCIAL,
         )
         self.operator = User.objects.create_user(
             username="operativo_api",
-            email="operativo-api@serkan.test",
+            email="operativo-api@example.invalid",
             role=UserRole.OPERATIVO,
         )
         self.supplier = Supplier.objects.create(

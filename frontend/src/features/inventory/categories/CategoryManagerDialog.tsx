@@ -30,7 +30,7 @@ import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
-import { SerkanDataGrid, type SerkanGridPaginationModel } from "../../../components/SerkanDataGrid";
+import { NexoDataGrid, type NexoGridPaginationModel } from "../../../components/NexoDataGrid";
 import { getApiErrorMessage as getErrorMessage } from "../../../services/api";
 import {
   createCategory,
@@ -94,7 +94,7 @@ type CategoryProductsDialogState = {
   category: Category | null;
   products: Product[];
   rowCount: number;
-  paginationModel: SerkanGridPaginationModel;
+  paginationModel: NexoGridPaginationModel;
   loading: boolean;
 };
 
@@ -129,7 +129,7 @@ const emptyCategoryActionMenu: CategoryActionMenuState = {
   category: null,
 };
 
-const defaultCategoryProductsPaginationModel: SerkanGridPaginationModel = {
+const defaultCategoryProductsPaginationModel: NexoGridPaginationModel = {
   page: 0,
   pageSize: 10,
 };
@@ -282,7 +282,7 @@ export function CategoryManagerDialog({
   const loadCategoryProducts = useCallback(
     async (
       category: Category,
-      paginationModel: SerkanGridPaginationModel = defaultCategoryProductsPaginationModel,
+      paginationModel: NexoGridPaginationModel = defaultCategoryProductsPaginationModel,
     ) => {
       setCategoryProductsDialog((current) => ({
         ...current,
@@ -324,7 +324,7 @@ export function CategoryManagerDialog({
   );
 
   const handleCategoryProductsPaginationModelChange = useCallback(
-    (nextPaginationModel: SerkanGridPaginationModel) => {
+    (nextPaginationModel: NexoGridPaginationModel) => {
       const category = categoryProductsDialog.category;
 
       if (!category) {
@@ -704,7 +704,7 @@ export function CategoryManagerDialog({
               </Alert>
             ) : null}
 
-            <SerkanDataGrid
+            <NexoDataGrid
               gridKey="inventory.categories"
               ariaLabel="Gestión de categorías"
               rows={visibleCategories}
@@ -817,7 +817,7 @@ export function CategoryManagerDialog({
               producto en el inventario principal.
             </Alert>
 
-            <SerkanDataGrid
+            <NexoDataGrid
               gridKey="inventory.category-products"
               serverManaged
               ariaLabel="Productos asociados a la categoría"

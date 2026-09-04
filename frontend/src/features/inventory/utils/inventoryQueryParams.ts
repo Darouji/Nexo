@@ -1,7 +1,7 @@
 import type {
-  SerkanGridFilter,
-  SerkanGridPaginationModel,
-} from "../../../components/SerkanDataGrid";
+  NexoGridFilter,
+  NexoGridPaginationModel,
+} from "../../../components/NexoDataGrid";
 import type {
   AuditOrigin,
   PendingReceiptStatus,
@@ -22,8 +22,8 @@ type ProductQueryState = {
   stockControlFilter: string;
   stockStatusFilter: ProductStockStatus[];
   ordering: string;
-  paginationModel: SerkanGridPaginationModel;
-  columnFilters: SerkanGridFilter[];
+  paginationModel: NexoGridPaginationModel;
+  columnFilters: NexoGridFilter[];
 };
 
 type KardexQueryState = {
@@ -31,8 +31,8 @@ type KardexQueryState = {
   movementType: string[];
   origin: AuditOrigin[];
   ordering: string;
-  paginationModel: SerkanGridPaginationModel;
-  columnFilters: SerkanGridFilter[];
+  paginationModel: NexoGridPaginationModel;
+  columnFilters: NexoGridFilter[];
 };
 
 type PendingReceiptQueryState = {
@@ -41,8 +41,8 @@ type PendingReceiptQueryState = {
   dateFrom: string;
   dateTo: string;
   ordering: string;
-  paginationModel: SerkanGridPaginationModel;
-  columnFilters: SerkanGridFilter[];
+  paginationModel: NexoGridPaginationModel;
+  columnFilters: NexoGridFilter[];
 };
 
 export function buildProductPageParams(

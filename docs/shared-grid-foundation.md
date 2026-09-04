@@ -1,4 +1,4 @@
-# Núcleo transversal de grillas — SERKAN V2
+# Núcleo transversal de grillas — NEXO ERP/CRM
 
 ## Alcance del primer incremento
 

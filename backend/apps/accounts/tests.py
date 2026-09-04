@@ -19,7 +19,7 @@ class AuthSessionAndSecurityTests(APITestCase):
 
         self.admin = User.objects.create_superuser(
             username="Admin",
-            email="admin@serkan.local",
+            email="admin@example.invalid",
             password=self.admin_password,
             role=UserRole.ADMINISTRADOR,
             status=BaseStatus.ACTIVO,
@@ -27,7 +27,7 @@ class AuthSessionAndSecurityTests(APITestCase):
 
         self.operativo = User.objects.create_user(
             username="Operativo",
-            email="operativo@serkan.local",
+            email="operativo@example.invalid",
             password="StrongPass123!",
             role=UserRole.OPERATIVO,
             status=BaseStatus.ACTIVO,
@@ -47,7 +47,7 @@ class AuthSessionAndSecurityTests(APITestCase):
         self.assertIn("X-Request-ID", response)
 
     def test_request_id_can_be_sent_by_client(self):
-        request_id = "serkan-test-request-id"
+        request_id = "nexo-test-request-id"
 
         response = self.client.get(
             "/api/health/",
@@ -264,7 +264,7 @@ class AuthSessionAndSecurityTests(APITestCase):
     def test_delete_user_deactivates_without_hard_delete(self):
         target = User.objects.create_user(
             username="UsuarioTemporal",
-            email="temporal@serkan.local",
+            email="temporal@example.invalid",
             password="StrongPass123!",
             role=UserRole.CONSULTA,
             status=BaseStatus.ACTIVO,

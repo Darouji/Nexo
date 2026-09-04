@@ -3,7 +3,7 @@ from drf_spectacular.extensions import OpenApiAuthenticationExtension
 
 class ExpiringTokenAuthenticationScheme(OpenApiAuthenticationExtension):
     """
-    Documenta en OpenAPI el esquema de autenticación usado por SERKAN V2.
+    Documenta en OpenAPI el esquema de autenticación usado por NEXO ERP/CRM.
 
     El backend usa apps.accounts.authentication.ExpiringTokenAuthentication,
     que mantiene el formato estándar de DRF:

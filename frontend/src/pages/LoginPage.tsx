@@ -224,7 +224,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   >
                     Accede al sistema centralizado de ventas, inventario,
                     documentos, compras, alertas y trazabilidad operacional de
-                    SERKAN.
+                    NEXO.
                   </Typography>
                 </Box>
 
@@ -404,7 +404,7 @@ export function LoginPage({ onLoginSuccess }: LoginPageProps) {
                         },
                       }}
                     >
-                      {loading ? "Ingresando..." : "Ingresar a SERKAN V2"}
+                      {loading ? "Ingresando..." : "Ingresar a NEXO ERP/CRM"}
                     </Button>
                   </Stack>
                 </Box>

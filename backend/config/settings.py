@@ -42,7 +42,7 @@ def env_int(name, default):
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 
 DEV_FALLBACK_SECRET_KEY = (
-    "django-insecure-serkan-v2-local-dev-only-change-in-production"
+    "django-insecure-nexo-v2-local-dev-only-change-in-production"
 )
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", DEV_FALLBACK_SECRET_KEY)
 
@@ -129,7 +129,7 @@ if DB_ENGINE == "postgres":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.getenv("DB_NAME", "serkan_v2"),
+            "NAME": os.getenv("DB_NAME", "nexo_v2"),
             "USER": os.getenv("DB_USER", "postgres"),
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": os.getenv("DB_HOST", "localhost"),
@@ -296,9 +296,9 @@ LOGGING = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "SERKAN V2 API",
+    "TITLE": "NEXO ERP/CRM API",
     "DESCRIPTION": (
-        "API interna de SERKAN V2. "
+        "API interna de NEXO ERP/CRM. "
         "Django REST Framework es la fuente de verdad para autenticación, "
         "permisos, validaciones, auditoría, trazabilidad, inventario, ventas, "
         "documentos, importaciones y estadísticas."
@@ -330,7 +330,7 @@ SPECTACULAR_SETTINGS = {
             "description": "Health checks, auditoría, búsqueda global e inicio.",
         },
         {"name": "Accounts", "description": "Usuarios internos, roles y permisos."},
-        {"name": "Collaborators", "description": "Colaboradores internos de SERKAN."},
+        {"name": "Collaborators", "description": "Colaboradores internos de NEXO."},
         {
             "name": "Commercial",
             "description": "Holdings, mineras, áreas, subáreas y contactos.",
@@ -357,7 +357,7 @@ SPECTACULAR_SETTINGS = {
     ],
 }
 
-# Umbral operativo interno de SERKAN; no sustituye una regla legal aduanera.
+# Umbral operativo interno de NEXO; no sustituye una regla legal aduanera.
 PURCHASE_CUSTOMS_ALERT_THRESHOLD_USD = os.getenv(
     "PURCHASE_CUSTOMS_ALERT_THRESHOLD_USD", "5000"
 )

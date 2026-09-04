@@ -1,4 +1,4 @@
-# Compras, abastecimiento y costos — SERKAN
+# Compras, abastecimiento y costos — NEXO
 
 ## Propósito
 
@@ -23,7 +23,7 @@ operativo mínimo de Compras:
 
 Este alcance es un MVP funcional para continuidad interna y demostración. No se
 declara listo para producción ni reemplaza todavía todo el flujo administrativo
-y contable de SERKAN. Las limitaciones conocidas se conservan en la sección
+y contable de NEXO. Las limitaciones conocidas se conservan en la sección
 “Pendiente para completar Compras”.
 
 ## Reglas que no se pueden vulnerar
@@ -135,4 +135,4 @@ para aprobar, emitir, cancelar o cerrar órdenes.
 - Facturas, notas de crédito, pagos y conciliación documental.
 - Asignación productiva de costo aterrizado.
 - Adjuntos documentales y validación concurrente definitiva en PostgreSQL.
-- Cobertura OpenAPI final y prueba integral por usuarios de SERKAN.
+- Cobertura OpenAPI final y prueba integral por usuarios de NEXO.

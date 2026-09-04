@@ -1,7 +1,7 @@
 import axios, { AxiosHeaders, type AxiosError } from "axios";
 import { clearStoredAuth, getStoredToken } from "./authStorage";
 
-export const AUTH_UNAUTHORIZED_EVENT = "serkan:auth-unauthorized";
+export const AUTH_UNAUTHORIZED_EVENT = "nexo:auth-unauthorized";
 
 const rawBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 

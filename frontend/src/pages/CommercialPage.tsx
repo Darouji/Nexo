@@ -30,8 +30,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import { PageHeader } from "../components/PageHeader";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
-import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
+import { NexoDataGrid, type NexoGridFilter, type NexoGridSortModel } from "../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../components/filters/NexoFilterToolbar";
 import {
   createArea,
   createContacto,
@@ -467,8 +467,8 @@ export function CommercialPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
-  const [sortModel, setSortModel] = useState<SerkanGridSortModel>(null);
-  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [sortModel, setSortModel] = useState<NexoGridSortModel>(null);
+  const [columnFilters, setColumnFilters] = useState<NexoGridFilter[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1590,7 +1590,7 @@ export function CommercialPage() {
 
           <Divider />
 
-          <SerkanFilterToolbar
+          <NexoFilterToolbar
             searchLabel={`Buscar en ${tabLabels[activeTab].toLowerCase()}`}
             searchPlaceholder="Nombre, RUT, correo, teléfono, minera, área o subárea..."
             searchValue={searchTerm}
@@ -1609,7 +1609,7 @@ export function CommercialPage() {
             panelId="commercial-advanced-filters"
           >
             <Box />
-          </SerkanFilterToolbar>
+          </NexoFilterToolbar>
         </Stack>
       </Card>
 
@@ -1631,7 +1631,7 @@ export function CommercialPage() {
         </Alert>
       ) : null}
 
-      <SerkanDataGrid
+      <NexoDataGrid
         key={activeTab}
         gridKey={`commercial.${activeTab}`}
         serverManaged

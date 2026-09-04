@@ -105,7 +105,7 @@ def _customs_defaults(order, data):
         expected = True
         reason = (
             f"Supera el umbral operativo interno de USD {threshold:,.0f} "
-            "informado por SERKAN; confirmar gestión con courier o agente de aduanas."
+            "informado por NEXO; confirmar gestión con courier o agente de aduanas."
         )
     return expected, reason
 

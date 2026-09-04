@@ -111,7 +111,7 @@ class CanViewAuditLogs(BasePermission):
     """
     Permiso para ver auditoría y trazabilidad sensible.
 
-    Decisión funcional SERKAN:
+    Decisión funcional NEXO:
     Administrador, Informático, RRHH y Finanzas/Comercial tienen acceso
     amplio debido al tamaño reducido del equipo interno.
 

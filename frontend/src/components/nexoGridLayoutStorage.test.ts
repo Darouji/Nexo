@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { GridApi } from "ag-grid-community";
 
-import { restoreSerkanGridLayout } from "./serkanGridLayoutStorage";
+import { restoreNexoGridLayout } from "./nexoGridLayoutStorage";
 
 
 describe("migración local tolerante de grillas", () => {
@@ -11,7 +11,7 @@ describe("migración local tolerante de grillas", () => {
 
   it("conserva columnas conocidas y descarta las retiradas", () => {
     window.localStorage.setItem(
-      "serkan:grid-layout:inventory.products:v3",
+      "nexo:grid-layout:inventory.products:v3",
       JSON.stringify({
         schemaVersion: 3,
         columnDefinitionIds: ["modelo", "columna_retirada"],
@@ -36,7 +36,7 @@ describe("migración local tolerante de grillas", () => {
     const api = { applyColumnState } as unknown as GridApi;
 
     expect(
-      restoreSerkanGridLayout(api, "inventory.products", [
+      restoreNexoGridLayout(api, "inventory.products", [
         "modelo",
         "columna_nueva",
       ]),

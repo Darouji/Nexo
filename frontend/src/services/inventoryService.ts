@@ -737,7 +737,7 @@ export async function exportProducts(
     blob: response.data,
     filename:
       filenameMatch?.[1] ||
-      `serkan_catalogo_productos_${params.mode}.${params.file_format}`,
+      `nexo_catalogo_productos_${params.mode}.${params.file_format}`,
   };
 }
 
@@ -919,7 +919,7 @@ export async function exportKardexMovements(
     blob: response.data,
     filename:
       filenameMatch?.[1] ||
-      `serkan_kardex_global_${params.mode}.${params.file_format}`,
+      `nexo_kardex_global_${params.mode}.${params.file_format}`,
   };
 }
 
@@ -1002,7 +1002,7 @@ export async function exportPendingReceipts(
     blob: response.data,
     filename:
       filenameMatch?.[1] ||
-      `serkan_pendientes_por_recibir_${params.mode}.${params.file_format}`,
+      `nexo_pendientes_por_recibir_${params.mode}.${params.file_format}`,
   };
 }
 

@@ -234,7 +234,7 @@ class GlobalColumnLabelView(APIView):
 
     @extend_schema(
         tags=["Grid"],
-        summary="Renombrar una columna para toda SERKAN",
+        summary="Renombrar una columna para toda NEXO",
         request=GlobalColumnLabelWriteSerializer,
         responses=GlobalColumnLabelResponseSerializer,
     )

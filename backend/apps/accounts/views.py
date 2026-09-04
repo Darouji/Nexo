@@ -50,7 +50,7 @@ def get_login_rate_limit_key(request, username):
     ip_address = get_request_ip(request)
     normalized_username = (username or "").strip().lower()[:150]
 
-    return f"serkan-login:{ip_address}:{normalized_username}"
+    return f"nexo-login:{ip_address}:{normalized_username}"
 
 
 def get_login_rate_limit_status(cache_key):
@@ -186,7 +186,7 @@ def create_auth_audit_log(
     tags=["Auth"],
     summary="Iniciar sesión",
     description=(
-        "Autentica un usuario interno activo de SERKAN V2. "
+        "Autentica un usuario interno activo de NEXO ERP/CRM. "
         "Si las credenciales son válidas, rota el token anterior, crea un token nuevo, "
         "registra auditoría de login y devuelve datos de usuario, permisos visuales, "
         "menú disponible y expiración del token."
@@ -427,7 +427,7 @@ def session_view(request):
     tags=["Accounts"],
     summary="Crear usuario interno",
     description=(
-        "Crea una cuenta interna de SERKAN V2. "
+        "Crea una cuenta interna de NEXO ERP/CRM. "
         "No crea colaborador interno ni contacto externo. "
         "Solo roles autorizados pueden gestionar usuarios."
     ),

@@ -37,7 +37,7 @@ class UserAdmin(DjangoUserAdmin):
 
     fieldsets = DjangoUserAdmin.fieldsets + (
         (
-            "Datos internos SERKAN",
+            "Datos internos NEXO",
             {
                 "fields": (
                     "role",
@@ -57,7 +57,7 @@ class UserAdmin(DjangoUserAdmin):
 
     add_fieldsets = DjangoUserAdmin.add_fieldsets + (
         (
-            "Datos internos SERKAN",
+            "Datos internos NEXO",
             {
                 "fields": (
                     "email",

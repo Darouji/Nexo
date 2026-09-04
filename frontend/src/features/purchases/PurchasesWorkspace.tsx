@@ -12,9 +12,9 @@ import { SectionCard } from "../../components/SectionCard";
 import { MetricCard } from "../../components/MetricCard";
 import { CapabilityGate } from "../../components/CapabilityGate";
 import { LoadingState, StateFeedback } from "../../components/StateFeedback";
-import { SerkanDataGrid, type SerkanGridFilter } from "../../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../../components/filters/SerkanMultiSelectFilter";
+import { NexoDataGrid, type NexoGridFilter } from "../../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../../components/filters/NexoMultiSelectFilter";
 import { getApiErrorMessage, getApiFieldErrors } from "../../services/api";
 import { downloadBlob } from "../../services/download";
 import { createIdempotencyKey } from "../../services/idempotency";
@@ -412,7 +412,7 @@ export function PurchasesWorkspace() {
       pagination: { page: 0, pageSize: config.page_size },
       sort: config.sort,
       columnFilters: Array.isArray(config.filters.column_filters)
-        ? (config.filters.column_filters as SerkanGridFilter[])
+        ? (config.filters.column_filters as NexoGridFilter[])
         : [],
     };
     setSearch(next.search);
@@ -518,7 +518,7 @@ export function PurchasesWorkspace() {
           />
         ) : (
           <>
-        <SerkanFilterToolbar
+        <NexoFilterToolbar
           searchLabel={`Buscar ${sections[section].label.toLowerCase()}`}
           searchPlaceholder="Número, proveedor, identificación o estado..."
           searchValue={search}
@@ -536,22 +536,22 @@ export function PurchasesWorkspace() {
           activeFiltersCount={query.statuses.length + query.currencies.length + query.columnFilters.length}
           panelId={`purchases-${section}-filters`}
         >
-          <SerkanMultiSelectFilter label="Estado" options={statusOptions} value={query.statuses} onChange={(statuses) => updateQuery({ statuses })} />
+          <NexoMultiSelectFilter label="Estado" options={statusOptions} value={query.statuses} onChange={(statuses) => updateQuery({ statuses })} />
           {section === "orders" ? (
-            <SerkanMultiSelectFilter
+            <NexoMultiSelectFilter
               label="Moneda"
               options={[{ value: "CLP", label: "CLP" }, { value: "USD", label: "USD" }]}
               value={query.currencies}
               onChange={(currencies) => updateQuery({ currencies })}
             />
           ) : null}
-        </SerkanFilterToolbar>
+        </NexoFilterToolbar>
         {loading && rows.length === 0 ? (
           <LoadingState message="Cargando Compras..." />
         ) : error && rows.length === 0 ? (
           <StateFeedback title="No se pudo mostrar esta sección" description={error} severity="error" actionLabel="Reintentar" onAction={() => void load(section, query)} />
         ) : (
-          <SerkanDataGrid
+          <NexoDataGrid
             key={section}
             gridKey={sections[section].gridKey}
             serverManaged

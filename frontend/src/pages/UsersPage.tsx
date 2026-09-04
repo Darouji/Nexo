@@ -28,9 +28,9 @@ import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { ProfileDocumentsSection } from "../components/ProfileDocumentsSection";
-import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
+import { NexoDataGrid, type NexoGridFilter, type NexoGridSortModel } from "../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../components/filters/NexoMultiSelectFilter";
 import { createUser, fetchUsers, updateUser } from "../services/userService";
 import type { CreateUserPayload } from "../services/userService";
 import type { AuthUser } from "../types/auth";
@@ -259,8 +259,8 @@ export function UsersPage({ currentUser }: UsersPageProps) {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
-  const [sortModel, setSortModel] = useState<SerkanGridSortModel>(null);
-  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [sortModel, setSortModel] = useState<NexoGridSortModel>(null);
+  const [columnFilters, setColumnFilters] = useState<NexoGridFilter[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -626,7 +626,7 @@ export function UsersPage({ currentUser }: UsersPageProps) {
                 fontWeight: 500,
               }}
             >
-              Los usuarios son trabajadores de SERKAN con una cuenta para ingresar a la plataforma. El rol asignado define qué información y acciones puede utilizar cada persona.
+              Los usuarios son trabajadores de NEXO con una cuenta para ingresar a la plataforma. El rol asignado define qué información y acciones puede utilizar cada persona.
             </Typography>
           </Box>
 
@@ -732,7 +732,7 @@ export function UsersPage({ currentUser }: UsersPageProps) {
               </Typography>
             </Box>
 
-            <SerkanFilterToolbar
+            <NexoFilterToolbar
               searchLabel="Buscar usuarios"
               searchPlaceholder="Usuario, nombre, correo, cargo o departamento..."
               searchValue={searchTerm}
@@ -752,13 +752,13 @@ export function UsersPage({ currentUser }: UsersPageProps) {
               activeFiltersCount={roleFilter.length + statusFilter.length + columnFilters.length}
               panelId="users-advanced-filters"
             >
-              <SerkanMultiSelectFilter
+              <NexoMultiSelectFilter
                 label="Rol"
                 options={roleOptions.map((role) => ({ value: role.value, label: role.label }))}
                 value={roleFilter}
                 onChange={setRoleFilter}
               />
-              <SerkanMultiSelectFilter
+              <NexoMultiSelectFilter
                 label="Estado"
                 options={[
                   { value: "ACTIVO", label: "Activo" },
@@ -769,9 +769,9 @@ export function UsersPage({ currentUser }: UsersPageProps) {
                 value={statusFilter}
                 onChange={setStatusFilter}
               />
-            </SerkanFilterToolbar>
+            </NexoFilterToolbar>
 
-            <SerkanDataGrid
+            <NexoDataGrid
               gridKey="accounts.users"
               serverManaged
               clientManaged

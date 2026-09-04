@@ -9,13 +9,13 @@ import {
 
 import { CapabilityGate } from "../../components/CapabilityGate";
 import {
-  SerkanDataGrid,
-  type SerkanGridFilter,
-  type SerkanGridPaginationModel,
-  type SerkanGridSortModel,
-} from "../../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../../components/filters/SerkanMultiSelectFilter";
+  NexoDataGrid,
+  type NexoGridFilter,
+  type NexoGridPaginationModel,
+  type NexoGridSortModel,
+} from "../../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../../components/filters/NexoMultiSelectFilter";
 import { LoadingState, StateFeedback } from "../../components/StateFeedback";
 import { getApiErrorMessage, getApiFieldErrors } from "../../services/api";
 import { downloadBlob } from "../../services/download";
@@ -69,9 +69,9 @@ type LogisticsQuery = {
   search: string;
   statuses: string[];
   modes: string[];
-  pagination: SerkanGridPaginationModel;
-  sort: SerkanGridSortModel;
-  columnFilters: SerkanGridFilter[];
+  pagination: NexoGridPaginationModel;
+  sort: NexoGridSortModel;
+  columnFilters: NexoGridFilter[];
 };
 
 const emptyQuery = (): LogisticsQuery => ({
@@ -402,7 +402,7 @@ export function PurchaseLogisticsSection({
       pagination: { page: 0, pageSize: config.page_size },
       sort: config.sort,
       columnFilters: Array.isArray(config.filters.column_filters)
-        ? (config.filters.column_filters as SerkanGridFilter[])
+        ? (config.filters.column_filters as NexoGridFilter[])
         : [],
     };
     setSearch(next.search);
@@ -472,7 +472,7 @@ export function PurchaseLogisticsSection({
         </CapabilityGate>
       </Stack>
 
-      <SerkanFilterToolbar
+      <NexoFilterToolbar
         searchLabel="Buscar envíos e importaciones"
         searchPlaceholder="Orden, proveedor, transportista o seguimiento..."
         searchValue={search}
@@ -494,19 +494,19 @@ export function PurchaseLogisticsSection({
         }
         panelId="purchases-shipments-filters"
       >
-        <SerkanMultiSelectFilter
+        <NexoMultiSelectFilter
           label="Estado"
           options={SHIPMENT_STATUS_OPTIONS}
           value={query.statuses}
           onChange={(statuses) => updateQuery({ statuses })}
         />
-        <SerkanMultiSelectFilter
+        <NexoMultiSelectFilter
           label="Medio de transporte"
           options={SHIPMENT_MODE_OPTIONS}
           value={query.modes}
           onChange={(modes) => updateQuery({ modes })}
         />
-      </SerkanFilterToolbar>
+      </NexoFilterToolbar>
 
       {loading && rows.length === 0 ? (
         <LoadingState message="Cargando envíos e importaciones..." />
@@ -519,7 +519,7 @@ export function PurchaseLogisticsSection({
           onAction={() => void load(query)}
         />
       ) : (
-        <SerkanDataGrid
+        <NexoDataGrid
           gridKey="purchases.shipments"
           serverManaged
           ariaLabel="Envíos e importaciones"

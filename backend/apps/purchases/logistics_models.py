@@ -41,7 +41,7 @@ class ShipmentCustodian(models.TextChoices):
     AGENTE_ADUANA = "AGENTE_ADUANA", "Agente de aduanas"
     COURIER_CHILE = "COURIER_CHILE", "Courier en Chile"
     ULTIMA_MILLA = "ULTIMA_MILLA", "Transportista de última milla"
-    SERKAN = "SERKAN", "SERKAN"
+    EMPRESA = "EMPRESA", "EMPRESA"
     OTRO = "OTRO", "Otro"
 
 

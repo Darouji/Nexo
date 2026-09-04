@@ -1,6 +1,6 @@
 export type AppFontScale = "compact" | "standard" | "large";
 
-const FONT_SCALE_STORAGE_KEY = "serkan_font_scale";
+const FONT_SCALE_STORAGE_KEY = "nexo_font_scale";
 
 const scaleValues: Record<AppFontScale, string> = {
   compact: "14px",

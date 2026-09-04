@@ -60,7 +60,7 @@ def database_health_check():
     tags=["Core"],
     summary="Health check público",
     description=(
-        "Verifica que la API SERKAN V2 esté disponible. "
+        "Verifica que la API NEXO ERP/CRM esté disponible. "
         "Este endpoint es público y no entrega información sensible de configuración."
     ),
     responses={
@@ -73,7 +73,7 @@ def health_check(request):
     return Response(
         {
             "status": "ok",
-            "message": "API Serkan V2 funcionando",
+            "message": "API Nexo V2 funcionando",
             "version": "0.1.0",
         }
     )
@@ -132,7 +132,7 @@ def full_health_check(request):
     tags=["Core"],
     summary="Omnibox global",
     description=(
-        "Búsqueda global transversal de SERKAN V2. "
+        "Búsqueda global transversal de NEXO ERP/CRM. "
         "Debe respetar permisos del usuario autenticado y devolver resultados agrupados "
         "por tipo de entidad o módulo."
     ),

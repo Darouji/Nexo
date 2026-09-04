@@ -1,6 +1,6 @@
 import type { ColumnState, GridApi } from "ag-grid-community";
 
-const STORAGE_PREFIX = "serkan:grid-layout";
+const STORAGE_PREFIX = "nexo:grid-layout";
 const STORAGE_SCHEMA_VERSION = 3;
 
 const INTERNAL_COLUMN_IDS = new Set(["__row_number__"]);
@@ -136,7 +136,7 @@ function readStoredGridLayout(gridKey: string): PersistedGridLayout | null {
   }
 }
 
-export function restoreSerkanGridLayout<TRow>(
+export function restoreNexoGridLayout<TRow>(
   api: GridApi<TRow>,
   gridKey: string,
   columnDefinitionIds: string[],
@@ -162,7 +162,7 @@ export function restoreSerkanGridLayout<TRow>(
   });
 }
 
-export function persistSerkanGridLayout<TRow>(
+export function persistNexoGridLayout<TRow>(
   api: GridApi<TRow>,
   gridKey: string,
   columnDefinitionIds: string[],
@@ -200,7 +200,7 @@ export function persistSerkanGridLayout<TRow>(
   }
 }
 
-export function clearSerkanGridLayout(gridKey: string) {
+export function clearNexoGridLayout(gridKey: string) {
   if (typeof window === "undefined") {
     return;
   }

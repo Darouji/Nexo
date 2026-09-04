@@ -8,14 +8,14 @@ import {
 import type { ColDef } from "ag-grid-community";
 import { useState } from "react";
 
-import { SerkanFilterToolbar } from "../../../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../../../components/filters/SerkanMultiSelectFilter";
+import { NexoFilterToolbar } from "../../../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../../../components/filters/NexoMultiSelectFilter";
 import {
-  SerkanDataGrid,
-  type SerkanGridFilter,
-  type SerkanGridPaginationModel,
-  type SerkanGridSortModel,
-} from "../../../components/SerkanDataGrid";
+  NexoDataGrid,
+  type NexoGridFilter,
+  type NexoGridPaginationModel,
+  type NexoGridSortModel,
+} from "../../../components/NexoDataGrid";
 import { SectionCard } from "../../../components/SectionCard";
 import type {
   AuditOrigin,
@@ -41,15 +41,15 @@ type GlobalKardexSectionProps = {
   onSearch: () => void;
   onClearFilters: () => void;
 
-  paginationModel: SerkanGridPaginationModel;
+  paginationModel: NexoGridPaginationModel;
   onPaginationModelChange: (
-    nextPaginationModel: SerkanGridPaginationModel,
+    nextPaginationModel: NexoGridPaginationModel,
   ) => void;
   rowCount: number;
 
-  sortModel: SerkanGridSortModel;
-  onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
-  onColumnFiltersChange: (filters: SerkanGridFilter[]) => void;
+  sortModel: NexoGridSortModel;
+  onSortModelChange: (nextSortModel: NexoGridSortModel) => void;
+  onColumnFiltersChange: (filters: NexoGridFilter[]) => void;
   filterResetKey: number;
   onVisibleColumnsChange: (fieldKeys: string[]) => void;
   exporting: boolean;
@@ -131,7 +131,7 @@ export function GlobalKardexSection({
         </Stack>
       ) : (
         <>
-          <SerkanFilterToolbar
+          <NexoFilterToolbar
             searchLabel="Buscar movimiento"
             searchPlaceholder="Producto, código SAP, motivo, referencia u operador"
             searchValue={searchTerm}
@@ -144,7 +144,7 @@ export function GlobalKardexSection({
             activeFiltersCount={movementType.length + origin.length}
             panelId="global-kardex-filter-panel"
           >
-            <SerkanMultiSelectFilter
+            <NexoMultiSelectFilter
               label="Tipos de movimiento"
               options={[
                 { value: "ENTRADA_MANUAL", label: "Entrada manual" },
@@ -161,7 +161,7 @@ export function GlobalKardexSection({
               onChange={onMovementTypeChange}
             />
 
-            <SerkanMultiSelectFilter
+            <NexoMultiSelectFilter
               label="Orígenes"
               options={[
                 { value: "MANUAL", label: "Manual" },
@@ -176,9 +176,9 @@ export function GlobalKardexSection({
               value={origin}
               onChange={(values) => onOriginChange(values as AuditOrigin[])}
             />
-          </SerkanFilterToolbar>
+          </NexoFilterToolbar>
 
-          <SerkanDataGrid
+          <NexoDataGrid
             gridKey="inventory.global-kardex"
             ariaLabel="Kardex global de inventario"
             rows={movements}

@@ -17,13 +17,13 @@ class GridPreferenceApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="grid-user",
-            email="grid-user@serkan.cl",
+            email="grid-user@example.invalid",
             password="test-pass-123",
             role=UserRole.OPERATIVO,
         )
         self.other_user = User.objects.create_user(
             username="grid-other-user",
-            email="grid-other-user@serkan.cl",
+            email="grid-other-user@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )
@@ -128,13 +128,13 @@ class SavedViewApiTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="saved-view-user",
-            email="saved-view-user@serkan.cl",
+            email="saved-view-user@example.invalid",
             password="test-pass-123",
             role=UserRole.OPERATIVO,
         )
         self.other_user = User.objects.create_user(
             username="saved-view-other",
-            email="saved-view-other@serkan.cl",
+            email="saved-view-other@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )
@@ -269,13 +269,13 @@ class GlobalColumnLabelApiTests(TestCase):
     def setUp(self):
         self.manager = User.objects.create_user(
             username="grid-label-manager",
-            email="grid-label-manager@serkan.cl",
+            email="grid-label-manager@example.invalid",
             password="test-pass-123",
             role=UserRole.RRHH,
         )
         self.operative = User.objects.create_user(
             username="grid-label-operative",
-            email="grid-label-operative@serkan.cl",
+            email="grid-label-operative@example.invalid",
             password="test-pass-123",
             role=UserRole.OPERATIVO,
         )

@@ -1,4 +1,4 @@
-// Design Tokens - SERKAN V2
+// Design Tokens - NEXO ERP/CRM
 // Paleta activa: clarityBalanced
 //
 // Regla irrompible:
@@ -11,7 +11,7 @@ export type ThemeMode = "dark" | "light";
 export const ACTIVE_THEME_PRESET: ThemePreset = "clarityBalanced";
 
 // Cambia solo esta línea para alternar entre modo oscuro y claro.
-const THEME_MODE_STORAGE_KEY = "serkan_theme_mode";
+const THEME_MODE_STORAGE_KEY = "nexo_theme_mode";
 
 function resolveActiveThemeMode(): ThemeMode {
   if (typeof window === "undefined") {
@@ -66,7 +66,7 @@ const palettes = {
       },
 
       brand: {
-        serkanBlue: "#001034",
+        nexoBlue: "#001034",
       },
 
       primary: {
@@ -226,7 +226,7 @@ const palettes = {
       },
 
       brand: {
-        serkanBlue: "#001034",
+        nexoBlue: "#001034",
       },
 
       primary: {

@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 
 import { colors } from "../../theme/colors";
 
-type SerkanFilterToolbarProps = {
+type NexoFilterToolbarProps = {
   searchLabel: string;
   searchPlaceholder: string;
   searchValue: string;
@@ -27,7 +27,7 @@ type SerkanFilterToolbarProps = {
   panelId: string;
 };
 
-export function SerkanFilterToolbar({
+export function NexoFilterToolbar({
   searchLabel,
   searchPlaceholder,
   searchValue,
@@ -40,7 +40,7 @@ export function SerkanFilterToolbar({
   activeFiltersCount,
   children,
   panelId,
-}: SerkanFilterToolbarProps) {
+}: NexoFilterToolbarProps) {
   return (
     <Stack spacing={1.5} sx={{ mb: 2 }}>
       <Stack

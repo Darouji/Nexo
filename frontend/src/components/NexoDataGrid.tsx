@@ -5,7 +5,7 @@ import BookmarkAddIcon from "@mui/icons-material/BookmarkAdd";
 import DeleteIcon from "@mui/icons-material/Delete";
 import { AgGridReact } from "ag-grid-react";
 import { colors } from "../theme/colors";
-import { serkanGridLocaleEs } from "./serkanGridLocaleEs";
+import { nexoGridLocaleEs } from "./nexoGridLocaleEs";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getApiErrorMessage } from "../services/api";
 import {
@@ -24,10 +24,10 @@ import {
 } from "../services/gridService";
 
 import {
-  clearSerkanGridLayout,
-  persistSerkanGridLayout,
-  restoreSerkanGridLayout,
-} from "./serkanGridLayoutStorage";
+  clearNexoGridLayout,
+  persistNexoGridLayout,
+  restoreNexoGridLayout,
+} from "./nexoGridLayoutStorage";
 
 import {
   Box,
@@ -59,21 +59,21 @@ import {
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const SERKAN_GRID_FONT_SIZE = 12;
-const SERKAN_GRID_ROW_HEIGHT = 46;
-const SERKAN_GRID_HEADER_HEIGHT = 43;
+const NEXO_GRID_FONT_SIZE = 12;
+const NEXO_GRID_ROW_HEIGHT = 46;
+const NEXO_GRID_HEADER_HEIGHT = 43;
 
-export type SerkanGridPaginationModel = {
+export type NexoGridPaginationModel = {
   page: number;
   pageSize: number;
 };
 
-export type SerkanGridSortModel = {
+export type NexoGridSortModel = {
   field: string;
   direction: "asc" | "desc";
 } | null;
 
-export type SerkanGridFilter = {
+export type NexoGridFilter = {
   field: string;
   operator: string;
   value: string | number;
@@ -89,7 +89,7 @@ type ColumnLayoutEvent<TRow extends IdentifiableRow> = {
   finished?: boolean;
 };
 
-type SerkanDataGridProps<TRow extends IdentifiableRow> = {
+type NexoDataGridProps<TRow extends IdentifiableRow> = {
   gridKey: string;
   serverManaged?: boolean;
   clientManaged?: boolean;
@@ -100,13 +100,13 @@ type SerkanDataGridProps<TRow extends IdentifiableRow> = {
   height?: number | string;
   minHeight?: number | string;
 
-  paginationModel: SerkanGridPaginationModel;
-  onPaginationModelChange: (model: SerkanGridPaginationModel) => void;
+  paginationModel: NexoGridPaginationModel;
+  onPaginationModelChange: (model: NexoGridPaginationModel) => void;
   rowCount: number;
 
-  sortModel?: SerkanGridSortModel;
-  onSortModelChange?: (model: SerkanGridSortModel) => void;
-  onFilterModelChange?: (filters: SerkanGridFilter[]) => void;
+  sortModel?: NexoGridSortModel;
+  onSortModelChange?: (model: NexoGridSortModel) => void;
+  onFilterModelChange?: (filters: NexoGridFilter[]) => void;
   filterResetKey?: number;
   onVisibleColumnsChange?: (fieldKeys: string[]) => void;
   namedViewFilters?: Record<string, string>;
@@ -114,7 +114,7 @@ type SerkanDataGridProps<TRow extends IdentifiableRow> = {
   footerSummary?: ReactNode;
 };
 
-const serkanGridTheme = themeQuartz.withParams({
+const nexoGridTheme = themeQuartz.withParams({
   accentColor: colors.primary.main,
   backgroundColor: colors.background.paper,
   foregroundColor: colors.text.primary,
@@ -122,7 +122,7 @@ const serkanGridTheme = themeQuartz.withParams({
   headerBackgroundColor: colors.background.header,
   headerTextColor: colors.text.secondary,
   rowHoverColor: colors.action.hover,
-  fontSize: SERKAN_GRID_FONT_SIZE,
+  fontSize: NEXO_GRID_FONT_SIZE,
   spacing: 8,
 });
 
@@ -151,15 +151,15 @@ function NoRowsOverlay() {
 }
 
 function areSortModelsEqual(
-  current: SerkanGridSortModel | undefined,
-  next: SerkanGridSortModel,
+  current: NexoGridSortModel | undefined,
+  next: NexoGridSortModel,
 ) {
   return (
     current?.field === next?.field && current?.direction === next?.direction
   );
 }
 
-function toSerkanGridFilters(
+function toNexoGridFilters(
   filterModel: Record<
     string,
     {
@@ -168,7 +168,7 @@ function toSerkanGridFilters(
       filterTo?: string | number;
     }
   >,
-): SerkanGridFilter[] {
+): NexoGridFilter[] {
   return Object.entries(filterModel)
     .filter(([, model]) => model.type && model.filter !== undefined)
     .map(([field, model]) => ({
@@ -179,7 +179,7 @@ function toSerkanGridFilters(
     }));
 }
 
-function toAgGridFilterModel(filters: SerkanGridFilter[]) {
+function toAgGridFilterModel(filters: NexoGridFilter[]) {
   return Object.fromEntries(
     filters.map((filter) => [
       filter.field,
@@ -206,7 +206,7 @@ function toInitialLayoutColumn<TRow>(column: ColDef<TRow>): ColDef<TRow> {
   };
 }
 
-export function SerkanDataGrid<TRow extends IdentifiableRow>({
+export function NexoDataGrid<TRow extends IdentifiableRow>({
   gridKey,
   serverManaged = false,
   clientManaged = false,
@@ -227,7 +227,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
   namedViewFilters = {},
   onNamedViewApply,
   footerSummary,
-}: SerkanDataGridProps<TRow>) {
+}: NexoDataGridProps<TRow>) {
   const gridApiRef = useRef<GridApi<TRow> | null>(null);
 
   const paginationModelRef = useRef(paginationModel);
@@ -275,7 +275,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
       suppressMovable: true,
       lockPosition: "left",
       pinned: "left",
-      headerClass: "serkan-grid-centered-header",
+      headerClass: "nexo-grid-centered-header",
       cellStyle: {
         textAlign: "center",
         fontVariantNumeric: "tabular-nums",
@@ -397,7 +397,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     (api: GridApi<TRow>) => {
       isApplyingStoredLayoutRef.current = true;
 
-      const restored = restoreSerkanGridLayout(api, gridKey, layoutColumnIds);
+      const restored = restoreNexoGridLayout(api, gridKey, layoutColumnIds);
 
       applyControlledSort(api);
       enforceActionsColumnPolicy(api);
@@ -559,7 +559,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         return;
       }
 
-      const persisted = persistSerkanGridLayout(
+      const persisted = persistNexoGridLayout(
         event.api,
         gridKey,
         layoutColumnIds,
@@ -584,7 +584,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
 
     isApplyingStoredLayoutRef.current = true;
 
-    clearSerkanGridLayout(gridKey);
+    clearNexoGridLayout(gridKey);
     api.resetColumnState();
     applyControlledSort(api);
 
@@ -648,7 +648,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
           (columnState.sort === "asc" || columnState.sort === "desc"),
       );
 
-    const nextSortModel: SerkanGridSortModel = sortedColumn
+    const nextSortModel: NexoGridSortModel = sortedColumn
       ? {
           field: sortedColumn.colId,
           direction: sortedColumn.sort as "asc" | "desc",
@@ -672,7 +672,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
     }
 
     onFilterModelChange(
-      toSerkanGridFilters(gridApiRef.current.getFilterModel()),
+      toNexoGridFilters(gridApiRef.current.getFilterModel()),
     );
   };
 
@@ -696,7 +696,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
 
       enforceActionsColumnPolicy(api);
       const columnFilters = Array.isArray(view.config.filters.column_filters)
-        ? (view.config.filters.column_filters as SerkanGridFilter[])
+        ? (view.config.filters.column_filters as NexoGridFilter[])
         : [];
       api.setFilterModel(toAgGridFilterModel(columnFilters));
       emitVisibleColumns(api);
@@ -718,7 +718,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
 
     try {
       setSavingNamedView(true);
-      const columnFilters = toSerkanGridFilters(api.getFilterModel());
+      const columnFilters = toNexoGridFilters(api.getFilterModel());
       const savedView = await createSavedGridView(gridKey, {
         name: normalizedName,
         is_default: newSavedViewIsDefault,
@@ -943,8 +943,8 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         ) : null}
 
         <AgGridReact<TRow>
-          theme={serkanGridTheme}
-          localeText={serkanGridLocaleEs}
+          theme={nexoGridTheme}
+          localeText={nexoGridLocaleEs}
           onGridReady={(event) => void handleGridReady(event.api)}
           rowData={rows}
           columnDefs={resolvedColumns}
@@ -979,8 +979,8 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
                 }
               : undefined
           }
-          rowHeight={SERKAN_GRID_ROW_HEIGHT}
-          headerHeight={SERKAN_GRID_HEADER_HEIGHT}
+          rowHeight={NEXO_GRID_ROW_HEIGHT}
+          headerHeight={NEXO_GRID_HEADER_HEIGHT}
           sortingOrder={["asc", "desc", null]}
         />
       </Box>
@@ -1282,7 +1282,7 @@ export function SerkanDataGrid<TRow extends IdentifiableRow>({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Renombrar columna para toda SERKAN</DialogTitle>
+        <DialogTitle>Renombrar columna para toda NEXO</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             <Alert severity="warning">

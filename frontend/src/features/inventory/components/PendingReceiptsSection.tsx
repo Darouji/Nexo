@@ -9,14 +9,14 @@ import {
 import type { ColDef } from "ag-grid-community";
 import { useState, type Ref } from "react";
 
-import { SerkanFilterToolbar } from "../../../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../../../components/filters/SerkanMultiSelectFilter";
+import { NexoFilterToolbar } from "../../../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../../../components/filters/NexoMultiSelectFilter";
 import {
-  SerkanDataGrid,
-  type SerkanGridFilter,
-  type SerkanGridPaginationModel,
-  type SerkanGridSortModel,
-} from "../../../components/SerkanDataGrid";
+  NexoDataGrid,
+  type NexoGridFilter,
+  type NexoGridPaginationModel,
+  type NexoGridSortModel,
+} from "../../../components/NexoDataGrid";
 import { SectionCard } from "../../../components/SectionCard";
 import type { SavedGridViewConfig } from "../../../services/gridService";
 import type {
@@ -45,15 +45,15 @@ type PendingReceiptsSectionProps = {
   onSearch: () => void;
   onClearFilters: () => void;
 
-  paginationModel: SerkanGridPaginationModel;
+  paginationModel: NexoGridPaginationModel;
   onPaginationModelChange: (
-    nextPaginationModel: SerkanGridPaginationModel,
+    nextPaginationModel: NexoGridPaginationModel,
   ) => void;
   rowCount: number;
 
-  sortModel: SerkanGridSortModel;
-  onSortModelChange: (nextSortModel: SerkanGridSortModel) => void;
-  onColumnFiltersChange: (filters: SerkanGridFilter[]) => void;
+  sortModel: NexoGridSortModel;
+  onSortModelChange: (nextSortModel: NexoGridSortModel) => void;
+  onColumnFiltersChange: (filters: NexoGridFilter[]) => void;
   filterResetKey: number;
   onVisibleColumnsChange: (fieldKeys: string[]) => void;
   onNamedViewApply: (config: SavedGridViewConfig) => void;
@@ -138,7 +138,7 @@ export function PendingReceiptsSection({
           </Alert>
         ) : null}
 
-        <SerkanFilterToolbar
+        <NexoFilterToolbar
           searchLabel="Buscar pendiente"
           searchPlaceholder="Producto, código SAP, categoría, OC, factura o motivo"
           searchValue={searchTerm}
@@ -153,7 +153,7 @@ export function PendingReceiptsSection({
           }
           panelId="pending-receipts-filter-panel"
         >
-          <SerkanMultiSelectFilter
+          <NexoMultiSelectFilter
             label="Estados"
             options={[
               { value: "PENDIENTE", label: "Pendiente" },
@@ -185,10 +185,10 @@ export function PendingReceiptsSection({
             slotProps={{ inputLabel: { shrink: true } }}
             fullWidth
           />
-        </SerkanFilterToolbar>
+        </NexoFilterToolbar>
 
 
-        <SerkanDataGrid
+        <NexoDataGrid
           gridKey="inventory.pending-receipts"
           serverManaged
           ariaLabel="Pendientes por recibir de inventario"

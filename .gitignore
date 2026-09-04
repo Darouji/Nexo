@@ -35,3 +35,19 @@ Thumbs.db
 # Archivos generados
 schema.yml
 backend/schema.yml
+
+# Private preparation, local data and credentials
+.portfolio-workspace/
+.venv/
+*.sqlite3.*
+*.db
+*.db.*
+*.bak
+*.backup*
+*.dump
+*.pem
+*.key
+*.p12
+*.pfx
+.coverage
+htmlcov/

@@ -1,8 +1,8 @@
 import type {
-  SerkanGridFilter,
-  SerkanGridPaginationModel,
-  SerkanGridSortModel,
-} from "../../components/SerkanDataGrid";
+  NexoGridFilter,
+  NexoGridPaginationModel,
+  NexoGridSortModel,
+} from "../../components/NexoDataGrid";
 import type { PurchaseListParams } from "../../services/purchasesService";
 import { serializeGridFilters } from "../../services/purchasesService";
 
@@ -10,9 +10,9 @@ export type PurchaseQueryState = {
   search: string;
   statuses: string[];
   currencies: string[];
-  pagination: SerkanGridPaginationModel;
-  sort: SerkanGridSortModel;
-  columnFilters: SerkanGridFilter[];
+  pagination: NexoGridPaginationModel;
+  sort: NexoGridSortModel;
+  columnFilters: NexoGridFilter[];
 };
 
 export function buildPurchaseQueryParams(

@@ -8,10 +8,10 @@ import type { AccessPayload, AuthUser } from "../types/auth";
 const user: AuthUser = {
   id: 1,
   username: "gestor",
-  email: "gestor@serkan.cl",
+  email: "gestor@example.invalid",
   first_name: "Gestor",
-  last_name: "SERKAN",
-  full_name: "Gestor SERKAN",
+  last_name: "NEXO",
+  full_name: "Gestor NEXO",
   role: "RRHH",
   role_display: "RRHH",
   status: "ACTIVO",
@@ -42,7 +42,7 @@ function storeAccess(canUpdate: boolean) {
     },
   };
 
-  window.localStorage.setItem("serkan_auth_access", JSON.stringify(access));
+  window.localStorage.setItem("nexo_auth_access", JSON.stringify(access));
 }
 
 

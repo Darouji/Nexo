@@ -105,7 +105,7 @@ class InventoryLocationServiceTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="location-admin",
-            email="location-admin@serkan.cl",
+            email="location-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
@@ -296,13 +296,13 @@ class InventoryLocationApiTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_user(
             username="location-api-admin",
-            email="location-api-admin@serkan.cl",
+            email="location-api-admin@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
         self.reader = User.objects.create_user(
             username="location-api-reader",
-            email="location-api-reader@serkan.cl",
+            email="location-api-reader@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )

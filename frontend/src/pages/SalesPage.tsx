@@ -27,9 +27,9 @@ import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageHeader } from "../components/PageHeader";
 import { SectionCard } from "../components/SectionCard";
 import { MetricCard } from "../components/MetricCard";
-import { SerkanDataGrid, type SerkanGridFilter, type SerkanGridSortModel } from "../components/SerkanDataGrid";
-import { SerkanFilterToolbar } from "../components/filters/SerkanFilterToolbar";
-import { SerkanMultiSelectFilter } from "../components/filters/SerkanMultiSelectFilter";
+import { NexoDataGrid, type NexoGridFilter, type NexoGridSortModel } from "../components/NexoDataGrid";
+import { NexoFilterToolbar } from "../components/filters/NexoFilterToolbar";
+import { NexoMultiSelectFilter } from "../components/filters/NexoMultiSelectFilter";
 import { getApiErrorMessage as getErrorMessage, getApiFieldErrors } from "../services/api";
 import {
   fetchAreas,
@@ -248,8 +248,8 @@ export function SalesPage() {
   const [dateTo, setDateTo] = useState("");
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [pagination, setPagination] = useState({ page: 0, pageSize: 25 });
-  const [sortModel, setSortModel] = useState<SerkanGridSortModel>({ field: "fecha_venta", direction: "desc" });
-  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [sortModel, setSortModel] = useState<NexoGridSortModel>({ field: "fecha_venta", direction: "desc" });
+  const [columnFilters, setColumnFilters] = useState<NexoGridFilter[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [salesCount, setSalesCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -275,7 +275,7 @@ export function SalesPage() {
   const [detailPagination, setDetailPagination] = useState({ page: 0, pageSize: 25 });
   const [alertPagination, setAlertPagination] = useState({ page: 0, pageSize: 25 });
 
-  const loadSales = async (options?: { search?: string; statuses?: string[]; validations?: string[]; from?: string; to?: string; page?: number; pageSize?: number; sort?: SerkanGridSortModel; filters?: SerkanGridFilter[] }) => {
+  const loadSales = async (options?: { search?: string; statuses?: string[]; validations?: string[]; from?: string; to?: string; page?: number; pageSize?: number; sort?: NexoGridSortModel; filters?: NexoGridFilter[] }) => {
     const querySearch = options?.search ?? appliedSearch;
     const queryStatuses = options?.statuses ?? saleStatuses;
     const queryValidations = options?.validations ?? validationSummaries;
@@ -774,7 +774,7 @@ export function SalesPage() {
         subtitle="Filtros remotos, vistas personales, columnas configurables y acciones comerciales."
         actions={<><Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreateSale} disabled={loading}>Nueva venta</Button><Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => void loadSales()} disabled={loading}>Actualizar</Button></>}
       >
-        <SerkanFilterToolbar
+        <NexoFilterToolbar
           searchLabel="Buscar ventas" searchPlaceholder="Minera, OC, factura, guía, producto o estado..."
           searchValue={searchTerm} onSearchValueChange={setSearchTerm}
           onApply={() => { setAppliedSearch(searchTerm); setPagination((current) => ({ ...current, page: 0 })); void loadSales({ search: searchTerm, page: 0 }); }}
@@ -787,13 +787,13 @@ export function SalesPage() {
           activeFiltersCount={saleStatuses.length + validationSummaries.length + Number(Boolean(dateFrom)) + Number(Boolean(dateTo)) + columnFilters.length}
           panelId="sales-advanced-filters"
         >
-          <SerkanMultiSelectFilter label="Estado" options={[{ value: "INGRESADA", label: "Ingresada" }, { value: "CONCRETADA", label: "Concretada" }, { value: "ANULADA", label: "Anulada" }]} value={saleStatuses} onChange={setSaleStatuses} />
-          <SerkanMultiSelectFilter label="Validación" options={[{ value: "OK", label: "Sin alertas" }, { value: "CON_ALERTAS", label: "Con alertas" }, { value: "BLOQUEANTE", label: "Bloqueante" }]} value={validationSummaries} onChange={setValidationSummaries} />
+          <NexoMultiSelectFilter label="Estado" options={[{ value: "INGRESADA", label: "Ingresada" }, { value: "CONCRETADA", label: "Concretada" }, { value: "ANULADA", label: "Anulada" }]} value={saleStatuses} onChange={setSaleStatuses} />
+          <NexoMultiSelectFilter label="Validación" options={[{ value: "OK", label: "Sin alertas" }, { value: "CON_ALERTAS", label: "Con alertas" }, { value: "BLOQUEANTE", label: "Bloqueante" }]} value={validationSummaries} onChange={setValidationSummaries} />
           <TextField label="Desde" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <TextField label="Hasta" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} slotProps={{ inputLabel: { shrink: true } }} />
           <Button variant="contained" onClick={() => { setAppliedSearch(searchTerm); setPagination((current) => ({ ...current, page: 0 })); void loadSales({ search: searchTerm, statuses: saleStatuses, validations: validationSummaries, from: dateFrom, to: dateTo, page: 0 }); }}>Aplicar filtros</Button>
-        </SerkanFilterToolbar>
-        <SerkanDataGrid
+        </NexoFilterToolbar>
+        <NexoDataGrid
           gridKey="sales.sales" serverManaged ariaLabel="Listado de ventas" rows={sales} columns={columns} loading={loading}
           paginationModel={pagination} onPaginationModelChange={(next) => { setPagination(next); void loadSales({ page: next.page, pageSize: next.pageSize }); }} rowCount={salesCount}
           sortModel={sortModel} onSortModelChange={(next) => { setSortModel(next); setPagination((current) => ({ ...current, page: 0 })); void loadSales({ sort: next, page: 0 }); }}
@@ -1246,7 +1246,7 @@ export function SalesPage() {
               Líneas de venta
             </Typography>
 
-            <SerkanDataGrid
+            <NexoDataGrid
               gridKey="sales.details"
               ariaLabel="Líneas de la venta"
               rows={visibleDetails}
@@ -1267,7 +1267,7 @@ export function SalesPage() {
                 Esta venta no tiene alertas activas.
               </Alert>
             ) : (
-              <SerkanDataGrid
+              <NexoDataGrid
                 gridKey="sales.alerts"
                 ariaLabel="Alertas activas de la venta"
                 rows={visibleAlerts}

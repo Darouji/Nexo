@@ -15,13 +15,13 @@ class CatalogGridApiTests(TestCase):
     def setUp(self):
         self.manager = User.objects.create_user(
             username="catalog-grid-manager",
-            email="catalog-grid-manager@serkan.cl",
+            email="catalog-grid-manager@example.invalid",
             password="test-pass-123",
             role=UserRole.ADMINISTRADOR,
         )
         self.reader = User.objects.create_user(
             username="catalog-grid-reader",
-            email="catalog-grid-reader@serkan.cl",
+            email="catalog-grid-reader@example.invalid",
             password="test-pass-123",
             role=UserRole.CONSULTA,
         )

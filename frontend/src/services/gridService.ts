@@ -49,10 +49,10 @@ export type SavedGridViewConfig = GridPreference["config"] & {
     field: string;
     direction: "asc" | "desc";
   } | null;
-  filters: Record<string, string | SerkanStoredGridFilter[]>;
+  filters: Record<string, string | NexoStoredGridFilter[]>;
 };
 
-export type SerkanStoredGridFilter = {
+export type NexoStoredGridFilter = {
   field: string;
   operator: string;
   value: string | number;

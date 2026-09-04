@@ -37,7 +37,7 @@ class PurchaseFlowTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             username="compras",
-            email="compras@serkan.test",
+            email="compras@example.invalid",
             role=UserRole.FINANZAS_COMERCIAL,
         )
         self.supplier = Supplier.objects.create(
@@ -254,15 +254,15 @@ class PurchaseFlowTests(TestCase):
 class PurchasePermissionTests(TestCase):
     def setUp(self):
         self.finance = User.objects.create_user(
-            username="finanzas", email="finanzas@serkan.test",
+            username="finanzas", email="finanzas@example.invalid",
             role=UserRole.FINANZAS_COMERCIAL,
         )
         self.operator = User.objects.create_user(
-            username="operativo", email="operativo@serkan.test",
+            username="operativo", email="operativo@example.invalid",
             role=UserRole.OPERATIVO,
         )
         self.it_user = User.objects.create_user(
-            username="informatica", email="informatica@serkan.test",
+            username="informatica", email="informatica@example.invalid",
             role=UserRole.INFORMATICO,
         )
         self.client = APIClient()

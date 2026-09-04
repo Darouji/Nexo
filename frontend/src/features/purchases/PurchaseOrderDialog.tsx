@@ -122,7 +122,7 @@ export function PurchaseOrderDialog({
                 value={form.number}
                 onChange={(event) => onChange({ ...form, number: event.target.value })}
                 error={Boolean(errors.number)}
-                helperText={errors.number || "Si lo dejas vacío, SERKAN asignará el siguiente número oficial."}
+                helperText={errors.number || "Si lo dejas vacío, NEXO asignará el siguiente número oficial."}
               />
               <TextField
                 select

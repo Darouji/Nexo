@@ -256,6 +256,6 @@ class PurchaseShipmentViewSet(
             self,
             request,
             SHIPMENT_GRID_DEFINITION,
-            "serkan_envios_importaciones",
+            "nexo_envios_importaciones",
             "Envíos e importaciones",
         )

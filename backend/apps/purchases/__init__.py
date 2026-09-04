@@ -1,1 +1,1 @@
-"""Dominio de Compras de SERKAN."""
+"""Dominio de Compras de NEXO."""

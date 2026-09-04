@@ -2,10 +2,10 @@ import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
-  SerkanGridFilter,
-  SerkanGridPaginationModel,
-  SerkanGridSortModel,
-} from "../../../components/SerkanDataGrid";
+  NexoGridFilter,
+  NexoGridPaginationModel,
+  NexoGridSortModel,
+} from "../../../components/NexoDataGrid";
 import { getApiErrorMessage } from "../../../services/api";
 import type { SavedGridViewConfig } from "../../../services/gridService";
 import {
@@ -33,13 +33,13 @@ export function useProductCatalogController({
   const [products, setProducts] = useState<Product[]>([]);
   const [rowCount, setRowCount] = useState(0);
   const [paginationModel, setPaginationModel] =
-    useState<SerkanGridPaginationModel>(defaultProductPaginationModel);
-  const [sortModel, setSortModel] = useState<SerkanGridSortModel>({
+    useState<NexoGridPaginationModel>(defaultProductPaginationModel);
+  const [sortModel, setSortModel] = useState<NexoGridSortModel>({
     field: "categoria__name",
     direction: "asc",
   });
   const [ordering, setOrdering] = useState("categoria__name,modelo");
-  const [columnFilters, setColumnFilters] = useState<SerkanGridFilter[]>([]);
+  const [columnFilters, setColumnFilters] = useState<NexoGridFilter[]>([]);
   const [filterResetKey, setFilterResetKey] = useState(0);
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -165,7 +165,7 @@ export function useProductCatalogController({
   );
 
   const changePagination = useCallback(
-    (nextPaginationModel: SerkanGridPaginationModel) => {
+    (nextPaginationModel: NexoGridPaginationModel) => {
       setPaginationModel(nextPaginationModel);
       void loadProducts({
         page: nextPaginationModel.page,
@@ -176,7 +176,7 @@ export function useProductCatalogController({
   );
 
   const changeSort = useCallback(
-    (nextSortModel: SerkanGridSortModel) => {
+    (nextSortModel: NexoGridSortModel) => {
       const nextOrdering = nextSortModel
         ? `${nextSortModel.direction === "desc" ? "-" : ""}${nextSortModel.field}`
         : "categoria__name,modelo";
@@ -195,7 +195,7 @@ export function useProductCatalogController({
   );
 
   const changeColumnFilters = useCallback(
-    (nextFilters: SerkanGridFilter[]) => {
+    (nextFilters: NexoGridFilter[]) => {
       const nextPaginationModel = { ...paginationModel, page: 0 };
 
       setColumnFilters(nextFilters);
@@ -246,7 +246,7 @@ export function useProductCatalogController({
       };
       const savedColumnFilters = config.filters.column_filters;
       const nextColumnFilters = Array.isArray(savedColumnFilters)
-        ? (savedColumnFilters as SerkanGridFilter[])
+        ? (savedColumnFilters as NexoGridFilter[])
         : [];
       const nextSortModel = config.sort;
       const nextOrdering = nextSortModel

@@ -1,7 +1,7 @@
 """
 Signals de ventas desactivados intencionalmente.
 
-SERKAN V2 ya no modifica stock mediante signals automáticos de Django.
+NEXO ERP/CRM ya no modifica stock mediante signals automáticos de Django.
 
 Regla actual:
 - Crear venta con detalles se hace desde apps.sales.services.create_sale_with_details().

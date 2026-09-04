@@ -1,6 +1,6 @@
 export type AppThemeMode = "light" | "dark";
 
-const THEME_MODE_STORAGE_KEY = "serkan_theme_mode";
+const THEME_MODE_STORAGE_KEY = "nexo_theme_mode";
 
 export function getStoredThemeMode(defaultMode: AppThemeMode = "light") {
   if (typeof window === "undefined") {

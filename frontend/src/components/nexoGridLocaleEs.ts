@@ -1,5 +1,5 @@
-/** Textos de AG Grid usados por todas las grillas de SERKAN. */
-export const serkanGridLocaleEs: Record<string, string> = {
+/** Textos de AG Grid usados por todas las grillas de NEXO. */
+export const nexoGridLocaleEs: Record<string, string> = {
   // Filtros
   selectAll: "Seleccionar todo",
   selectAllSearchResults: "Seleccionar todos los resultados de búsqueda",

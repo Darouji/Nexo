@@ -1,6 +1,6 @@
 export type AppLayoutMode = "horizontal" | "vertical";
 
-const LAYOUT_MODE_STORAGE_KEY = "serkan_layout_mode";
+const LAYOUT_MODE_STORAGE_KEY = "nexo_layout_mode";
 
 export function getStoredLayoutMode(): AppLayoutMode | null {
   if (typeof window === "undefined") {

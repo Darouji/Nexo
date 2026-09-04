@@ -1,4 +1,4 @@
-name: SERKAN CI
+name: NEXO CI
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
         working-directory: backend
 
     env:
-      DJANGO_SECRET_KEY: ci-only-secret-key-for-serkan-v2
+      DJANGO_SECRET_KEY: ci-only-secret-key-for-nexo-v2
       DJANGO_DEBUG: "True"
       DJANGO_ENABLE_API_DOCS: "True"
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver

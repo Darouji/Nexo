@@ -67,7 +67,7 @@ class CollaboratorAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Datos internos SERKAN",
+            "Datos internos NEXO",
             {
                 "fields": [
                     "position",
